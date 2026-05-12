@@ -13,6 +13,9 @@ import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.auth.security.JwtUtil;
 
+import com.example.operion.module.auth.repository.TenantRepository;
+import com.example.operion.module.tenant.Tenant;
+
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -22,6 +25,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final TenantRepository tenantRepository;
 
     public String register(RegisterRequest request) {
 
@@ -36,10 +40,17 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
         user.setRole(Role.OPERATOR);
+        Tenant tenant = tenantRepository
+                .findByCode("BLITZ_BDG")
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+        user.setTenant(tenant);
         userRepository.save(user);
 
         // 3. Generate token
-        return jwtUtil.generateToken(user.getId().toString(),user.getRole().name());
+        return jwtUtil.generateToken(
+                user.getId().toString(),
+                user.getRole().name(),
+                user.getTenant().getId().toString());
     }
 
     public String login(LoginRequest request) {
@@ -55,7 +66,10 @@ public class AuthService {
         }
 
         // 3. Return JWT
-        return jwtUtil.generateToken(user.getId().toString(), user.getRole().name());
+        return jwtUtil.generateToken(
+                user.getId().toString(),
+                user.getRole().name(),
+                user.getTenant().getId().toString());
     }
 
     public UserProfileResponse getCurrentUser(Authentication authentication) {
