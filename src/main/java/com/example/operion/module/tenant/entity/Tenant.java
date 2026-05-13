@@ -1,4 +1,4 @@
-package com.example.operion.module.tenant;
+package com.example.operion.module.tenant.entity;
 
 import com.example.operion.module.auth.entity.BaseEntity;
 import jakarta.persistence.*;

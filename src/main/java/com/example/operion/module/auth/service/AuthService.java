@@ -12,9 +12,8 @@ import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.auth.security.JwtUtil;
-
-import com.example.operion.module.auth.repository.TenantRepository;
-import com.example.operion.module.tenant.Tenant;
+import com.example.operion.module.tenant.entity.Tenant;
+import com.example.operion.module.tenant.repository.TenantRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -87,3 +86,4 @@ public class AuthService {
                 .build();
     }
 }
+

@@ -1,10 +1,11 @@
-package com.example.operion.module.auth.entity;
+package com.example.operion.module.airsoft.entity;
 
 import java.time.LocalDate;
 import java.util.UUID;
 
-import com.example.operion.module.auth.enums.UnitStatus;
-import com.example.operion.module.tenant.Tenant;
+import com.example.operion.module.airsoft.enums.UnitStatus;
+import com.example.operion.module.auth.entity.BaseEntity;
+import com.example.operion.module.tenant.entity.Tenant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,14 +23,16 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
 @Table(name = "airsoft_units")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 public class AirsoftUnit extends BaseEntity {
 
     @Id

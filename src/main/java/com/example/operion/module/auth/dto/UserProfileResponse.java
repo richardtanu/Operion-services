@@ -18,3 +18,4 @@ public class UserProfileResponse {
     private String fullName;
     private Role role;
 }
+

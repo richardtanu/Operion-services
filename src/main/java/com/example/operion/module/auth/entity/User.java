@@ -3,7 +3,7 @@ package com.example.operion.module.auth.entity;
 import java.util.UUID;
 
 import com.example.operion.module.auth.enums.Role;
-import com.example.operion.module.tenant.Tenant;
+import com.example.operion.module.tenant.entity.Tenant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

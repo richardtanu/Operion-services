@@ -1,4 +1,4 @@
-package com.example.operion.module.auth.dto;
+package com.example.operion.module.airsoft.dto;
 
 import java.time.LocalDate;
 
