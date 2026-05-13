@@ -41,7 +41,7 @@ public class JwtUtil {
         return extractAllClaims(token).getSubject();
     }
 
-    private Claims extractAllClaims(String token) {
+    public Claims extractAllClaims(String token) {
 
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
@@ -49,4 +49,5 @@ public class JwtUtil {
                 .parseClaimsJws(token)
                 .getBody();
     }
+
 }
