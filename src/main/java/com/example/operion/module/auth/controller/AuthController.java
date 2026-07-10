@@ -15,6 +15,7 @@ import com.example.operion.module.auth.dto.RegisterRequest;
 import com.example.operion.module.auth.dto.UserProfileResponse;
 import com.example.operion.module.auth.service.AuthService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -26,7 +27,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
-            @RequestBody RegisterRequest request
+            @Valid @RequestBody RegisterRequest request
     ) {
 
         String token = authService.register(request);
@@ -42,7 +43,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
-        @RequestBody LoginRequest request
+        @Valid @RequestBody LoginRequest request
     ) {
 
         String token = authService.login(request);

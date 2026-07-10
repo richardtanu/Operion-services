@@ -124,4 +124,18 @@ public class ServiceEventService {
                 .nextCheckDate(event.getNextCheckDate())
                 .build();
     }
+
+    public List<ServiceEventResponse> getRecentByUnit(UUID unitId) {
+
+        UUID tenantId = UUID.fromString(
+                TenantContext.getTenantId());
+
+        return repository
+                .findTop5ByTenantIdAndAirsoftUnitIdOrderByServiceDateDesc(
+                        tenantId,
+                        unitId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
 }

@@ -17,37 +17,121 @@ import lombok.*;
 @AllArgsConstructor
 public class Part {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private UUID id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "tenant_id", nullable = false)
-  private Tenant tenant;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
-  @Column(nullable = false)
-  private String name;
+    @Column(nullable = false)
+    private String name;
 
-  private String brand;
+    private String brand;
 
-  private String category;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private PartCategory category;
 
-  private Integer expectedLifespanDays;
+    @Column(name = "category")
+    private String legacyCategory;
 
-  @Column(columnDefinition = "TEXT")
-  private String notes;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "part_type_id")
+    private PartType partType;
 
-  private LocalDateTime createdAt;
+    private Integer expectedLifespanDays;
 
-  private LocalDateTime updatedAt;
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer reorderQuantity = 10;
 
-  @PrePersist
-  public void prePersist() {
-    createdAt = LocalDateTime.now();
-  }
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean active = true;
 
-  @PreUpdate
-  public void preUpdate() {
-    updatedAt = LocalDateTime.now();
-  }
+    /*
+     * =====================================================
+     * Retirement
+     * =====================================================
+     */
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean retired = false;
+
+    private LocalDateTime retiredAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String retirementReason;
+
+    /*
+     * =====================================================
+     * Inventory
+     * =====================================================
+     */
+
+    @Column(name = "current_stock", nullable = false)
+    @Builder.Default
+    private Integer currentStock = 0;
+
+    @Column(name = "minimum_stock", nullable = false)
+    @Builder.Default
+    private Integer minimumStock = 0;
+
+    /*
+     * =====================================================
+     * Misc
+     * =====================================================
+     */
+
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
+
+    /*
+     * =====================================================
+     * Lifecycle
+     * =====================================================
+     */
+
+    @PrePersist
+    public void prePersist() {
+
+        if (currentStock == null) {
+            currentStock = 0;
+        }
+
+        if (minimumStock == null) {
+            minimumStock = 0;
+        }
+
+        if (retired == null) {
+            retired = false;
+        }
+
+        createdAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+
+        if (currentStock == null) {
+            currentStock = 0;
+        }
+
+        if (minimumStock == null) {
+            minimumStock = 0;
+        }
+
+        if (retired == null) {
+            retired = false;
+        }
+
+        updatedAt = LocalDateTime.now();
+    }
 }

@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.example.operion.module.airsoft.entity.AirsoftUnit;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.tenant.entity.Tenant;
+import com.example.operion.module.unitpart.enums.PartCondition;
 import com.example.operion.module.unitpart.enums.UnitPartStatus;
 
 import jakarta.persistence.*;
@@ -38,7 +39,13 @@ public class AirsoftUnitPart {
   private Part part;
 
   @Enumerated(EnumType.STRING)
+  private PartCondition condition;
+
+  @Enumerated(EnumType.STRING)
   private UnitPartStatus status;
+
+  @Column(columnDefinition = "TEXT")
+  private String technicianAssessment;
 
   private LocalDate installedDate;
 

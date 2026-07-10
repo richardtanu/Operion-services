@@ -19,7 +19,19 @@ public class PartResponse {
 
   private String category;
 
+  private UUID categoryId;
+
+  private String categoryName;
+
+  private UUID partTypeId;
+
+  private String partTypeName;
+
   private Integer expectedLifespanDays;
 
   private String notes;
+
+  private Integer minimumStock;
+
+  private Integer reorderQuantity;
 }

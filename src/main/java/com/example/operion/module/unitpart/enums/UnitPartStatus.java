@@ -4,5 +4,4 @@ public enum UnitPartStatus {
 
     INSTALLED,
     REMOVED,
-    BROKEN
 }
