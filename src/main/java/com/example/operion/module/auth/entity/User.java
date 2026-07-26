@@ -3,6 +3,7 @@ package com.example.operion.module.auth.entity;
 import java.util.UUID;
 
 import com.example.operion.module.auth.enums.Role;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.tenant.entity.Tenant;
 
 import jakarta.persistence.Column;
@@ -40,6 +41,9 @@ public class User extends BaseEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private Role role;
+
+  @Enumerated(EnumType.STRING)
+  private Scope scope;
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "tenant_id", nullable = false)

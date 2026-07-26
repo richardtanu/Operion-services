@@ -1,5 +1,7 @@
 package com.example.operion.module.auth.service;
 
+import java.util.UUID;
+
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,8 +41,13 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
         user.setRole(Role.OPERATOR);
+        user.setScope(request.getScope());
+        String tenantCode = request.getTenantCode() != null
+                ? request.getTenantCode()
+                : "BLITZ_BDG";
+
         Tenant tenant = tenantRepository
-                .findByCode("BLITZ_BDG")
+                .findByCode(tenantCode)
                 .orElseThrow(() -> new RuntimeException("Tenant not found"));
         user.setTenant(tenant);
         userRepository.save(user);
@@ -49,7 +56,8 @@ public class AuthService {
         return jwtUtil.generateToken(
                 user.getId().toString(),
                 user.getRole().name(),
-                user.getTenant().getId().toString());
+                user.getTenant().getId().toString(),
+                user.getScope() != null ? user.getScope().name() : null);
     }
 
     public String login(LoginRequest request) {
@@ -68,14 +76,15 @@ public class AuthService {
         return jwtUtil.generateToken(
                 user.getId().toString(),
                 user.getRole().name(),
-                user.getTenant().getId().toString());
+                user.getTenant().getId().toString(),
+                user.getScope() != null ? user.getScope().name() : null);
     }
 
     public UserProfileResponse getCurrentUser(Authentication authentication) {
 
-        String email = authentication.getName();
+        UUID userId = UUID.fromString(authentication.getName());
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return UserProfileResponse.builder()
@@ -83,6 +92,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .role(user.getRole())
+                .scope(user.getScope())
                 .build();
     }
 }

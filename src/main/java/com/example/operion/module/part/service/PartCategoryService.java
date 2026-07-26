@@ -14,6 +14,7 @@ import com.example.operion.module.part.repository.PartCategoryRepository;
 import com.example.operion.module.part.repository.PartTypeRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,8 @@ public class PartCategoryService {
     private final PartCategoryRepository categoryRepository;
 
     private final PartTypeRepository partTypeRepository;
+
+    private final TenantHierarchyService tenantHierarchyService;
 
     @Transactional
     public PartCategoryResponse create(
@@ -99,8 +102,10 @@ public class PartCategoryService {
         UUID tenantId = UUID.fromString(
                 TenantContext.getTenantId());
 
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
         return categoryRepository
-                .findByTenantId(tenantId)
+                .findByTenantIdIn(tenantIds)
                 .stream()
                 .map(this::map)
                 .toList();
@@ -128,7 +133,7 @@ public class PartCategoryService {
                         tenantId)
                 .orElseThrow(() -> new RuntimeException("Category not found"));
 
-        if (partTypeRepository.existsById(categoryId)) {
+        if (partTypeRepository.existsByCategoryId(categoryId)) {
 
             throw new RuntimeException(
                     "Cannot delete category because it still contains Part Types.");
@@ -137,71 +142,50 @@ public class PartCategoryService {
         categoryRepository.delete(category);
     }
 
+    /**
+     * Idempotent, incremental: only creates categories from the canonical
+     * default list that this tenant doesn't already have (by name). Safe to
+     * call repeatedly — on a brand-new tenant, on an already-seeded one, or
+     * after the default list itself has grown — it only ever adds what's
+     * missing, never duplicates or touches unrelated/custom categories.
+     */
     @Transactional
     public void seedDefaultCategories(
             UUID tenantId) {
-
-        if (!categoryRepository.findByTenantId(tenantId).isEmpty()) {
-            return;
-        }
 
         Tenant tenant = tenantRepository
                 .findById(tenantId)
                 .orElseThrow();
 
-        categoryRepository.saveAll(List.of(
+        List<String[]> defaults = List.of(
 
-                category(
-                        tenant,
-                        "Gearbox",
-                        "Gearbox shell, gears, bushings, tappet plate, spring guide"),
+                new String[] { "Internal Mechanical",
+                        "Gearbox, compression, hop-up, motor and trigger group components" },
 
-                category(
-                        tenant,
-                        "Compression",
-                        "Cylinder, piston, cylinder head, nozzle and compression parts"),
+                new String[] { "External Mechanical",
+                        "Barrel, receiver, handguard, stock and other body components" },
 
-                category(
-                        tenant,
-                        "Hop Up",
-                        "Hop-up chamber, bucking, nub and related parts"),
+                new String[] { "Electrical & Electronic",
+                        "MOSFET, ETU, wiring and other electrical components" },
 
-                category(
-                        tenant,
-                        "Barrel",
-                        "Inner barrel, outer barrel and muzzle components"),
+                new String[] { "Magazine",
+                        "Magazine body and internal components" },
 
-                category(
-                        tenant,
-                        "Trigger",
-                        "Trigger assembly and selector components"),
+                new String[] { "Consumable",
+                        "Gas, BB and other consumable items" },
 
-                category(
-                        tenant,
-                        "Motor",
-                        "Motor, motor cage and pinion gear"),
+                new String[] { "Optics & Accessories",
+                        "Optics, rails, sling, flashlight and other accessories" });
 
-                category(
-                        tenant,
-                        "Electronics",
-                        "MOSFET, ETU, wiring and electrical components"),
+        for (String[] entry : defaults) {
 
-                category(
-                        tenant,
-                        "Magazine",
-                        "Magazine body and internal components"),
+            String name = entry[0];
+            String description = entry[1];
 
-                category(
-                        tenant,
-                        "External",
-                        "Receiver, handguard, stock, grip and body components"),
-
-                category(
-                        tenant,
-                        "Accessories",
-                        "Optics, rails, sling, flashlight and other accessories")
-
-        ));
+            if (categoryRepository.findByTenantIdAndName(tenantId, name).isEmpty()) {
+                categoryRepository.save(category(tenant, name, description));
+            }
+        }
     }
 
     private PartCategory category(

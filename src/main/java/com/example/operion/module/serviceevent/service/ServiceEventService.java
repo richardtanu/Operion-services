@@ -3,6 +3,7 @@ package com.example.operion.module.serviceevent.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
@@ -16,7 +17,10 @@ import com.example.operion.module.serviceevent.entity.ServiceEvent;
 import com.example.operion.module.serviceevent.repository.ServiceEventRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 import com.example.operion.module.airsoft.enums.UnitStatus;
+import com.example.operion.module.workorder.entity.WorkOrder;
+import com.example.operion.module.workorder.repository.WorkOrderRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -30,6 +34,10 @@ public class ServiceEventService {
     private final AirsoftUnitRepository airsoftUnitRepository;
 
     private final UserRepository userRepository;
+
+    private final TenantHierarchyService tenantHierarchyService;
+
+    private final WorkOrderRepository workOrderRepository;
 
     public ServiceEventResponse create(
             CreateServiceEventRequest request) {
@@ -52,10 +60,20 @@ public class ServiceEventService {
                     .orElseThrow();
         }
 
+        WorkOrder workOrder = null;
+
+        if (request.getWorkOrderId() != null) {
+
+            workOrder = workOrderRepository
+                    .findByIdAndTenantId(request.getWorkOrderId(), tenantId)
+                    .orElseThrow(() -> new RuntimeException("Work order not found"));
+        }
+
         ServiceEvent event = ServiceEvent.builder()
                 .tenant(tenant)
                 .airsoftUnit(unit)
                 .technician(technician)
+                .workOrder(workOrder)
                 .eventType(request.getEventType())
                 .issue(request.getIssue())
                 .actionTaken(request.getActionTaken())
@@ -100,7 +118,9 @@ public class ServiceEventService {
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
-        return repository.findByTenantId(tenantId)
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+        return repository.findByTenantIdIn(tenantIds)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -116,6 +136,10 @@ public class ServiceEventService {
                         event.getTechnician() != null
                                 ? event.getTechnician().getFullName()
                                 : null)
+                .workOrderId(
+                        event.getWorkOrder() != null
+                                ? event.getWorkOrder().getId()
+                                : null)
                 .eventType(event.getEventType().name())
                 .issue(event.getIssue())
                 .actionTaken(event.getActionTaken())
@@ -130,10 +154,27 @@ public class ServiceEventService {
         UUID tenantId = UUID.fromString(
                 TenantContext.getTenantId());
 
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
         return repository
-                .findTop5ByTenantIdAndAirsoftUnitIdOrderByServiceDateDesc(
-                        tenantId,
-                        unitId)
+                .findTopByTenantIdInAndAirsoftUnitId(
+                        tenantIds,
+                        unitId,
+                        PageRequest.of(0, 5))
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public List<ServiceEventResponse> getByWorkOrder(UUID workOrderId) {
+
+        UUID tenantId = UUID.fromString(
+                TenantContext.getTenantId());
+
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+        return repository
+                .findByTenantIdInAndWorkOrderId(tenantIds, workOrderId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();

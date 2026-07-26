@@ -9,6 +9,7 @@ import com.example.operion.module.auth.entity.BaseEntity;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.serviceevent.enums.ServiceEventType;
 import com.example.operion.module.tenant.entity.Tenant;
+import com.example.operion.module.workorder.entity.WorkOrder;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -52,6 +53,10 @@ public class ServiceEvent extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "technician_id")
     private User technician;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_order_id")
+    private WorkOrder workOrder;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false)

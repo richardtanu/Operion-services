@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.module.analytics.dto.ConsumablePerformanceResponse;
 import com.example.operion.module.analytics.dto.PartDurabilityResponse;
 import com.example.operion.module.analytics.service.AnalyticsService;
 
@@ -27,6 +28,17 @@ public class AnalyticsController {
         .success(true)
         .message("Part durability analytics")
         .data(service.getPartDurability())
+        .build();
+  }
+
+  @GetMapping("/consumables/performance")
+  public ApiResponse<List<ConsumablePerformanceResponse>> getConsumablePerformance() {
+
+    return ApiResponse
+        .<List<ConsumablePerformanceResponse>>builder()
+        .success(true)
+        .message("Consumable performance analytics")
+        .data(service.getConsumablePerformance())
         .build();
   }
 }

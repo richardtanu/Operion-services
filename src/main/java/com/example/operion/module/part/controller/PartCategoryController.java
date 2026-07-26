@@ -1,7 +1,6 @@
 package com.example.operion.module.part.controller;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -97,35 +96,4 @@ public class PartCategoryController {
                                 .build();
         }
 
-        Map<String, String> CATEGORY_MAPPING = Map.ofEntries(
-
-                        Map.entry("Gearbox Shell", "Gearbox"),
-                        Map.entry("Gearset", "Gearbox"),
-                        Map.entry("Spring", "Gearbox"),
-                        Map.entry("Spring Guide", "Gearbox"),
-                        Map.entry("Tappet Plate", "Gearbox"),
-                        Map.entry("Bushing", "Gearbox"),
-
-                        Map.entry("Cylinder", "Compression"),
-                        Map.entry("Cylinder Head", "Compression"),
-                        Map.entry("Piston", "Compression"),
-                        Map.entry("Piston Head", "Compression"),
-                        Map.entry("Nozzle", "Compression"),
-
-                        Map.entry("Hop-Up Chamber", "Hop Up"),
-                        Map.entry("Hop-Up Rubber", "Hop Up"),
-                        Map.entry("Hopup", "Hop Up"),
-
-                        Map.entry("Inner Barrel", "Barrel"),
-                        Map.entry("Outer Barrel", "Barrel"),
-
-                        Map.entry("Trigger", "Trigger"),
-
-                        Map.entry("Motor", "Motor"),
-                        Map.entry("Motor Cage", "Motor"),
-                        Map.entry("Pinion Gear", "Motor"),
-
-                        Map.entry("MOSFET", "Electronics")
-
-        );
 }

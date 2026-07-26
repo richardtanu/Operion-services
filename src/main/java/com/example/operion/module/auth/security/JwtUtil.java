@@ -23,12 +23,14 @@ public class JwtUtil {
 
     public String generateToken(String userId,
             String role,
-            String tenantId) {
+            String tenantId,
+            String scope) {
 
         return Jwts.builder()
                 .setSubject(userId)
                 .claim("role", role)
                 .claim("tenantId", tenantId)
+                .claim("scope", scope)
                 .setIssuedAt(new Date())
                 .setExpiration(
                         new Date(System.currentTimeMillis() + 86400000))

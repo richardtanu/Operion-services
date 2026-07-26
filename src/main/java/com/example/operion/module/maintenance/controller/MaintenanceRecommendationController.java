@@ -7,11 +7,13 @@ import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.maintenance.dto.CreateMaintenanceScheduleRequest;
+import com.example.operion.module.maintenance.dto.MaintenanceEvaluationResult;
 import com.example.operion.module.maintenance.dto.MaintenanceRecommendationResponse;
 import com.example.operion.module.maintenance.dto.MaintenanceScheduleResponse;
 import com.example.operion.module.maintenance.entity.MaintenanceSchedule;
 import com.example.operion.module.maintenance.repository.MaintenanceScheduleRepository;
 import com.example.operion.module.maintenance.service.MaintenanceRecommendationService;
+import com.example.operion.module.maintenance.service.PreventiveMaintenanceService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +24,7 @@ public class MaintenanceRecommendationController {
 
   private final MaintenanceRecommendationService service;
   private final MaintenanceScheduleRepository repository;
+  private final PreventiveMaintenanceService preventiveMaintenanceService;
 
   @GetMapping("/recommendations/{unitId}")
   public ApiResponse<List<MaintenanceRecommendationResponse>> getRecommendations(
@@ -69,6 +72,18 @@ public class MaintenanceRecommendationController {
         .success(true)
         .message("Maintenance schedules fetched")
         .data(service.getMaintenanceRecommendationByUnit(unitId))
+        .build();
+  }
+
+  @PostMapping("/evaluate/{unitId}")
+  public ApiResponse<MaintenanceEvaluationResult> evaluateUnit(
+      @PathVariable UUID unitId) {
+
+    return ApiResponse
+        .<MaintenanceEvaluationResult>builder()
+        .success(true)
+        .message("Unit evaluated")
+        .data(preventiveMaintenanceService.evaluateUnit(unitId))
         .build();
   }
 

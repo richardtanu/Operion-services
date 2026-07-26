@@ -19,6 +19,8 @@ public class ServiceEventResponse {
 
     private String technicianName;
 
+    private UUID workOrderId;
+
     private String eventType;
 
     private String issue;

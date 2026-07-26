@@ -1,6 +1,9 @@
 package com.example.operion.module.dashboard.service;
 
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -11,6 +14,7 @@ import com.example.operion.module.airsoft.repository.AirsoftUnitRepository;
 import com.example.operion.module.dashboard.dto.OperationalDashboardResponse;
 import com.example.operion.module.dashboard.dto.UnitStatusSummaryResponse;
 import com.example.operion.module.serviceevent.repository.ServiceEventRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 import com.example.operion.module.unitpart.enums.UnitPartStatus;
 import com.example.operion.module.unitpart.repository.AirsoftUnitPartRepository;
 import com.example.operion.module.workorder.enums.WorkOrderPriority;
@@ -31,45 +35,49 @@ public class DashboardService {
 
         private final WorkOrderRepository workOrderRepository;
 
+        private final TenantHierarchyService tenantHierarchyService;
+
         public OperationalDashboardResponse getOverview() {
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+                Set<UUID> tenantIdSet = new HashSet<>(tenantIds);
+
                 Long totalUnits = airsoftUnitRepository
-                                .countByTenantId(
-                                                tenantId);
+                                .countByTenantIdIn(
+                                                tenantIds);
 
                 Long activeUnits = airsoftUnitRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.ACTIVE);
 
                 Long maintenanceUnits = airsoftUnitRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.MAINTENANCE);
 
                 Long installedParts = unitPartRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitPartStatus.INSTALLED);
 
                 Long removedParts = unitPartRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitPartStatus.REMOVED);
 
                 Long replacementEvents = serviceEventRepository
-                                .countByTenantId(
-                                                tenantId);
+                                .countByTenantIdIn(
+                                                tenantIds);
 
                 Double averageHealthScore = airsoftUnitRepository
                                 .findAll()
                                 .stream()
-                                .filter(unit -> unit.getTenant()
-                                                .getId()
-                                                .equals(tenantId))
+                                .filter(unit -> tenantIdSet.contains(
+                                                unit.getTenant().getId()))
                                 .filter(unit -> unit.getHealthScore() != null)
                                 .mapToInt(unit -> unit.getHealthScore())
                                 .average()
@@ -78,36 +86,31 @@ public class DashboardService {
                 Long criticalUnits = airsoftUnitRepository
                                 .findAll()
                                 .stream()
-                                .filter(unit -> unit.getTenant()
-                                                .getId()
-                                                .equals(tenantId))
+                                .filter(unit -> tenantIdSet.contains(
+                                                unit.getTenant().getId()))
                                 .filter(unit -> unit.getHealthScore() != null)
                                 .filter(unit -> unit.getHealthScore() < 40)
                                 .count();
 
                 Long openWorkOrders = workOrderRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.OPEN);
 
-                // Long criticalWorkOrders = workOrderRepository
-                // .countByTenantIdAndPriority(
-                // tenantId,
-                // WorkOrderPriority.CRITICAL);
                 Long criticalWorkOrders = workOrderRepository
-                                .countByTenantIdAndPriorityAndStatusNot(
-                                                tenantId,
+                                .countByTenantIdInAndPriorityAndStatusNot(
+                                                tenantIds,
                                                 WorkOrderPriority.CRITICAL,
                                                 WorkOrderStatus.COMPLETED);
 
                 Long completedWorkOrders = workOrderRepository
-                                .countByTenantIdAndStatus(
-                                                tenantId,
+                                .countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.COMPLETED);
 
                 Long overdueWorkOrders = workOrderRepository
-                                .countByTenantIdAndStatusNotAndTargetDateBefore(
-                                                tenantId,
+                                .countByTenantIdInAndStatusNotAndTargetDateBefore(
+                                                tenantIds,
                                                 WorkOrderStatus.COMPLETED,
                                                 LocalDate.now());
                 return OperationalDashboardResponse
@@ -140,25 +143,27 @@ public class DashboardService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
                 return UnitStatusSummaryResponse.builder()
-                                .active(airsoftUnitRepository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .active(airsoftUnitRepository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.ACTIVE))
 
-                                .maintenance(airsoftUnitRepository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .maintenance(airsoftUnitRepository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.MAINTENANCE))
 
-                                .broken(airsoftUnitRepository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .broken(airsoftUnitRepository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.BROKEN))
 
-                                .upgrade(airsoftUnitRepository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .upgrade(airsoftUnitRepository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.UPGRADE))
 
-                                .retired(airsoftUnitRepository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .retired(airsoftUnitRepository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 UnitStatus.RETIRED))
 
                                 .build();

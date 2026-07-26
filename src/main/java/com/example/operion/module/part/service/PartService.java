@@ -19,6 +19,9 @@ import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.part.repository.PartTypeRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
+import com.example.operion.module.unitpart.enums.UnitPartStatus;
+import com.example.operion.module.unitpart.repository.AirsoftUnitPartRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,10 @@ public class PartService {
         private final PartCategoryRepository categoryRepository;
 
         private final PartTypeRepository partTypeRepository;
+
+        private final AirsoftUnitPartRepository unitPartRepository;
+
+        private final TenantHierarchyService tenantHierarchyService;
 
         public PartResponse create(CreatePartRequest request) {
 
@@ -117,7 +124,9 @@ public class PartService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
-                return repository.findByTenantIdAndActiveTrue(tenantId)
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                return repository.findByTenantIdInAndActiveTrue(tenantIds)
                                 .stream()
                                 .map(this::map)
                                 .toList();
@@ -139,11 +148,13 @@ public class PartService {
 
                                 .partTypeId(partType != null ? partType.getId() : null)
                                 .partTypeName(partType != null ? partType.getName() : null)
-
                                 .expectedLifespanDays(part.getExpectedLifespanDays())
+                                .currentStock(part.getCurrentStock())
                                 .minimumStock(part.getMinimumStock())
                                 .reorderQuantity(part.getReorderQuantity())
                                 .notes(part.getNotes())
+                                .retired(part.getRetired())
+                                .retiredAt(part.getRetiredAt())
                                 .build();
         }
 
@@ -278,7 +289,9 @@ public class PartService {
                                         "Cannot retire part while stock still exists.");
                 }
 
-                if (repository.existsInstalledByPartId(partId)) {
+                if (unitPartRepository.existsByPartIdAndStatus(
+                                partId,
+                                UnitPartStatus.INSTALLED)) {
 
                         throw new RuntimeException(
                                         "Cannot retire because this part is currently installed.");
@@ -292,7 +305,7 @@ public class PartService {
         }
 
         @Transactional
-        public void restore(UUID partId) {
+        public PartResponse restore(UUID partId) {
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -303,9 +316,17 @@ public class PartService {
                                                 tenantId)
                                 .orElseThrow(() -> new RuntimeException("Part not found"));
 
-                part.setActive(true);
+                if (!Boolean.TRUE.equals(part.getRetired())) {
 
-                repository.save(part);
+                        throw new RuntimeException("Part is not retired.");
+                }
+
+                part.setActive(true);
+                part.setRetired(false);
+                part.setRetiredAt(null);
+                part.setRetirementReason(null);
+
+                return map(repository.save(part));
         }
 
 }

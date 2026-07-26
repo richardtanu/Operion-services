@@ -5,6 +5,8 @@ import java.util.UUID;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.example.operion.module.unitpart.entity.AirsoftUnitPart;
 import com.example.operion.module.unitpart.enums.UnitPartStatus;
@@ -18,6 +20,11 @@ public interface AirsoftUnitPartRepository
                         UUID tenantId,
                         UnitPartStatus status);
 
+        @Query("select count(a) from AirsoftUnitPart a where a.tenant.id in :tenantIds and a.status = :status")
+        Long countByTenantIdInAndStatus(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        @Param("status") UnitPartStatus status);
+
         List<AirsoftUnitPart> findByAirsoftUnitIdAndStatus(
                         UUID airsoftUnitId,
                         UnitPartStatus status);
@@ -26,6 +33,9 @@ public interface AirsoftUnitPartRepository
                         UUID airsoftUnitId);
 
         List<AirsoftUnitPart> findByTenantId(UUID tenantId);
+
+        @Query("select a from AirsoftUnitPart a where a.tenant.id in :tenantIds")
+        List<AirsoftUnitPart> findByTenantIdIn(@Param("tenantIds") List<UUID> tenantIds);
 
         List<AirsoftUnitPart> findByAirsoftUnitIdAndTenantId(
                         UUID airsoftUnitId,

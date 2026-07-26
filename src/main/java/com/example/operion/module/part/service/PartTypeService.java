@@ -18,6 +18,7 @@ import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.part.repository.PartTypeRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import lombok.RequiredArgsConstructor;
 import jakarta.transaction.Transactional;
@@ -33,6 +34,8 @@ public class PartTypeService {
     private final TenantRepository tenantRepository;
 
     private final PartRepository partRepository;
+
+    private final TenantHierarchyService tenantHierarchyService;
 
     /*
      * CREATE
@@ -88,6 +91,117 @@ public class PartTypeService {
     }
 
     /*
+     * SEED DEFAULTS
+     */
+
+    /**
+     * Idempotent, incremental: only creates (category, name) pairs from the
+     * canonical default list that this tenant doesn't already have. Safe to
+     * call repeatedly — on a brand-new tenant, on an already-seeded one, or
+     * after the default list itself has grown — it only ever adds what's
+     * missing, never duplicates or touches unrelated/custom part types.
+     * Assumes the default categories have already been seeded.
+     */
+    @Transactional
+    public void seedDefaultPartTypes(UUID tenantId) {
+
+        Tenant tenant = tenantRepository
+                .findById(tenantId)
+                .orElseThrow();
+
+        PartCategory internalMechanical = requiredCategory(tenantId, "Internal Mechanical");
+        PartCategory externalMechanical = requiredCategory(tenantId, "External Mechanical");
+        PartCategory electrical = requiredCategory(tenantId, "Electrical & Electronic");
+        PartCategory magazine = requiredCategory(tenantId, "Magazine");
+        PartCategory consumable = requiredCategory(tenantId, "Consumable");
+        PartCategory optics = requiredCategory(tenantId, "Optics & Accessories");
+
+        List<Object[]> defaults = List.of(
+
+                new Object[] { internalMechanical, "Anti-Reversal Latch" },
+                new Object[] { internalMechanical, "Bushing" },
+                new Object[] { internalMechanical, "Cylinder" },
+                new Object[] { internalMechanical, "Cylinder Head" },
+                new Object[] { internalMechanical, "Gear Set" },
+                new Object[] { internalMechanical, "Gearbox Shell" },
+                new Object[] { internalMechanical, "Motor Cage" },
+                new Object[] { internalMechanical, "Nozzle" },
+                new Object[] { internalMechanical, "Pinion Gear" },
+                new Object[] { internalMechanical, "Piston" },
+                new Object[] { internalMechanical, "Piston Head" },
+                new Object[] { internalMechanical, "Spring" },
+                new Object[] { internalMechanical, "Spring Guide" },
+                new Object[] { internalMechanical, "Tappet Plate" },
+                new Object[] { internalMechanical, "Trigger Assembly" },
+
+                new Object[] { externalMechanical, "Grip" },
+                new Object[] { externalMechanical, "Hop-up Bucking" },
+                new Object[] { externalMechanical, "Hop-up Unit" },
+                new Object[] { externalMechanical, "Inner Barrel" },
+                new Object[] { externalMechanical, "Outer Barrel" },
+                new Object[] { externalMechanical, "Rail System" },
+                new Object[] { externalMechanical, "Receiver (Lower)" },
+                new Object[] { externalMechanical, "Receiver (Upper)" },
+                new Object[] { externalMechanical, "Stock" },
+
+                new Object[] { electrical, "Battery (LiPo)" },
+                new Object[] { electrical, "Battery (NiMH)" },
+                new Object[] { electrical, "Charger" },
+                new Object[] { electrical, "MOSFET" },
+                new Object[] { electrical, "Motor" },
+                new Object[] { electrical, "Trigger Switch" },
+                new Object[] { electrical, "Wiring Harness" },
+
+                new Object[] { magazine, "Drum Magazine" },
+                new Object[] { magazine, "Hi-cap Magazine" },
+                new Object[] { magazine, "Low-cap Magazine" },
+                new Object[] { magazine, "Mid-cap Magazine" },
+
+                new Object[] { consumable, "BB 0.20g" },
+                new Object[] { consumable, "BB 0.25g" },
+                new Object[] { consumable, "BB 0.28g" },
+                new Object[] { consumable, "CO2 Cartridge 12g" },
+                new Object[] { consumable, "Green Gas" },
+
+                new Object[] { optics, "Flashlight" },
+                new Object[] { optics, "Foregrip" },
+                new Object[] { optics, "Magnified Scope" },
+                new Object[] { optics, "Red Dot Sight" },
+                new Object[] { optics, "Sling" });
+
+        for (Object[] entry : defaults) {
+
+            PartCategory category = (PartCategory) entry[0];
+            String name = (String) entry[1];
+
+            boolean exists = repository
+                    .findByTenantIdAndCategoryIdAndName(tenantId, category.getId(), name)
+                    .isPresent();
+
+            if (!exists) {
+                repository.save(type(tenant, category, name));
+            }
+        }
+    }
+
+    private PartCategory requiredCategory(UUID tenantId, String name) {
+
+        return categoryRepository
+                .findByTenantIdAndName(tenantId, name)
+                .orElseThrow(() -> new RuntimeException(
+                        "Category not found: " + name));
+    }
+
+    private PartType type(Tenant tenant, PartCategory category, String name) {
+
+        return PartType.builder()
+                .tenant(tenant)
+                .category(category)
+                .name(name)
+                .build();
+    }
+
+    /*
      * GET ALL
      */
 
@@ -96,8 +210,10 @@ public class PartTypeService {
         UUID tenantId = UUID.fromString(
                 TenantContext.getTenantId());
 
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
         return repository
-                .findByTenantId(tenantId)
+                .findByTenantIdIn(tenantIds)
 
                 .stream()
 
@@ -116,17 +232,19 @@ public class PartTypeService {
         UUID tenantId = UUID.fromString(
                 TenantContext.getTenantId());
 
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
         categoryRepository
-                .findByIdAndTenantId(
+                .findByIdAndTenantIdIn(
                         categoryId,
-                        tenantId)
+                        tenantIds)
                 .orElseThrow(() -> new RuntimeException(
                         "Category not found"));
 
         return repository
-                .findByCategoryIdAndTenantId(
+                .findByCategoryIdAndTenantIdIn(
                         categoryId,
-                        tenantId)
+                        tenantIds)
 
                 .stream()
 

@@ -13,6 +13,7 @@ import com.example.operion.module.airsoft.enums.UnitStatus;
 import com.example.operion.module.airsoft.repository.AirsoftUnitRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -22,6 +23,7 @@ public class AirsoftUnitService {
 
     private final AirsoftUnitRepository repository;
     private final TenantRepository tenantRepository;
+    private final TenantHierarchyService tenantHierarchyService;
 
     public AirsoftUnitResponse create(CreateAirsoftUnitRequest request) {
 
@@ -48,9 +50,11 @@ public class AirsoftUnitService {
 
     public List<AirsoftUnitResponse> getAll() {
 
-        String tenantId = TenantContext.getTenantId();
+        UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
-        return repository.findAllByTenant_Id(UUID.fromString(tenantId))
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+        return repository.findAllByTenant_IdIn(tenantIds)
                 .stream()
                 .map(this::toResponse)
                 .toList();

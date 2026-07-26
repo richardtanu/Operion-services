@@ -48,4 +48,11 @@ public class ReplacePartRequest {
   private LocalDate installedDate;
 
   private LocalDate removedDate;
+
+  /**
+   * Optional: barcode of the specific PartInstance being installed as the
+   * replacement. If omitted, replace proceeds without linking to instance
+   * tracking.
+   */
+  private String barcode;
 }

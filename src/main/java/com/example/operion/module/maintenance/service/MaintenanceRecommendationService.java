@@ -22,6 +22,7 @@ import com.example.operion.module.serviceevent.entity.ServiceEvent;
 import com.example.operion.module.serviceevent.repository.ServiceEventRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 import com.example.operion.module.unitpart.entity.AirsoftUnitPart;
 import com.example.operion.module.unitpart.enums.PartCondition;
 import com.example.operion.module.unitpart.enums.UnitPartStatus;
@@ -54,6 +55,8 @@ public class MaintenanceRecommendationService {
         private final MaintenanceScheduleRepository repository;
 
         private final WorkOrderRepository workOrderRepository;
+
+        private final TenantHierarchyService tenantHierarchyService;
 
         public List<MaintenanceRecommendationResponse> generate(UUID unitId) {
 
@@ -135,7 +138,9 @@ public class MaintenanceRecommendationService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
-                return repository.findByTenantId(tenantId)
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                return repository.findByTenantIdIn(tenantIds)
                                 .stream()
                                 .map(this::map)
                                 .toList();

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.part.dto.CreatePartTypeRequest;
 import com.example.operion.module.part.dto.PartTypeResponse;
 import com.example.operion.module.part.dto.UpdatePartTypeRequest;
@@ -40,6 +41,24 @@ public class PartTypeController {
         .success(true)
         .message("Part Type created")
         .data(service.create(request))
+        .build();
+  }
+
+  /*
+   * SEED DEFAULTS
+   */
+
+  @PostMapping("/seed")
+  public ApiResponse<Void> seed() {
+
+    UUID tenantId = UUID.fromString(
+        TenantContext.getTenantId());
+
+    service.seedDefaultPartTypes(tenantId);
+
+    return ApiResponse.<Void>builder()
+        .success(true)
+        .message("Default part types created")
         .build();
   }
 

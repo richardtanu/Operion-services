@@ -9,6 +9,8 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.example.operion.module.workorder.entity.WorkOrder;
 import com.example.operion.module.workorder.enums.WorkOrderPriority;
@@ -25,12 +27,22 @@ public interface WorkOrderRepository
                         UUID tenantId,
                         Pageable pageable);
 
+        @Query("select w from WorkOrder w where w.tenant.id in :tenantIds")
+        Page<WorkOrder> findByTenantIdIn(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        Pageable pageable);
+
         List<WorkOrder> findByAirsoftUnitId(
                         UUID unitId);
 
         Long countByTenantIdAndStatus(
                         UUID tenantId,
                         WorkOrderStatus status);
+
+        @Query("select count(w) from WorkOrder w where w.tenant.id in :tenantIds and w.status = :status")
+        Long countByTenantIdInAndStatus(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        @Param("status") WorkOrderStatus status);
 
         boolean existsByAirsoftUnitIdAndStatusIn(
                         UUID airsoftUnitId,
@@ -45,6 +57,12 @@ public interface WorkOrderRepository
                         WorkOrderPriority priority,
                         WorkOrderStatus status);
 
+        @Query("select count(w) from WorkOrder w where w.tenant.id in :tenantIds and w.priority = :priority and w.status <> :status")
+        Long countByTenantIdInAndPriorityAndStatusNot(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        @Param("priority") WorkOrderPriority priority,
+                        @Param("status") WorkOrderStatus status);
+
         List<WorkOrder> findByAirsoftUnitIdOrderByCreatedAtDesc(
                         UUID airsoftUnitId);
 
@@ -52,6 +70,12 @@ public interface WorkOrderRepository
                         UUID tenantId,
                         WorkOrderStatus status,
                         LocalDate targetDate);
+
+        @Query("select count(w) from WorkOrder w where w.tenant.id in :tenantIds and w.status <> :status and w.targetDate < :date")
+        Long countByTenantIdInAndStatusNotAndTargetDateBefore(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        @Param("status") WorkOrderStatus status,
+                        @Param("date") LocalDate date);
 
         List<WorkOrder> findByAirsoftUnitIdAndStatusIn(
                         UUID unitId,
@@ -66,6 +90,13 @@ public interface WorkOrderRepository
                         WorkOrderStatus status,
                         LocalDateTime start,
                         LocalDateTime end);
+
+        @Query("select count(w) from WorkOrder w where w.tenant.id in :tenantIds and w.status = :status and w.completedAt between :start and :end")
+        long countByTenantIdInAndStatusAndCompletedAtBetween(
+                        @Param("tenantIds") List<UUID> tenantIds,
+                        @Param("status") WorkOrderStatus status,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 
         boolean existsByMaintenanceScheduleIdAndStatusIn(
                         UUID maintenanceScheduleId,

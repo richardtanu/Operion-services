@@ -21,4 +21,10 @@ public class InstallPartRequest {
   private LocalDate installedDate;
 
   private String notes;
+
+  /**
+   * Optional: barcode of the specific PartInstance being installed. If
+   * omitted, install proceeds without linking to instance tracking.
+   */
+  private String barcode;
 }

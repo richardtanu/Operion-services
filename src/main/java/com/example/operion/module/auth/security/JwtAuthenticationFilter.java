@@ -10,6 +10,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 
 import java.io.IOException;
@@ -32,7 +33,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 String path = request.getServletPath();
 
-                if (path.startsWith("/auth/")) {
+                if (path.equals("/auth/login") || path.equals("/auth/register")) {
                         filterChain.doFilter(request, response);
                         return;
                 }
@@ -58,7 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                         String tenantId = claims.get("tenantId", String.class);
 
+                        String scope = claims.get("scope", String.class);
+
                         TenantContext.setTenantId(tenantId);
+
+                        ScopeContext.setScope(scope);
 
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                         userId,
@@ -84,6 +89,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 } finally {
 
                         TenantContext.clear();
+                        ScopeContext.clear();
                 }
         }
 }

@@ -27,4 +27,8 @@ public class Tenant extends BaseEntity {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private Tenant parent;
 }

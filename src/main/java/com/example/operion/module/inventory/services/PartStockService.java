@@ -18,8 +18,11 @@ import com.example.operion.module.inventory.enums.StockMovementType;
 import com.example.operion.module.inventory.enums.StockReferenceType;
 import com.example.operion.module.inventory.repository.ReceiveStockRequest;
 import com.example.operion.module.inventory.repository.StockMovementRepository;
+import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
+import com.example.operion.module.partinstance.service.PartInstanceService;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,12 @@ public class PartStockService {
         private final PartRepository partRepository;
 
         private final StockMovementRepository movementRepository;
+
+        private final PartInstanceService partInstanceService;
+
+        private final TenantHierarchyService tenantHierarchyService;
+
+        private final NotificationService notificationService;
 
         public void adjustStock(
                         Part part,
@@ -52,6 +61,12 @@ public class PartStockService {
                 part.setCurrentStock(after);
 
                 partRepository.save(part);
+
+                Integer minimumStock = part.getMinimumStock();
+
+                if (minimumStock != null && before > minimumStock && after <= minimumStock) {
+                        notificationService.notifyLowStock(part);
+                }
 
                 StockMovement movement = StockMovement.builder()
                                 .tenant(part.getTenant())
@@ -150,6 +165,15 @@ public class PartStockService {
                                 StockReferenceType.MANUAL,
                                 null,
                                 request.getNotes());
+
+                if (part.getCategory() == null
+                                || !"Consumable".equals(part.getCategory().getName())) {
+
+                        partInstanceService.generateInstances(
+                                        part,
+                                        request.getQuantity(),
+                                        request.getNotes());
+                }
         }
 
         private StockMovementResponse map(StockMovement movement) {
@@ -171,13 +195,15 @@ public class PartStockService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
-                List<Part> parts = partRepository.findByTenantId(tenantId);
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                List<Part> parts = partRepository.findByTenantIdIn(tenantIds);
 
                 int totalStock = parts.stream()
                                 .mapToInt(Part::getCurrentStock)
                                 .sum();
 
-                List<Part> lowStockParts = getLowStockParts(tenantId);
+                List<Part> lowStockParts = getLowStockParts(tenantIds);
 
                 int lowStock = lowStockParts.size();
 
@@ -188,7 +214,8 @@ public class PartStockService {
                 LocalDateTime today = LocalDate.now().atStartOfDay();
 
                 int receivedToday = movementRepository
-                                .findByMovementTypeAndCreatedAtAfter(
+                                .findByTenantIdInAndMovementTypeAndCreatedAtAfter(
+                                                tenantIds,
                                                 StockMovementType.PURCHASE,
                                                 today)
                                 .stream()
@@ -197,7 +224,8 @@ public class PartStockService {
                                 .sum();
 
                 int usedToday = movementRepository
-                                .findByMovementTypeAndCreatedAtAfter(
+                                .findByTenantIdInAndMovementTypeAndCreatedAtAfter(
+                                                tenantIds,
                                                 StockMovementType.MAINTENANCE_USAGE,
                                                 today)
                                 .stream()
@@ -219,7 +247,9 @@ public class PartStockService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
-                return getLowStockParts(tenantId)
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                return getLowStockParts(tenantIds)
                                 .stream()
                                 .map(this::mapLowStock)
                                 .toList();
@@ -230,16 +260,18 @@ public class PartStockService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
-                return partRepository.findByTenantId(tenantId)
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                return partRepository.findByTenantIdIn(tenantIds)
                                 .stream()
                                 .map(this::mapLowStock)
                                 .toList();
         }
 
-        private List<Part> getLowStockParts(UUID tenantId) {
+        private List<Part> getLowStockParts(List<UUID> tenantIds) {
 
                 return partRepository
-                                .findByTenantIdOrderByCurrentStockAsc(tenantId)
+                                .findByTenantIdInOrderByCurrentStockAsc(tenantIds)
                                 .stream()
                                 .filter(part -> getSafeStock(part.getCurrentStock()) <= getSafeStock(
                                                 part.getMinimumStock()))

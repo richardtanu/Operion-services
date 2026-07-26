@@ -17,6 +17,8 @@ public class CreateServiceEventRequest {
 
   private UUID technicianId;
 
+  private UUID workOrderId;
+
   private ServiceEventType eventType;
 
   private String issue;

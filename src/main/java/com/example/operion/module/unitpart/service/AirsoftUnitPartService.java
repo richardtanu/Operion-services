@@ -14,11 +14,15 @@ import com.example.operion.module.airsoft.repository.AirsoftUnitRepository;
 import com.example.operion.module.airsoft.service.UnitOperationalRuleService;
 import com.example.operion.module.analytics.service.UnitHealthService;
 import com.example.operion.module.inventory.dto.StockAdjustmentRequest;
+import com.example.operion.module.inventory.enums.StockMovementType;
+import com.example.operion.module.inventory.enums.StockReferenceType;
 import com.example.operion.module.inventory.services.PartStockService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.parthistory.entity.PartConditionHistory;
 import com.example.operion.module.parthistory.repository.PartConditionHistoryRepository;
+import com.example.operion.module.partinstance.entity.PartInstance;
+import com.example.operion.module.partinstance.service.PartInstanceService;
 import com.example.operion.module.serviceevent.entity.ServiceEvent;
 import com.example.operion.module.serviceevent.enums.ServiceEventType;
 import com.example.operion.module.serviceevent.repository.ServiceEventRepository;
@@ -70,6 +74,9 @@ public class AirsoftUnitPartService {
 
         private final PartStockService stockAdjustmentRequest;
 
+        private final PartInstanceService partInstanceService;
+
+        @Transactional
         public AirsoftUnitPartResponse installPart(
                         InstallPartRequest request) {
 
@@ -111,6 +118,16 @@ public class AirsoftUnitPartService {
                         throw new RuntimeException(
                                         "Unit already has this part type installed: " + part.getPartType().getName());
                 }
+
+                PartInstance instance = null;
+
+                if (request.getBarcode() != null && !request.getBarcode().isBlank()) {
+
+                        instance = partInstanceService.findByBarcodeForInstall(
+                                        request.getBarcode(),
+                                        part.getId());
+                }
+
                 AirsoftUnitPart installedPart = AirsoftUnitPart.builder()
                                 .tenant(tenant)
                                 .airsoftUnit(unit)
@@ -122,6 +139,18 @@ public class AirsoftUnitPartService {
                                 .build();
 
                 AirsoftUnitPart saved = repository.save(installedPart);
+
+                if (instance != null) {
+                        partInstanceService.markInstalled(instance, saved);
+                }
+
+                stockAdjustmentRequest.adjustStock(
+                                part,
+                                -1,
+                                StockMovementType.MAINTENANCE_USAGE,
+                                StockReferenceType.UNIT_INSTALL,
+                                saved.getId(),
+                                "Installed on " + unit.getName());
 
                 return map(saved);
         }
@@ -241,6 +270,18 @@ public class AirsoftUnitPartService {
                 historyRepository.save(history);
 
                 /*
+                 * RESOLVE OPTIONAL BARCODE INSTANCE
+                 */
+                PartInstance instance = null;
+
+                if (request.getBarcode() != null && !request.getBarcode().isBlank()) {
+
+                        instance = partInstanceService.findByBarcodeForInstall(
+                                        request.getBarcode(),
+                                        newPart.getId());
+                }
+
+                /*
                  * INSTALL NEW PART
                  */
                 AirsoftUnitPart replacement = AirsoftUnitPart.builder()
@@ -255,12 +296,31 @@ public class AirsoftUnitPartService {
 
                 AirsoftUnitPart saved = repository.save(replacement);
 
+                if (instance != null) {
+                        partInstanceService.markInstalled(instance, saved);
+                }
+
+                /*
+                 * RESOLVE OPTIONAL WORK ORDER
+                 */
+                WorkOrder linkedWorkOrder = null;
+
+                if (request.getWorkOrderId() != null) {
+
+                        linkedWorkOrder = workOrderRepository
+                                        .findByIdAndTenantId(
+                                                        request.getWorkOrderId(),
+                                                        oldInstalledPart.getTenant().getId())
+                                        .orElseThrow(() -> new RuntimeException("Work order not found"));
+                }
+
                 /*
                  * CREATE SERVICE EVENT
                  */
                 ServiceEvent serviceEvent = ServiceEvent.builder()
                                 .tenant(oldInstalledPart.getTenant())
                                 .airsoftUnit(oldInstalledPart.getAirsoftUnit())
+                                .workOrder(linkedWorkOrder)
                                 .eventType(ServiceEventType.REPAIR)
                                 .issue("Part replacement")
                                 .actionTaken(

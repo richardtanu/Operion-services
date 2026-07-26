@@ -1,6 +1,7 @@
 package com.example.operion.module.serviceevent.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +37,17 @@ public class ServiceEventController {
         .success(true)
         .message("Service events fetched")
         .data(service.getAll())
+        .build();
+  }
+
+  @GetMapping("/work-order/{workOrderId}")
+  public ApiResponse<List<ServiceEventResponse>> getByWorkOrder(
+      @PathVariable UUID workOrderId) {
+
+    return ApiResponse.<List<ServiceEventResponse>>builder()
+        .success(true)
+        .message("Service events fetched")
+        .data(service.getByWorkOrder(workOrderId))
         .build();
   }
 }

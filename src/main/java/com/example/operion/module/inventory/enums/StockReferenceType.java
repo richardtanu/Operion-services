@@ -8,5 +8,7 @@ public enum StockReferenceType {
 
   PURCHASE,
 
-  STOCK_ADJUSTMENT
+  STOCK_ADJUSTMENT,
+
+  UNIT_INSTALL
 }

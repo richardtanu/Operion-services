@@ -1,5 +1,6 @@
 package com.example.operion.module.part.dto;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import lombok.Builder;
@@ -31,7 +32,13 @@ public class PartResponse {
 
   private String notes;
 
+  private Integer currentStock;
+
   private Integer minimumStock;
 
   private Integer reorderQuantity;
+
+  private Boolean retired;
+
+  private LocalDateTime retiredAt;
 }

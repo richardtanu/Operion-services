@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.example.operion.module.inventory.entity.StockMovement;
@@ -24,4 +26,10 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
     List<StockMovement> findByMovementTypeInAndCreatedAtAfter(
             List<StockMovementType> types,
             LocalDateTime date);
+
+    @Query("select m from StockMovement m where m.tenant.id in :tenantIds and m.movementType = :movementType and m.createdAt > :date")
+    List<StockMovement> findByTenantIdInAndMovementTypeAndCreatedAtAfter(
+            @Param("tenantIds") List<UUID> tenantIds,
+            @Param("movementType") StockMovementType movementType,
+            @Param("date") LocalDateTime date);
 }

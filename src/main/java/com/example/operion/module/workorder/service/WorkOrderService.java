@@ -20,6 +20,7 @@ import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.maintenance.service.MaintenanceRecommendationService;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 import com.example.operion.module.unitpart.entity.AirsoftUnitPart;
 import com.example.operion.module.unitpart.enums.UnitPartStatus;
 import com.example.operion.module.unitpart.repository.AirsoftUnitPartRepository;
@@ -49,6 +50,8 @@ public class WorkOrderService {
         private final UserRepository userRepository;
 
         private final MaintenanceRecommendationService maintenanceRecommendationService;
+
+        private final TenantHierarchyService tenantHierarchyService;
 
         public WorkOrderResponse create(
                         CreateWorkOrderRequest request) {
@@ -124,11 +127,13 @@ public class WorkOrderService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
                 PageRequest pageable = PageRequest.of(page, size);
 
                 return repository
-                                .findByTenantId(
-                                                tenantId,
+                                .findByTenantIdIn(
+                                                tenantIds,
                                                 pageable)
                                 .map(this::map);
         }
@@ -504,6 +509,8 @@ public class WorkOrderService {
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
                 LocalDateTime startMonth = LocalDate.now()
                                 .withDayOfMonth(1)
                                 .atStartOfDay();
@@ -511,25 +518,25 @@ public class WorkOrderService {
                 LocalDateTime endMonth = LocalDateTime.now();
 
                 return WorkOrderDashboardResponse.builder()
-                                .open(repository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .open(repository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.OPEN))
-                                .assigned(repository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .assigned(repository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.ASSIGNED))
-                                .inProgress(repository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .inProgress(repository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.IN_PROGRESS))
-                                .waitingParts(repository.countByTenantIdAndStatus(
-                                                tenantId,
+                                .waitingParts(repository.countByTenantIdInAndStatus(
+                                                tenantIds,
                                                 WorkOrderStatus.WAITING_PARTS))
-                                .completedThisMonth(repository.countByTenantIdAndStatusAndCompletedAtBetween(
-                                                tenantId,
+                                .completedThisMonth(repository.countByTenantIdInAndStatusAndCompletedAtBetween(
+                                                tenantIds,
                                                 WorkOrderStatus.COMPLETED,
                                                 startMonth,
                                                 endMonth))
-                                .overdue(repository.countByTenantIdAndStatusNotAndTargetDateBefore(
-                                                tenantId,
+                                .overdue(repository.countByTenantIdInAndStatusNotAndTargetDateBefore(
+                                                tenantIds,
                                                 WorkOrderStatus.COMPLETED,
                                                 LocalDate.now()))
                                 .build();

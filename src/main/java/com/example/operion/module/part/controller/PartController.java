@@ -74,4 +74,16 @@ public class PartController {
                 .build();
     }
 
+    @PatchMapping("/{partId}/restore")
+    public ApiResponse<PartResponse> restore(
+            @PathVariable UUID partId) {
+
+        return ApiResponse
+                .<PartResponse>builder()
+                .success(true)
+                .message("Part restored")
+                .data(service.restore(partId))
+                .build();
+    }
+
 }
