@@ -1,5 +1,6 @@
 package com.example.operion.module.partinstance.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +50,18 @@ public class PartInstanceService {
     @Transactional
     public void generateInstances(Part part, int quantity, String notes) {
 
+        generateInstances(part, quantity, notes, null);
+    }
+
+    /**
+     * Same as {@link #generateInstances(Part, int, String)}, but also stamps
+     * each instance with a per-unit landed cost (decision #5, specific-
+     * identification costing). Pass null when no itemized cost data exists
+     * for this receipt (manual receipt, legacy PO-based receipt).
+     */
+    @Transactional
+    public void generateInstances(Part part, int quantity, String notes, BigDecimal landedCost) {
+
         for (int i = 0; i < quantity; i++) {
 
             repository.save(
@@ -58,6 +71,7 @@ public class PartInstanceService {
                             .barcode(generateBarcode())
                             .status(PartInstanceStatus.IN_STOCK)
                             .notes(notes)
+                            .landedCost(landedCost)
                             .build());
         }
     }
@@ -235,6 +249,7 @@ public class PartInstanceService {
                         ? instance.getInstalledUnitPart().getId()
                         : null)
                 .notes(instance.getNotes())
+                .landedCost(instance.getLandedCost())
                 .build();
     }
 }

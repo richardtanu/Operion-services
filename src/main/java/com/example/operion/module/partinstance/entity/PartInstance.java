@@ -1,5 +1,6 @@
 package com.example.operion.module.partinstance.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -57,6 +58,15 @@ public class PartInstance {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    /**
+     * Per-unit landed cost, for specific-identification costing (decision #5).
+     * Only populated when the instance was generated from a Realisasi goods
+     * receipt, which is the only path with itemized cost data — null for
+     * manual receipt and legacy PO-based receipt.
+     */
+    @Column(name = "landed_cost")
+    private BigDecimal landedCost;
 
     @PrePersist
     public void prePersist() {

@@ -22,4 +22,6 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
     List<PurchaseRequest> findByIdInAndTenantId(List<UUID> ids, UUID tenantId);
 
     List<PurchaseRequest> findByPurchaseOrderId(UUID purchaseOrderId);
+
+    List<PurchaseRequest> findByPurchaseRequestAuthorizationId(UUID purchaseRequestAuthorizationId);
 }

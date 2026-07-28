@@ -40,6 +40,10 @@ public class PurchaseRequest {
     @JoinColumn(name = "po_id")
     private PurchaseOrder purchaseOrder;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pra_id")
+    private PurchaseRequestAuthorization purchaseRequestAuthorization;
+
     private LocalDateTime createdAt;
 
     @PrePersist

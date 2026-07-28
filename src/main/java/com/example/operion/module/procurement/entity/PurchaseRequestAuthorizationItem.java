@@ -1,5 +1,6 @@
 package com.example.operion.module.procurement.entity;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import com.example.operion.module.part.entity.Part;
@@ -8,29 +9,29 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "goods_receipt_items")
+@Table(name = "purchase_request_authorization_items")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class GoodsReceiptItem {
+public class PurchaseRequestAuthorizationItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receipt_id")
-    private GoodsReceipt goodsReceipt;
+    @JoinColumn(name = "pra_id")
+    private PurchaseRequestAuthorization purchaseRequestAuthorization;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "part_id")
     private Part part;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "realisasi_item_id")
-    private RealisasiItem realisasiItem;
+    @Column(name = "authorized_qty")
+    private Integer authorizedQty;
 
-    private Integer quantity;
+    @Column(name = "max_value")
+    private BigDecimal maxValue;
 }

@@ -14,8 +14,10 @@ import lombok.Setter;
 @Setter
 public class CreateGoodsReceiptRequest {
 
-    @NotNull
+    /** Exactly one of purchaseOrderId / realisasiId must be set. */
     private UUID purchaseOrderId;
+
+    private UUID realisasiId;
 
     @NotNull
     private UUID receivedBy;

@@ -1,5 +1,6 @@
 package com.example.operion.module.partinstance.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -33,4 +34,6 @@ public class PartInstanceResponse {
     private UUID installedUnitPartId;
 
     private String notes;
+
+    private BigDecimal landedCost;
 }

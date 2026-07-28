@@ -11,6 +11,14 @@ import com.example.operion.module.tenant.entity.Tenant;
 import jakarta.persistence.*;
 import lombok.*;
 
+/**
+ * Scope narrowed 28 Jul 2026: this is now the outlet&rarr;center leg only
+ * (a PR converted into an internal restock order against the center). Direct
+ * marketplace/supplier purchasing goes through {@link PurchaseRequestAuthorization}
+ * / {@link Realisasi} instead. The {@code supplier} field below predates that
+ * split and is legacy — new code should not rely on a PurchaseOrder carrying
+ * a real external supplier.
+ */
 @Entity
 @Table(name = "purchase_orders")
 @Getter

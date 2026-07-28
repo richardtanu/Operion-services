@@ -6,5 +6,6 @@ public enum PurchaseRequestStatus {
     APPROVED,
     REJECTED,
     ORDERED,
+    AUTHORIZED,
     CANCELLED,
 }

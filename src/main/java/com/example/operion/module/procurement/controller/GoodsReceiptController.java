@@ -41,4 +41,15 @@ public class GoodsReceiptController {
                 .data(service.getByPurchaseOrder(poId))
                 .build();
     }
+
+    @GetMapping("/realisasi/{realisasiId}")
+    public ApiResponse<List<GoodsReceiptResponse>> getByRealisasi(
+            @PathVariable UUID realisasiId) {
+
+        return ApiResponse.<List<GoodsReceiptResponse>>builder()
+                .success(true)
+                .message("Goods receipts fetched")
+                .data(service.getByRealisasi(realisasiId))
+                .build();
+    }
 }

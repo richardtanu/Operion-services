@@ -19,6 +19,10 @@ public class GoodsReceiptResponse {
 
     private String poNumber;
 
+    private UUID realisasiId;
+
+    private String externalOrderRef;
+
     private UUID receivedById;
 
     private String receivedByName;

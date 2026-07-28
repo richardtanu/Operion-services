@@ -20,6 +20,7 @@ import com.example.operion.module.notification.enums.NotificationType;
 import com.example.operion.module.notification.repository.NotificationRepository;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.procurement.entity.PurchaseRequest;
+import com.example.operion.module.procurement.entity.Realisasi;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.service.TenantHierarchyService;
 
@@ -73,6 +74,24 @@ public class NotificationService {
                 "Your purchase request has been ordered from the supplier",
                 NotificationReferenceType.PURCHASE_REQUEST,
                 pr.getId());
+    }
+
+    public void notifyRealisasiEscalated(Realisasi realisasi) {
+
+        List<UUID> tenantIds = tenantHierarchyService.getAncestorTenantIds(realisasi.getTenant().getId());
+
+        for (User target : approversIn(tenantIds)) {
+
+            create(
+                    realisasi.getTenant(),
+                    target,
+                    NotificationType.REALISASI_ESCALATED,
+                    "Realisasi Pembelian Exceeds Authorization Ceiling",
+                    "Realisasi " + realisasi.getExternalOrderRef()
+                            + " exceeds its PRA ceiling and needs approval",
+                    NotificationReferenceType.REALISASI,
+                    realisasi.getId());
+        }
     }
 
     public void notifyPartEndOfLife(AirsoftUnit unit, String message) {

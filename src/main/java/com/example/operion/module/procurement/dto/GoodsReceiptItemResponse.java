@@ -17,5 +17,7 @@ public class GoodsReceiptItemResponse {
 
     private String partName;
 
+    private UUID realisasiItemId;
+
     private Integer quantity;
 }

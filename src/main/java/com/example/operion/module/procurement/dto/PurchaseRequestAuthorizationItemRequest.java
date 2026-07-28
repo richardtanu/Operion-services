@@ -1,5 +1,6 @@
 package com.example.operion.module.procurement.dto;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
@@ -9,14 +10,15 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class GoodsReceiptItemRequest {
+public class PurchaseRequestAuthorizationItemRequest {
 
     @NotNull
     private UUID partId;
 
-    /** Only used on the Realisasi receiving path, to attribute received_qty to a specific line. */
-    private UUID realisasiItemId;
-
     @Positive
-    private Integer quantity;
+    private Integer authorizedQty;
+
+    @NotNull
+    @Positive
+    private BigDecimal maxValue;
 }
