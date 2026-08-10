@@ -207,6 +207,38 @@ Open `PurchaseRequestAuthorization.java` and `PurchaseRequestAuthorizationItem.j
       (`RealisasiService.java:194,476`; `Realisasi.java:107,136-137`; two DTOs) — no
       repository query or filter method uses it. Confirms `CLAUDE.md`.
 
+- [x] **C7.** (BE-09, 10 Aug) Is `Realisasi.reimbursementStatus` ever written, and does
+      it ever reach `REIMBURSED`?
+      → BE-01's live CHECK-constraint dump found `NOT_APPLICABLE/PENDING/REIMBURSED` as
+      allowed values with no code-level confirmation either was ever set.
+      **Answer `[C]`:** Written, but the loop never closes. `RealisasiService.java:170-183`
+      sets it at creation: `PENDING` when `paymentMethod == PERSONAL_REIMBURSABLE`,
+      `NOT_APPLICABLE` otherwise. `REIMBURSED` is declared in `ReimbursementStatus.java`
+      but has **zero write sites** anywhere in the codebase — grepped every file touching
+      `Reimburs*` (exactly 3: the entity, the enum, `RealisasiService`), no
+      `markReimbursed` endpoint, no service method, no scheduled job. A reimbursement
+      queue screen filtering on `PENDING` has real data to show; a "mark as reimbursed"
+      *action* on that screen would be an orphan — no backing endpoint. Whether to build
+      one is a product decision, not a gap for a screen-inventory session to close
+      unilaterally. Same reasoning kills the Gate 3 question "may the purchaser mark
+      their own reimbursement paid" — unanswerable today because the action doesn't
+      exist to have a segregation rule about.
+
+- [x] **C8.** (BE-09, 10 Aug) Is `PurchaseRequestAuthorizationStatus.PARTIALLY_FULFILLED`
+      / `FULFILLED` ever reached, or is PRA lifecycle really just `ACTIVE`/`CANCELLED` as
+      `CLAUDE.md`'s narrative implies?
+      **Answer `[C]`:** Fully wired, contrary to the narrative. `PurchaseRequestAuthorizationService
+      .refreshStatus(UUID)` (lines 192-235) computes `FULFILLED` (no item has remaining
+      ceiling), `PARTIALLY_FULFILLED` (some but not all items fulfilled), or `ACTIVE`
+      (nothing fulfilled) — live, from `approvedPurchasedQtyInStockUnits()` vs
+      `authorizedQty` per line, same no-mutable-column pattern as everything else here.
+      Called from **four** sites in `RealisasiService`: `create()` (170),
+      `approveEscalated()` (233), `reject()` (258), `supersede()` (275) — every
+      Realisasi transition that changes APPROVED-status aggregation triggers a
+      recompute. **`PurchaseRequestAuthorizationStatus` has four real, reachable
+      values**, not two. Any screen showing PRA status needs a four-state badge, not a
+      binary active/cancelled one.
+
 ---
 
 ## D. Segregation of duties — enforced or documented?

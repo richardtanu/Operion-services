@@ -412,6 +412,78 @@ guessing.
 
 ---
 
+## BE-09 — Verify the reimbursement flow and PRA lifecycle states
+
+**Status: DONE, 10 Aug 2026.**
+
+**Priority:** Do before module 1 screen inventory (`SESSION_BRIEF_A_BACKEND_INVENTORY.md`
+step 1). A reimbursement queue screen designed against an orphaned field wastes the work
+and makes an aspirational column look shipped.
+**Type:** Investigation, no code change.
+**Effort:** ~20 minutes.
+
+### Why
+
+BE-01's live CHECK-constraint dump found `realisasis.payment_method` ∈
+`{COMPANY_ACCOUNT, PERSONAL_REIMBURSABLE}`, `reimbursement_status` ∈ `{NOT_APPLICABLE,
+PENDING, REIMBURSED}`, and `purchase_request_authorizations.status` allowing
+`PARTIALLY_FULFILLED`/`FULFILLED` — none of these were in any narrative doc, and nobody
+had confirmed service code actually writes (or ever transitions) them.
+
+### What was found
+
+**Reimbursement: half-wired, not orphaned, not closeable.**
+`RealisasiService.create()` (line 170-183) sets `reimbursementStatus` at creation time —
+`PENDING` when `paymentMethod == PERSONAL_REIMBURSABLE`, `NOT_APPLICABLE` otherwise. So
+the field is real and a "reimbursement queue" screen filtering on `PENDING` would show
+real data.
+
+But `REIMBURSED` — the value that would close that queue — is declared in
+`ReimbursementStatus.java` and **never set anywhere**. Grepped the whole codebase
+(`grep -rln "Reimburs"`): exactly 3 files touch it — the entity, the enum, and
+`RealisasiService` — and none of them contain a write path to `REIMBURSED`. There is no
+`markReimbursed` endpoint, no service method, no scheduled job. A reimbursement gets
+flagged `PENDING` at creation and stays there permanently; the workflow has no exit.
+
+**Screen consequence:** the reimbursement queue *screen* is not an orphan (real data to
+show), but any "mark as reimbursed" *action* on it is — there is no backing endpoint.
+Gate 1 should flag the action, not the screen. Whether to build that endpoint is a
+product decision, not a gap for the inventory session to close on its own — flag and
+stop, per this task's own instruction.
+
+**Consequence for the brief's Gate 3 question** ("may the person who made a purchase
+mark their own reimbursement paid?"): currently unanswerable, because the action doesn't
+exist yet to have a segregation rule about. Not a finding to invent an answer for — flag
+it as blocked on the same product decision above.
+
+**PRA lifecycle: fully wired, contrary to the ACTIVE/CANCELLED-only narrative.**
+`PurchaseRequestAuthorizationService.refreshStatus(UUID)` (lines 192-235) computes
+`FULFILLED` (no item has remaining ceiling), `PARTIALLY_FULFILLED` (some items fulfilled,
+some not), or `ACTIVE` (nothing fulfilled yet) by comparing each line's
+`approvedPurchasedQtyInStockUnits()` against `authorizedQty` — live, not stored, same
+"no mutable remaining column" pattern as everything else in this module. It's called
+from **four** sites in `RealisasiService`: `create()` (170), `approveEscalated()` (233),
+`reject()` (258), and `supersede()` (275) — every Realisasi transition that changes
+APPROVED-status aggregation triggers a PRA status recompute. This is not dead code and
+not aspirational: **`PurchaseRequestAuthorizationStatus` has four real, reachable
+values** (`ACTIVE`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CANCELLED`), not the two
+CLAUDE.md's narrative implies. `screens/00-backend-state.md` B2 and I2 should be read
+alongside this — the PRA status field itself needs a four-state badge on any screen
+showing it, not two.
+
+### Done when
+
+`screens/00-backend-state.md` gets a new item recording both findings as `[C]`, tagged
+with file:line evidence. **Met** — see §C7/§C8 there.
+
+### Do not
+
+Build the missing `markReimbursed` endpoint here. Absence confirmed; whether it should
+exist is Blitz's call, not this investigation's. Report and stop, per this task's own
+instruction.
+
+---
+
 ## Ordering
 
 ```
