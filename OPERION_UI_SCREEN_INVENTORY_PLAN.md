@@ -1,9 +1,27 @@
 # Operion — UI Screen Inventory Plan
 
-**Versi:** 1.2
-**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1, v1.2)
+**Versi:** 1.3
+**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1, v1.2, v1.3)
 **Status:** Plan — belum dieksekusi
 **Owner:** Blitz (product owner)
+
+### Changelog — v1.3
+
+All four §11 pre-module-1 blockers closed same day, via `OPERION_BE_CHANGE_QUEUE.md`
+BE-01…BE-04. Full evidence in `screens/00-backend-state.md`; this changelog only tracks
+what changed in *this* document as a result:
+
+- **§5.1 gap 2** (PRA notification type blocked on unknown CHECK constraints) —
+  unblocked. `00-backend-state.md` I2 is now `[C]` with the full constraint list; BE-07
+  has an exact `ALTER TABLE` shape ready.
+- **§5.1 gap 4** (PRA→PR FK unverified) — resolved, rewritten below. The FK exists, on
+  the inverse side, already exposed via the API. No schema change, no navigation gap.
+- **§11 item 3** (runtime-verify the sparepart fix) — done. A real bug surfaced along the
+  way (unrelated to production correctness): `BurnRateService` depends on open-in-view
+  for its lazy category load and can't safely run outside a web request yet.
+- **§11 item 4** (string-check refactor) — done. `PartCategory.consumable` replaces the
+  name comparison everywhere; category create/update DTOs now expose the flag.
+- **§11 item 5** — done, `screens/00-backend-state.md` has been committed since v1.2.
 
 ### Changelog — v1.2
 
@@ -351,15 +369,22 @@ are in different UOMs and the mismatch is a live source of user error.
    (§H1). When a PRA is created, **nobody is told** — the person who must create the
    Realisasi gets no signal. This is a flow break in the middle of the happy path.
    ⚠️ Adding a value here hits `CLAUDE.md` rule 3 (`ddl-auto` does not alter CHECK
-   constraints on existing tables) and `00-backend-state.md` I2 is still `[?]`. Resolve
-   the constraint question before this becomes code.
+   constraints on existing tables). ~~`00-backend-state.md` I2 is still `[?]`~~ **`[C]` 10
+   Aug (BE-01): resolved.** Full constraint list captured against the live instance;
+   `notifications_type_check`'s exact allowed-value shape is known, so the migration for
+   this gap is a known `ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT ... CHECK
+   (type IN (..., 'NEW_VALUE'))`, not an open question anymore.
 3. **`retroPurchaseFlag` is written but never queried** (§C6). An Owner-facing filter is a
    *new* requirement, not an existing capability.
-4. **Unverified:** does `PurchaseRequestAuthorization` hold an FK back to its
-   `PurchaseRequest`? §B2's field list shows only `id`, `tenant`, `approvedBy`, `status`.
-   If the FK is genuinely absent, PRA screens have no navigation back to the originating
-   PR — the same defect blueprint §9 #3 flagged for `purchase_orders`. **Confirm before
-   drawing PRA screens.**
+4. ~~**Unverified:** does `PurchaseRequestAuthorization` hold an FK back to its
+   `PurchaseRequest`?~~ **`[C]` 10 Aug (BE-02): resolved — the FK exists.** Not on
+   `PurchaseRequestAuthorization` itself (§B2's field list was correct but answered a
+   different question); it's on the inverse side —
+   `PurchaseRequest.purchaseRequestAuthorization` (column `purchase_requests.pra_id`). A
+   PRA can authorize multiple PRs at once, and the reverse lookup is already wired:
+   `PurchaseRequestRepository.findByPurchaseRequestAuthorizationId()` populates
+   `purchaseRequestIds` on **every** PRA API response today. **PRA screens already have
+   navigation back to origin PR(s) — no gap, no schema change needed.**
 
 Two existing prototypes (PR creation, PR approval console) are **stale** — drawn against
 the old chain. Redrawing them is part of this module.
@@ -534,15 +559,41 @@ backlog, derived from real screens rather than guessed at.
 
 ## 11. Before starting module 1
 
-- [ ] Resolve `00-backend-state.md` **I2** — `\d+ notifications` against live Postgres.
+**All five closed 10 Aug 2026** (`OPERION_BE_CHANGE_QUEUE.md` BE-01…BE-04; full evidence
+in `screens/00-backend-state.md`). Module 1 screen work is no longer blocked on any of
+these.
+
+- [x] Resolve `00-backend-state.md` **I2** — `\d+ notifications` against live Postgres.
       Blocks the PRA notification type (§5.1 gap 2).
-- [ ] Confirm whether `PurchaseRequestAuthorization` has a `purchaseRequest` FK
+      **Done via BE-01.** `psql`/`pg_restore` weren't available in the executing
+      environment; queried `information_schema.check_constraints` directly instead. Full
+      constraint list recorded, including two CHECK-constrained `realisasis` columns
+      (`payment_method`, `reimbursement_status`) nobody had documented before.
+- [x] Confirm whether `PurchaseRequestAuthorization` has a `purchaseRequest` FK
       (§5.1 gap 4).
-- [ ] Runtime-verify the 10 Aug `BurnRateService` sparepart fix — a sparepart with enough
+      **Done via BE-02.** FK exists on the inverse side, already exposed via the API —
+      see §5.1 gap 4 above. No code change needed.
+- [x] Runtime-verify the 10 Aug `BurnRateService` sparepart fix — a sparepart with enough
       takes to cross the thresholds should report `MANUAL_LEVEL`, not `COMPUTED`. A clean
       compile does not verify this (`CLAUDE.md` rule 7).
-- [ ] Consider replacing the `getCategory().getName().equals("Consumable")` string check
+      **Done via BE-03.** New test (`BurnRateServiceSparepartGateTest`) confirms it at
+      the exact threshold and at triple the threshold, plus a Consumable regression
+      control. In practice the mode landed on `NONE` rather than `MANUAL_LEVEL` for the
+      test fixtures (no `manualReorderPoint` was seeded) — the assertion that matters,
+      "never `COMPUTED`," held regardless. Surfaced one non-production finding:
+      `BurnRateService` has no `@Transactional` of its own and depends on Spring Boot's
+      default open-in-view to keep a session open for its lazy `category` load — fine for
+      the real `GET /burn-rate` endpoint, not safe if `BurnRateService` is ever called
+      from a batch job or another service outside a web request.
+- [x] Consider replacing the `getCategory().getName().equals("Consumable")` string check
       with a flag or enum on the category entity. It is duplicated across three services
       and fails silently if a category is renamed or localized — and per-tenant
       configurable taxonomies are already planned.
-- [ ] Create `screens/` and commit `00-backend-state.md` into it.
+      **Done via BE-04.** `PartCategory.consumable` (boolean, avoids BE-01's
+      CHECK-constraint question entirely) is now the single source of truth, read through
+      one shared `Part.isConsumable()`. Existing data backfilled to match prior behavior
+      exactly. Category create/update DTOs now expose the flag, so a tenant can mark a
+      renamed or custom category explicitly instead of the flag only ever matching a
+      hardcoded string.
+- [x] Create `screens/` and commit `00-backend-state.md` into it.
+      **Done** — committed alongside the v1.1 correction pass.

@@ -2,7 +2,8 @@
 
 **Tanggal:** 10 Agustus 2026
 **Source:** `screens/00-backend-state.md` (verification sweep, all `[C]`) +
-`OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.2
+`OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.2 (now v1.3 — this queue's §11 items are what
+moved it there)
 **Status:** BE-01, BE-02 done. BE-03, BE-04 executed same session. BE-05 … BE-08 blocked
 or deferred — see each.
 
