@@ -41,4 +41,16 @@ public class PartCategory {
 
   @Column
   private String description;
+
+  /**
+   * Stable discriminator for "this category's parts are fungible
+   * consumables" — set once at category creation/edit, not re-derived from
+   * {@code name} on every read. Renaming or localizing the category (or a
+   * tenant creating their own "Consumables" taxonomy) must not silently
+   * change this. Nullable on purpose: existing rows predate this column and
+   * are backfilled explicitly rather than defaulted by ddl-auto.
+   */
+  @Column(name = "is_consumable")
+  @Builder.Default
+  private Boolean consumable = false;
 }

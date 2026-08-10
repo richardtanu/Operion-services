@@ -1,9 +1,22 @@
 # Operion — UI Screen Inventory Plan
 
-**Versi:** 1.1
-**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1)
+**Versi:** 1.2
+**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1, v1.2)
 **Status:** Plan — belum dieksekusi
 **Owner:** Blitz (product owner)
+
+### Changelog — v1.2
+
+Merge fix (v1.1 was edited from a stale copy of v1.0), plus the consequences of the
+verification sweep that v1.1 recorded but did not yet act on:
+
+- **Gate 4 rewritten.** Scope is an *action* gate, not a data filter — repositories scope
+  by tenant, not scope (`00-backend-state.md` §G5). The old Gate 4 was unrunnable.
+- **§1 connectivity** — outbox posture stated, with the K4 `[?]` caveat.
+- **§5.1** — PRA/Realisasi rules written out, five quantity columns added, endpoint
+  inventory added, three concrete gaps recorded.
+- **§9** — output directory is `screens/`, not `inventory/`.
+- **§10 added** — session prompt template for running a module.
 
 ### Changelog — v1.1
 
@@ -78,25 +91,31 @@ dual timestamps, idempotency keys, `origin_node_id` + `revision`, clean module
 boundaries) are **still worth keeping**. They cost little now and are what make a future
 Local Agent reintroduction non-breaking if outlet count or connectivity ever forces it.
 
-#### ⚠️ Open question — retry behaviour on request failure
+#### Offline tolerance is client-side only
 
-Cloud-only settles the architecture but not this: **an operator scans a barcode, the
-connection drops mid-request. What happens?**
+Per DL-06, the RN app carries an **outbox queue** plus **pre-allocated barcode code
+blocks**. There is no server-side sync layer and no conflict resolution — the client
+holds writes and replays them; the server just receives them.
 
-Two options:
-- **Hard fail** — error state, manual retry button. Simplest. Every failed scan is
-  visible to the operator and must be redone by hand.
-- **Small in-app retry queue** — the request is held and retried silently. Still an
-  outbox, but a far smaller one than the Local Agent implied.
+Backend-side evidence confirms the design: `BarcodeAllocationService.issue()` reserves a
+`[rangeStart, rangeEnd]` block via a locked counter and creates no `PartInstance` rows
+(`00-backend-state.md` §H5). That endpoint exists *only* to support offline code
+generation.
 
-This must be answered before the module 3 scan loop screens can be inventoried, because
-it determines whether scan screens need a pending/queued state at all.
+> ⚠️ **`[?]` — the outbox itself is unverified.** It lives in the RN client repo, outside
+> the backend sweep's scope (`00-backend-state.md` K4, §J #5). Confirm it exists and
+> behaves as described before inventorying module 3. Everything below assumes it does.
 
-> **Note:** the React Native (over PWA) decision was justified by iOS outbox storage
-> guarantees. If the answer is "hard fail, no queue," that rationale no longer applies.
-> The stack choice stands regardless — Expo dev builds are settled and switching now
-> costs more than it saves — but the recorded *reason* would be wrong, and a future
-> session should not build on it.
+**UI consequence:** scan screens need a **pending/queued state**. A scan that goes into
+the outbox is not an error and must not render as one — the operator's job succeeded, the
+transmission is just deferred. Screens writing through the outbox need three visual
+states, not two: confirmed, queued, failed.
+
+> ⚠️ **The barcode redemption path is deliberately not built** — offline-generated codes
+> do not yet become real `PartInstance` rows on sync; the endpoint reserves number space
+> only. Blocked on an unmeasured question: how often outlets actually lose connectivity.
+> Inventory the scan screens as if redemption works, and flag every field that depends on
+> it.
 
 ---
 
@@ -155,11 +174,16 @@ make the gates in §4 possible, and retrofitting them is how the gates get skipp
   is the normal case — not an edge case.
 - **Backend status** uses the provenance tiers (§6). Do not write `[C]` unless you have
   actually opened the source file.
-- **Failure behaviour** replaces what would have been an "offline behaviour" field. Every
-  screen is online-only under cloud-only architecture, so the interesting question is not
-  *whether* it works offline but what the user sees when a call fails — a blocking error,
-  a retry affordance, or a queued state. Pending the §1 open question, default to
-  "blocking error, manual retry" and flag screens where that is operationally painful.
+- **Failure behaviour** replaces what would have been an "offline behaviour" field. The
+  backend is cloud-only, but the RN app has a client-side outbox, so the question per
+  screen is which of three paths applies: **blocking error** (screen cannot proceed),
+  **manual retry** (error state with a retry affordance), or **outbox-queued** (write is
+  held and replayed; screen shows a pending state and lets the operator continue).
+  Approval and authorization screens should be blocking — a queued approval that silently
+  fails later is worse than one that refuses now.
+- **Cost visibility.** Any screen displaying landed cost, unit cost, supplier pricing, or
+  the six Realisasi cost components must record which scope tiers see those fields. See
+  Gate 4.
 - **Deferred decisions** records blockers without letting them block the module.
 
 ---
@@ -179,19 +203,59 @@ Every screen either completes a task or leads somewhere. Terminal screens with n
 are a navigation bug — cheaper to catch now than after the flow is built.
 
 ### Gate 3 — Segregation of duties check
-No single role can both create and approve the same document, except through the two
-documented exemption patterns.
+
+Two rules. **They have different exemptions — do not collapse them.** Both are enforced
+in service code, verified `[C]` 10 Aug (`00-backend-state.md` §D).
+
+| Rule | Exemption | Enforced at |
+|---|---|---|
+| PRA approver ≠ Realisasi creator | **Yes** — OWNER/PRINCIPAL may do both; MANAGER does not qualify | `RealisasiService.requireSegregationFromPraApprover()` |
+| Realisasi creator ≠ goods receipt receiver | **None** | `GoodsReceiptService.receiveAgainstRealisasi()` |
+
+The first check reads the approver's **stored** scope from the `User` row referenced by
+`pra.approvedBy` — a snapshot from PRA creation time, not the live request context. A
+later promotion cannot retroactively legalize a past pairing.
+
+**Screen consequence:** because both are enforced server-side, screens may offer the
+action and surface the rejection. They do not need to pre-compute eligibility — but they
+should explain the refusal in domain terms, not as a raw error.
 
 ⚠️ **Do not skip this on modules that feel non-financial.** Stock adjustment (module 2)
-is an approval workflow with real fraud surface. Procurement is module 1, so the
-precedent gets set early either way.
+is an approval workflow with real fraud surface, scope-gated at OWNER.
 
-### Gate 4 — Scope leak check
-Does any tier see data from outside its scope? The classic failure is a Supervisor seeing
-a cross-outlet aggregate on a dashboard tile.
+### Gate 4 — Cost visibility check
 
-Principal is **aggregation-layer-only** per blueprint §2.1 — no direct query into
-per-outlet detail. That boundary must hold in the UI, not just in the service layer.
+**Rewritten in v1.2.** The original gate asked whether any tier sees data outside its
+scope, and assumed the backend filtered rows by scope. It does not.
+
+`[C]` 10 Aug (`00-backend-state.md` §G5): scope is enforced **only** at the service layer
+via `ScopeContext.hasAtLeast(...)`, which gates *actions*. Repositories filter by
+`TenantContext` — tenancy, not scope. A Supervisor's `GET /purchase-requests` returns the
+same rows an Owner's does.
+
+Two consequences:
+
+1. **Row-level scope leak is not currently checkable**, because there is nothing to leak
+   into — tenancy is flat, so tenant ≈ outlet, and cross-outlet data does not exist yet.
+   Principal and Owner see the same rows today, differing only in approval rights. This
+   gate gets a row-level clause when franchise/principal tenancy lands, not before.
+
+2. **Cost visibility is checkable, and is a live requirement.** Blueprint §2.1 states a
+   Supervisor has no access to financial reporting. Today a Supervisor can read landed
+   cost, supplier pricing, and all six Realisasi cost components through the API. The
+   code does not meet a requirement you already wrote down.
+
+**The check:** for every screen, does it display cost data to a tier that should not see
+it? Cost data means landed cost, unit cost, supplier pricing, and the six components
+(`subtotal`, `sellerDiscount`, `platformVoucher`, `shipping`, `insurance`, `serviceFee`).
+
+**Resolution direction (decided 10 Aug):** field-level redaction at the DTO layer below
+OWNER scope — not repository-level row filtering. It targets the actual exposure, costs a
+handful of DTO changes rather than every list endpoint, and defers row filtering until
+the tiers mean something.
+
+⚠️ **Hiding a field in the UI is not redaction.** The endpoint remains reachable. Every
+screen this gate flags produces a DTO-layer backend task, not just a UI note.
 
 ### Gate 5 — Deferred-decision log
 Any screen blocked on an unresolved input (burn rate target, notification engine) is
@@ -215,11 +279,87 @@ recorded in the module's deferred list. Record and move on; do not block the mod
 Chain is **PR → PRA → Realisasi Pembelian** (DL-08). The old PR → PO → Invoice model in
 blueprint §4 is **superseded** — the blueprint doc has not been updated.
 
-Rules the screens must reflect:
-- PRA ceilings are **per-line**, no header cap
-- Ceiling consumption derived from **APPROVED Realisasi only** — no stored remaining column
-- Failed Realisasi releases its hold **without restarting the PR**
-- **Partial fulfilment is the default case**, not an exception
+**The API already exists.** All six entities have controllers (`00-backend-state.md` §A2).
+This module is therefore a **gap-finding exercise**, not a design-into-vacuum: every
+screen's "Data read" gets checked against a real endpoint, and the valuable output is
+where no endpoint serves what a screen needs.
+
+#### Existing endpoints — the contract baseline
+
+| Resource | Endpoints |
+|---|---|
+| `/suppliers` | `POST`, `GET` |
+| `/purchase-requests` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}/approve`, `PATCH /{id}/reject`, `PATCH /{id}/cancel`, `GET /{id}/history` |
+| `/purchase-orders` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}/send`, `PATCH /{id}/cancel`, `GET /{id}/history` |
+| `/purchase-authorizations` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}/cancel`, `GET /{id}/history` |
+| `/realisasi` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}/approve`, `PATCH /{id}/reject`, `POST /{id}/supersede`, `GET /{id}/history` |
+| `/goods-receipts` | `POST`, `GET /purchase-order/{poId}`, `GET /realisasi/{realisasiId}` |
+
+#### Rules the screens must reflect
+
+- **PRA creation *is* the authorization act.** There is no approve endpoint, verified
+  `[C]` (§A3). `approvedBy` is set to the creator inside `create()` (§A4) — it is not a
+  separate approver. **The PRA screen must have no Approve button.**
+- PRA ceilings are **per-line** (`authorizedQty`, `maxValue` on
+  `PurchaseRequestAuthorizationItem`). **No header-level cap exists** (§B2). Whether to
+  add a nullable one is an **open decision** — per-line ceilings cannot express "spend at
+  most Rp 2.1M on this authorization," and ten in-ceiling lines can overrun a total
+  nobody stated. The PRA screen is where an Owner would feel that gap; designing it is
+  probably how the decision gets made.
+- Ceiling consumption is **computed live from APPROVED `RealisasiItem` rows only**
+  (`PurchaseRequestAuthorizationService.approvedPurchasedQtyInStockUnits()`). No stored
+  `remaining` column exists — `remainingQty`/`remainingValue` appear on the response DTO
+  only (§B3). **Do not design a screen that implies a stored balance.**
+- Failed Realisasi releases its hold **without restarting the PR**.
+- **Partial fulfilment is the default case**, not an exception.
+- **Correction is supersede, not edit** (§C3). `POST /realisasi/{id}/supersede` flips the
+  original to `SUPERSEDED` and creates a new record via self-FK. Nothing is overwritten.
+  This is an append-only correction screen, not an edit form.
+- **Two status dimensions, not one** (§J #1). `RealisasiStatus` is
+  `PENDING_APPROVAL / APPROVED / FAILED / SUPERSEDED`. `ESCALATED` belongs to a separate
+  `VarianceStatus` enum (`WITHIN_CEILING / ESCALATED`), set alongside
+  `status=PENDING_APPROVAL` when over ceiling. A screen showing one status field will
+  misrepresent the state.
+- **Six cost components, six inputs** (§C2). A single "total" field destroys landed-cost
+  accuracy — roughly 17% error on a real receipt.
+- **`attachments` is a plain text/URL field** with no upload backing, by design (§C5).
+  The screen shows a URL input, not a file picker.
+
+#### The five quantity columns
+
+All stored, none overwritten. Each divergence is a signal, and every procurement screen
+touches at least one.
+
+| Quantity | Lives on | Unit |
+|---|---|---|
+| `suggested_qty` | computed on read by `BurnRateService` — **not stored** | stock |
+| `requested_qty` | `PurchaseRequestItem.quantity` | stock |
+| `authorized_qty` | `PurchaseRequestAuthorizationItem.authorizedQty` | stock |
+| `purchased_qty` | `RealisasiItem.purchasedQty` | **purchase UOM** |
+| `received_qty` | `GoodsReceiptItem.quantity` | **stock units** |
+
+⚠️ `conversionFactor` is stored **per Realisasi line**, not as a `Part` constant (§E6).
+Any screen showing both purchased and received quantities **must label the unit** — they
+are in different UOMs and the mismatch is a live source of user error.
+
+#### Gaps found by the 10 Aug sweep — inventory these
+
+1. **No goods receipt list, no `GET /goods-receipts/{id}`.** Only by-PO and by-Realisasi
+   lookups exist. A "recent receipts" screen is not currently servable.
+2. **No PRA notification type.** `NotificationType` is `NEW_PURCHASE_REQUEST`,
+   `PURCHASE_REQUEST_ORDERED`, `PART_END_OF_LIFE`, `LOW_STOCK`, `REALISASI_ESCALATED`
+   (§H1). When a PRA is created, **nobody is told** — the person who must create the
+   Realisasi gets no signal. This is a flow break in the middle of the happy path.
+   ⚠️ Adding a value here hits `CLAUDE.md` rule 3 (`ddl-auto` does not alter CHECK
+   constraints on existing tables) and `00-backend-state.md` I2 is still `[?]`. Resolve
+   the constraint question before this becomes code.
+3. **`retroPurchaseFlag` is written but never queried** (§C6). An Owner-facing filter is a
+   *new* requirement, not an existing capability.
+4. **Unverified:** does `PurchaseRequestAuthorization` hold an FK back to its
+   `PurchaseRequest`? §B2's field list shows only `id`, `tenant`, `approvedBy`, `status`.
+   If the FK is genuinely absent, PRA screens have no navigation back to the originating
+   PR — the same defect blueprint §9 #3 flagged for `purchase_orders`. **Confirm before
+   drawing PRA screens.**
 
 Two existing prototypes (PR creation, PR approval console) are **stale** — drawn against
 the old chain. Redrawing them is part of this module.
@@ -285,6 +425,16 @@ Tag every backend claim in this inventory:
 **A `[D]` claim is not evidence.** If a screen's design depends on a `[D]` claim, either
 verify it to `[C]` or record it as a deferred decision.
 
+**`screens/00-backend-state.md` is the `[C]` source of record** for procurement and
+cross-cutting concerns as of 10 Aug 2026. Cite it by section rather than re-deriving.
+Modules 2–6 need their own sweep before their screen records can claim `[C]` — the 10 Aug
+sweep did not cover the digital twin, analytics, or tenancy modules.
+
+Note what this process caught: four confident claims in v1.0 of this document were false,
+and were only found because someone opened the source. Two of them (a "missing"
+notification engine, a "missing" item-instance entity) would have produced screens
+designed around capabilities that already existed.
+
 ---
 
 ## 7. Cross-module scope pass
@@ -323,10 +473,76 @@ this pass is the specific correction for it. Do not skip it.
 ## 9. Working notes for Claude Code sessions
 
 - This document is a **plan**, not a spec. The inventory output belongs in a separate
-  file per module (`inventory/01-procurement.md`, etc.).
+  file per module: `screens/01-procurement.md`, `screens/02-inventory-stock.md`, etc.
+- **Directory is `screens/`, not `inventory/`** — deliberately. `inventory` is already a
+  backend module name meaning stock control, and a root-level `inventory/` directory
+  would read as backend code to every future session.
+- **This plan is `[D]` about backend state except where marked `[C]`.** Claims carrying a
+  `[C]` tag and an `00-backend-state.md` citation were read in source on 10 Aug.
+  Everything else is summary. `CLAUDE.md` rule 1 applies to this file too.
 - **Do not infer backend state from this document.** Open the source. See §6.
 - Blueprint (`operionblueprint.pdf`, Draft 1, 10 Jul 2026) is **partially superseded** —
   §4 procurement chain is wrong (now PR → PRA → Realisasi), and §3 sync model is obsolete
   (no Local Agent, no eventual sync, cloud API only). Treat the Decision Log as
   authoritative where they conflict. The blueprint is overdue for a v2 rewrite.
 - Blitz prefers tradeoff explanations alongside decisions, not directives.
+
+---
+
+## 10. Session prompt template
+
+Paste this at the start of a Claude Code session, filling in the module. One module per
+session — do not batch.
+
+```
+Module: [N] — [name]
+Plan: OPERION_UI_SCREEN_INVENTORY_PLAN.md (read §3 record format, §4 gates, §5.[N])
+Backend facts: screens/00-backend-state.md — [C]-tier, cite by section
+Output: screens/[NN]-[name].md
+
+Before writing any screen record:
+1. Read the module source under module/[name]/ — controllers first, then entities.
+2. List every endpoint with its response DTO fields. This is what screens can display.
+3. Do NOT infer backend state from the plan or from CLAUDE.md. Open the source.
+   Where they disagree with the code, the code wins — record the disagreement.
+
+Then:
+4. Draft 3-4 screen records in the §3 format. STOP and show them before continuing.
+5. After I confirm the format, complete the module.
+6. Run gates 1-5 from §4. Record findings inline, including failures.
+7. List every screen whose Data read has no serving endpoint. This is the
+   module's real output.
+
+Rules:
+- Tag every backend claim [V]/[C]/[D]/[?]. [D] is not acceptable in a final record.
+- Actions get permissions, not screens.
+- Flag every user-facing string containing domain vocabulary
+  (airsoft, unit, gun, part) for the ServiceableUnit rename.
+- Cost fields (landed cost, unit cost, supplier price, the six Realisasi
+  components) get an explicit scope-visibility note. See Gate 4.
+```
+
+**Why step 4 stops.** The first three records establish the pattern for the module. If
+the format drifts, catching it at record 3 costs minutes; catching it at record 20 costs
+a rewrite.
+
+**Why step 7 exists.** With the procurement API already built, screens that no endpoint
+can serve are the highest-value output of this whole exercise. They are the backend
+backlog, derived from real screens rather than guessed at.
+
+---
+
+## 11. Before starting module 1
+
+- [ ] Resolve `00-backend-state.md` **I2** — `\d+ notifications` against live Postgres.
+      Blocks the PRA notification type (§5.1 gap 2).
+- [ ] Confirm whether `PurchaseRequestAuthorization` has a `purchaseRequest` FK
+      (§5.1 gap 4).
+- [ ] Runtime-verify the 10 Aug `BurnRateService` sparepart fix — a sparepart with enough
+      takes to cross the thresholds should report `MANUAL_LEVEL`, not `COMPUTED`. A clean
+      compile does not verify this (`CLAUDE.md` rule 7).
+- [ ] Consider replacing the `getCategory().getName().equals("Consumable")` string check
+      with a flag or enum on the category entity. It is duplicated across three services
+      and fails silently if a category is renamed or localized — and per-tenant
+      configurable taxonomies are already planned.
+- [ ] Create `screens/` and commit `00-backend-state.md` into it.

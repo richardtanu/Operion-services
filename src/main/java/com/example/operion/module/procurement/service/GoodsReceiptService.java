@@ -181,8 +181,7 @@ public class GoodsReceiptService {
                     receipt.getId(),
                     "Goods receipt for PO " + po.getPoNumber());
 
-            if (part.getCategory() == null
-                    || !"Consumable".equals(part.getCategory().getName())) {
+            if (!part.isConsumable()) {
 
                 partInstanceService.generateInstances(
                         part,
@@ -325,8 +324,7 @@ public class GoodsReceiptService {
                     receipt.getId(),
                     "Goods receipt for Realisasi " + realisasi.getExternalOrderRef());
 
-            if (part.getCategory() == null
-                    || !"Consumable".equals(part.getCategory().getName())) {
+            if (!part.isConsumable()) {
 
                 // Per-unit landed cost (decision #5, specific-identification
                 // costing): the line's allocated landed cost spread across

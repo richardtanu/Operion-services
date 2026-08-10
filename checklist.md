@@ -120,6 +120,21 @@ Open `PurchaseRequestAuthorization.java` and `PurchaseRequestAuthorizationItem.j
       against a cap, or only per-line numbers.
       **Answer `[C]`:** Absent. `PurchaseRequestAuthorization.java:27-53` has only
       `id`, `tenant`, `approvedBy`, `status` — no cap field.
+      **Addendum `[C]` 10 Aug (BE-02):** this field list is correct but was read narrowly
+      for the ceiling question — it does **not** mean PRA has no link back to its
+      `PurchaseRequest`(s). The FK exists, just on the **inverse side**:
+      `PurchaseRequest.purchaseRequestAuthorization` (`PurchaseRequest.java:43-45`,
+      column `purchase_requests.pra_id`), set in
+      `PurchaseRequestAuthorizationService.create()` line 113. Reverse lookup is a real,
+      already-wired repository method —
+      `PurchaseRequestRepository.findByPurchaseRequestAuthorizationId(UUID)` — called in
+      `map()` (lines 317-321) and exposed on **every** PRA response as
+      `purchaseRequestIds`. A PRA can authorize multiple PRs at once (`create()` accepts
+      `purchaseRequestIds: List<UUID>`, all validated `APPROVED` first). **No code change
+      needed** — PRA screens already have navigation back to origin PR(s) via the
+      existing API. Confirmed both in source and against the live schema
+      (`purchase_requests` has a `pra_id` column, no separate FK on
+      `purchase_request_authorizations`).
 
 - [x] **B3.** Search the whole procurement module for a `remaining` / `remainingQty` /
       `remainingValue` column on any entity.
@@ -322,6 +337,44 @@ Confirm each exists on the entity named, and that none is mutated in place.
       .equals("Consumable")`), and gated the `COMPUTED` branch on it. Non-Consumable
       parts now fall through to `MANUAL_RATE`/`MANUAL_LEVEL`/`NONE` regardless of take
       volume. Verified with `mvnw compile` (clean build). See §J #2.
+      **`[V]` 10 Aug (BE-03), runtime-verified — a clean compile was not trusted per
+      `CLAUDE.md` rule 7.** `src/test/java/.../BurnRateServiceSparepartGateTest.java`
+      seeds real fixtures (via the actual `PartRepository`/`PartInstanceRepository`,
+      inside one `@Transactional` test transaction that auto-rolls-back — nothing
+      persists) and calls the real `BurnRateService.getByPart()`: a sparepart at
+      *exactly* the threshold (10 takes, 21 days) and one at *triple* it (30 takes, 25
+      days, rule 6 — vary the input) both assert `burnRateSource != COMPUTED`; a
+      Consumable control with the same threshold-crossing shape (15 takes, 25 days)
+      asserts `burnRateSource == COMPUTED` with `observationDays=25, eventCount=15` —
+      confirming the gate doesn't break the normal path. All 3 pass against the live
+      dev DB (`mvnw test -Dtest=BurnRateServiceSparepartGateTest`).
+      Running this without `@Transactional` first threw
+      `LazyInitializationException` on `part.getCategory().getName()` — real finding,
+      not a test bug: `Part.category` is a lazy `@ManyToOne`, and
+      `BurnRateService.compute()`/`computeAll()` have no `@Transactional` of their
+      own, relying entirely on Spring Boot's default `open-in-view=true` (confirmed
+      unmodified in `application.properties`) to keep a session open for the whole
+      `GET /burn-rate` request. **Not a production bug today** — the real endpoint
+      works — but `BurnRateService` cannot safely be called from a non-web context
+      (batch job, another service, a future scheduled pre-computation) without its
+      own session/transaction. Worth remembering if that ever changes.
+      **`[C]` 10 Aug (BE-04) — the string check itself is now gone.** Added a stable
+      `PartCategory.consumable` (`Boolean`, column `is_consumable`, nullable — see
+      `PartCategory.java`) instead of comparing `getName()` to `"Consumable"` at every
+      read. `Part.isConsumable()` is now the single call site all three services use.
+      Existing rows backfilled directly against the live DB (`true` where
+      `name='Consumable'`, `false` elsewhere — 3 true / 15 false across all tenants,
+      preserves current behavior exactly). `CreatePartCategoryRequest` /
+      `UpdatePartCategoryRequest` / `PartCategoryResponse` now carry `consumable` so a
+      tenant can flag a renamed or custom category explicitly, instead of the flag
+      only ever being settable by matching a hardcoded name.
+      `seedDefaultCategories()` (the one remaining place a "Consumable" category name
+      is used to decide anything) sets the flag once at creation time, not on every
+      read. New test `PartTest.isConsumableFollowsTheStoredFlagNotTheDisplayName`
+      proves a category named "Konsumabel" with the flag set still reports
+      `isConsumable() == true`, and a category still literally named "Consumable"
+      with the flag unset reports `false` — the exact silent-failure mode BE-04 was
+      opened to close.
 
 - [x] **F6.** Does `MaintenancePolicyController` exist?
       (`CLAUDE.md` says no — the four thresholds are DB-edit-only.)
@@ -419,16 +472,55 @@ Confirm each exists on the entity named, and that none is mutated in place.
       **Answer `[C]`:** Yes, still `ddl-auto=update` (`application.properties:9`). No
       Flyway/Liquibase — grep for `flyway|liquibase` in `pom.xml` returns nothing, no
       `db/migration` directory anywhere in the repo.
-- [ ] **I2.** List DB-level CHECK constraints on enum columns that already exist.
+- [x] **I2.** List DB-level CHECK constraints on enum columns that already exist.
       → Rule 3 caused two bugs. Any new enum value the UI work implies (new notification
       types, new Realisasi statuses) needs a migration planned in the same change.
-      **Answer `[?]`:** Could not determine. No plain-SQL migration files exist (pure
-      `ddl-auto`, as expected). The only schema artifact is
-      `dump-operion-202605152101.sql`, which is a **binary `pg_dump` custom-format
-      file**, not plain SQL — `pg_restore` is not available in this environment to
-      inspect it. Needs a follow-up session with DB tooling access (or a live
-      `\d+ <table>` against the actual Postgres instance) before any new enum value is
-      added to an existing table, per rule 3.
+      **Answer `[C]` 10 Aug (BE-01):** `pg_restore`/`psql` still unavailable in this
+      environment, but the live instance at `localhost:5432/operion` was reachable —
+      queried `information_schema.check_constraints` directly via JDBC (driver already a
+      project dependency). Full results:
+
+      **`notifications`**
+      - `notifications_type_check`: `type` ∈ `{NEW_PURCHASE_REQUEST,
+        PURCHASE_REQUEST_ORDERED, PART_END_OF_LIFE, LOW_STOCK, REALISASI_ESCALATED}`
+      - `notifications_reference_type_check`: `reference_type` ∈ `{PURCHASE_REQUEST,
+        PART, AIRSOFT_UNIT, REALISASI}`
+      - plus standard `NOT NULL` checks on `id`, `read`, `recipient_user_id`, `tenant_id`,
+        `title`
+
+      **`purchase_request_authorizations`**
+      - `purchase_request_authorizations_status_check`: `status` ∈ `{ACTIVE,
+        PARTIALLY_FULFILLED, FULFILLED, CANCELLED}` — note this differs from the Java
+        `PurchaseRequestAuthorizationStatus` enum used in `CLAUDE.md`'s narrative
+        (which frames PRA lifecycle around ACTIVE/CANCELLED only) — `PARTIALLY_FULFILLED`
+        and `FULFILLED` also exist at the DB/enum level. Not independently confirmed as
+        reachable code paths in this pass — flag for whoever designs the PRA screen's
+        status badge.
+      - plus `NOT NULL` on `id`, `status`, `tenant_id`
+
+      **`realisasis`** (note: table is `realisasis`, not `realisasi` — the entity's
+      `@Table(name=...)` pluralizes it; this tripped the first query attempt)
+      - `realisasis_status_check`: `status` ∈ `{PENDING_APPROVAL, APPROVED, FAILED,
+        SUPERSEDED}` — matches C1 exactly
+      - `realisasis_variance_status_check`: `variance_status` ∈ `{WITHIN_CEILING,
+        ESCALATED}` — matches §J #1's finding that `ESCALATED` is a `VarianceStatus`
+        value, not a `RealisasiStatus` value
+      - `realisasis_payment_method_check`: `payment_method` ∈ `{COMPANY_ACCOUNT,
+        PERSONAL_REIMBURSABLE}` — not previously covered by this sweep
+      - `realisasis_reimbursement_status_check`: `reimbursement_status` ∈
+        `{NOT_APPLICABLE, PENDING, REIMBURSED}` — not previously covered by this sweep
+      - plus `NOT NULL` on `external_order_ref`, `id`, `pra_id`, `status`, `tenant_id`
+
+      **`stock_adjustments`**
+      - `stock_adjustments_status_check`: `status` ∈ `{PENDING, APPROVED, REJECTED}` —
+        matches H3
+      - plus `NOT NULL` on `id`, `part_id`, `quantity`, `status`, `tenant_id`
+
+      **Consequence for BE-07** (PRA notification type): adding a `NotificationType`
+      value now has an exact, known migration —
+      `ALTER TABLE notifications DROP CONSTRAINT notifications_type_check, ADD CONSTRAINT
+      notifications_type_check CHECK (type IN (..., 'NEW_VALUE'))` — in the same change
+      as the enum edit. No longer blocked on unknown constraint shape.
 
 ---
 

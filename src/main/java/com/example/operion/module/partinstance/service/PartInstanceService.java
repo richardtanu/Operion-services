@@ -5,11 +5,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.repository.UserRepository;
+import com.example.operion.module.inventory.enums.StockMovementType;
+import com.example.operion.module.inventory.enums.StockReferenceType;
+import com.example.operion.module.inventory.services.PartStockService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.partinstance.dto.ExhaustRequest;
@@ -25,13 +29,9 @@ import com.example.operion.module.tenant.service.TenantHierarchyService;
 import com.example.operion.module.unitpart.entity.AirsoftUnitPart;
 
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 
 @Service
-@RequiredArgsConstructor
 public class PartInstanceService {
-
-    private static final String CONSUMABLE_CATEGORY_NAME = "Consumable";
 
     private final PartInstanceRepository repository;
 
@@ -42,6 +42,34 @@ public class PartInstanceService {
     private final TenantRepository tenantRepository;
 
     private final TenantHierarchyService tenantHierarchyService;
+
+    private final PartStockService partStockService;
+
+    /**
+     * Explicit constructor (not @RequiredArgsConstructor) because @Lazy on
+     * partStockService below needs to land on the constructor parameter to
+     * take effect — Lombok does not copy field annotations onto the
+     * generated constructor by default. Lazy breaks a real cycle:
+     * PartStockService already depends on PartInstanceService (for
+     * generateInstances on receipt), and take() needs to call back into
+     * PartStockService. Safe — take() is never invoked during context
+     * startup.
+     */
+    public PartInstanceService(
+            PartInstanceRepository repository,
+            PartRepository partRepository,
+            UserRepository userRepository,
+            TenantRepository tenantRepository,
+            TenantHierarchyService tenantHierarchyService,
+            @Lazy PartStockService partStockService) {
+
+        this.repository = repository;
+        this.partRepository = partRepository;
+        this.userRepository = userRepository;
+        this.tenantRepository = tenantRepository;
+        this.tenantHierarchyService = tenantHierarchyService;
+        this.partStockService = partStockService;
+    }
 
     /**
      * Auto-generates system-issued barcode instances for a non-consumable
@@ -90,7 +118,7 @@ public class PartInstanceService {
                 .findByIdAndTenantId(request.getPartId(), tenantId)
                 .orElseThrow(() -> new RuntimeException("Part not found"));
 
-        if (!isConsumable(part)) {
+        if (!part.isConsumable()) {
 
             throw new RuntimeException(
                     "Only Consumable-category parts can be scanned in; "
@@ -133,7 +161,27 @@ public class PartInstanceService {
         instance.setTakenAt(LocalDateTime.now());
         instance.setTakenBy(takenBy);
 
-        return map(repository.save(instance));
+        PartInstance saved = repository.save(instance);
+
+        /*
+         * Only Consumable takes decrement stock here. Non-Consumable
+         * (sparepart) instances are never exhausted (see exhaust() below) —
+         * their stock effect happens once, at AirsoftUnitPartService.install/
+         * replacePart, regardless of whether the instance was taken first.
+         * Decrementing here too would double-count that unit.
+         */
+        if (instance.getPart().isConsumable()) {
+
+            partStockService.adjustStock(
+                    instance.getPart(),
+                    -1,
+                    StockMovementType.CONSUMABLE_TAKE,
+                    StockReferenceType.PART_INSTANCE,
+                    instance.getId(),
+                    "Taken via barcode " + instance.getBarcode());
+        }
+
+        return map(saved);
     }
 
     @Transactional
@@ -141,7 +189,7 @@ public class PartInstanceService {
 
         PartInstance instance = findOwnedByBarcode(request.getBarcode());
 
-        if (!isConsumable(instance.getPart())) {
+        if (!instance.getPart().isConsumable()) {
 
             throw new RuntimeException(
                     "Only Consumable-category instances can be exhausted; "
@@ -221,11 +269,6 @@ public class PartInstanceService {
                 .orElseThrow(() -> new RuntimeException("Part instance not found for barcode"));
     }
 
-    private boolean isConsumable(Part part) {
-
-        return part.getCategory() != null
-                && CONSUMABLE_CATEGORY_NAME.equals(part.getCategory().getName());
-    }
 
     private String generateBarcode() {
 

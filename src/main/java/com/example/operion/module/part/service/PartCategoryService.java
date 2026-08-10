@@ -54,6 +54,7 @@ public class PartCategoryService {
                 .tenant(tenant)
                 .name(request.getName())
                 .description(request.getDescription())
+                .consumable(Boolean.TRUE.equals(request.getConsumable()))
                 .build();
 
         return map(categoryRepository.save(category));
@@ -94,6 +95,11 @@ public class PartCategoryService {
                     request.getDescription());
         }
 
+        if (request.getConsumable() != null) {
+
+            category.setConsumable(request.getConsumable());
+        }
+
         return map(categoryRepository.save(category));
     }
 
@@ -118,6 +124,7 @@ public class PartCategoryService {
                 .id(category.getId())
                 .name(category.getName())
                 .description(category.getDescription())
+                .consumable(category.getConsumable())
                 .build();
     }
 
@@ -157,46 +164,52 @@ public class PartCategoryService {
                 .findById(tenantId)
                 .orElseThrow();
 
-        List<String[]> defaults = List.of(
+        List<DefaultCategory> defaults = List.of(
 
-                new String[] { "Internal Mechanical",
-                        "Gearbox, compression, hop-up, motor and trigger group components" },
+                new DefaultCategory("Internal Mechanical",
+                        "Gearbox, compression, hop-up, motor and trigger group components", false),
 
-                new String[] { "External Mechanical",
-                        "Barrel, receiver, handguard, stock and other body components" },
+                new DefaultCategory("External Mechanical",
+                        "Barrel, receiver, handguard, stock and other body components", false),
 
-                new String[] { "Electrical & Electronic",
-                        "MOSFET, ETU, wiring and other electrical components" },
+                new DefaultCategory("Electrical & Electronic",
+                        "MOSFET, ETU, wiring and other electrical components", false),
 
-                new String[] { "Magazine",
-                        "Magazine body and internal components" },
+                new DefaultCategory("Magazine",
+                        "Magazine body and internal components", false),
 
-                new String[] { "Consumable",
-                        "Gas, BB and other consumable items" },
+                // The only default category flows through Part.isConsumable() — this is
+                // the one place "Consumable" as a name and isConsumable as a fact are
+                // still linked. Every other reader goes through the stored flag, not
+                // this string (BE-04, OPERION_BE_CHANGE_QUEUE.md).
+                new DefaultCategory("Consumable",
+                        "Gas, BB and other consumable items", true),
 
-                new String[] { "Optics & Accessories",
-                        "Optics, rails, sling, flashlight and other accessories" });
+                new DefaultCategory("Optics & Accessories",
+                        "Optics, rails, sling, flashlight and other accessories", false));
 
-        for (String[] entry : defaults) {
+        for (DefaultCategory entry : defaults) {
 
-            String name = entry[0];
-            String description = entry[1];
-
-            if (categoryRepository.findByTenantIdAndName(tenantId, name).isEmpty()) {
-                categoryRepository.save(category(tenant, name, description));
+            if (categoryRepository.findByTenantIdAndName(tenantId, entry.name()).isEmpty()) {
+                categoryRepository.save(category(tenant, entry.name(), entry.description(), entry.consumable()));
             }
         }
+    }
+
+    private record DefaultCategory(String name, String description, boolean consumable) {
     }
 
     private PartCategory category(
             Tenant tenant,
             String name,
-            String description) {
+            String description,
+            boolean consumable) {
 
         return PartCategory.builder()
                 .tenant(tenant)
                 .name(name)
                 .description(description)
+                .consumable(consumable)
                 .build();
     }
 

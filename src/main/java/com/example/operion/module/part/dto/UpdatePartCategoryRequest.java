@@ -9,4 +9,6 @@ public class UpdatePartCategoryRequest {
 
   private String description;
 
+  private Boolean consumable;
+
 }

@@ -1,5 +1,6 @@
 package com.example.operion.module.part.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -80,6 +81,22 @@ public class Part {
     @Builder.Default
     private Integer minimumStock = 0;
 
+    /**
+     * Stock units per day, for burn-rate mode MANUAL_RATE — consumables
+     * without enough take history yet. Nullable; takes precedence over
+     * manualReorderPoint if both are set (operion-burn-rate-spec.md §5).
+     */
+    @Column(name = "manual_daily_usage", precision = 10, scale = 4)
+    private BigDecimal manualDailyUsage;
+
+    /**
+     * Minimum stock level, for burn-rate mode MANUAL_LEVEL — spareparts that
+     * never get a computed rate (installed on failure, not consumed daily).
+     * Nullable, permanent for this item class, not a cold-start fallback.
+     */
+    @Column(name = "manual_reorder_point")
+    private Integer manualReorderPoint;
+
     /*
      * =====================================================
      * Misc
@@ -98,6 +115,17 @@ public class Part {
      * Lifecycle
      * =====================================================
      */
+
+    /**
+     * Reads {@link PartCategory#getConsumable()}, not the category name — see
+     * that field's Javadoc. The single call site every service should use
+     * instead of comparing {@code getCategory().getName()} to a string
+     * literal.
+     */
+    public boolean isConsumable() {
+
+        return category != null && Boolean.TRUE.equals(category.getConsumable());
+    }
 
     @PrePersist
     public void prePersist() {

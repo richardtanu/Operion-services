@@ -11,4 +11,6 @@ public class CreatePartCategoryRequest {
 
   private String description;
 
+  private Boolean consumable;
+
 }

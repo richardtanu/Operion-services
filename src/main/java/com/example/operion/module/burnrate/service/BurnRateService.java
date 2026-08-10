@@ -40,8 +40,6 @@ public class BurnRateService {
 
     private static final int DEFAULT_TARGET_DAYS = 14;
 
-    private static final String CONSUMABLE_CATEGORY_NAME = "Consumable";
-
     private final PartRepository partRepository;
 
     private final PartInstanceRepository partInstanceRepository;
@@ -137,7 +135,7 @@ public class BurnRateService {
         // spec §3: spareparts never get a computed rate at all, even if take()
         // volume happens to clear the thresholds — installed-on-failure items
         // stay on the manual path permanently (MANUAL_RATE/MANUAL_LEVEL/NONE).
-        if (isConsumable(part) && observationDays != null && observationDays >= minObservationDays
+        if (part.isConsumable() && observationDays != null && observationDays >= minObservationDays
                 && takes >= minEvents) {
 
             int clampedObservationDays = observationDays;
@@ -240,10 +238,5 @@ public class BurnRateService {
     private int intOrDefault(Integer value, int defaultValue) {
 
         return value != null ? value : defaultValue;
-    }
-
-    private boolean isConsumable(Part part) {
-
-        return part.getCategory() != null && CONSUMABLE_CATEGORY_NAME.equals(part.getCategory().getName());
     }
 }

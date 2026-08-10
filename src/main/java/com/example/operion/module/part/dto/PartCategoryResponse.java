@@ -17,4 +17,6 @@ public class PartCategoryResponse {
 
   private String description;
 
+  private Boolean consumable;
+
 }
