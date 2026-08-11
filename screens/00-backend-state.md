@@ -448,6 +448,20 @@ Confirm each exists on the entity named, and that none is mutated in place.
       `StockAdjustmentService.java:177`. Also used in `RealisasiService`,
       `PurchaseRequestService`. No controller- or repository-level scope filtering
       found (repositories use `TenantContext` for tenant scoping, a different concern).
+- [x] **G6.** (BE-10.1, 10 Aug) Is tenant hierarchy real or flat — does any live tenant
+      row actually have a `parent_id` set? Gate 4 deferred row-level scope filtering on
+      the premise that it doesn't.
+      **Answer `[V]`:** Queried `tenants` directly (JDBC, no `psql` needed — same
+      workaround as I2). **3 tenants, 1 with a non-null `parent_id`:** `Blitz Tactical`
+      (`a720623c…`, root, flat) and `Franchise HQ` (`aa950bb6…`, root) are standalone;
+      `Outlet 2` (`8417979f…`) has `parent_id = aa950bb6…` (Franchise HQ). Hierarchy is
+      not a future possibility — it is live, two-level, real data today.
+      `TenantHierarchyService.getEffectiveTenantIds()` (already called by
+      `PartStockService` and `BurnRateService`) aggregates Outlet 2's rows into any
+      Franchise HQ-scoped request with **no scope-based redaction** — the exposure G5
+      documents as a design gap is, for this specific pair, already reachable in
+      practice, not just in principle. **Gate 4's row-level deferral is lifted, not
+      re-justified.** See `OPERION_BE_CHANGE_QUEUE.md` BE-10.1, BE-06.
 
 ---
 

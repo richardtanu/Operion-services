@@ -1,11 +1,13 @@
 # Operion — Backend Plan & Conformance Audit
 
-**Version:** 3.3 · 28 Jul 2026
-**Replaces:** v3.2 (28 Jul), v3.1 (28 Jul), v3.0 (28 Jul), v2.0 (26 Jul), v1.0 (15 Jul) — all archived, see §0.1
+**Version:** 3.4 · 29 Jul 2026
+**Replaces:** v3.3 (28 Jul), v3.2 (28 Jul), v3.1 (28 Jul), v3.0 (28 Jul), v2.0 (26 Jul), v1.0 (15 Jul) — all archived, see §0.1
 **Repo:** `richardtanu/Operion-services` — Java Spring Boot + PostgreSQL, modular monolith
 **Companion:** `Operion-Decision-Log-Tambahan.md` (Indonesian) — rationale for `DL-06` … `DL-11`
 
-**What changed from v3.2:** the one remaining open item (#20, `conversionFactor`) was live-tested with `conversionFactor=6` — and it caught a real bug, not a non-issue. The landed-cost divisor in `GoodsReceiptService.receiveAgainstRealisasi` used `purchasedQty` (purchase UOM) instead of `purchasedQty × conversionFactor` (stock units), so #19's "FIXED" from the previous round was only correct by coincidence (that live test happened to use `conversionFactor=1`). **Fixed and re-verified live**, see §3.3 #19/#20. **The audit is now fully closed — zero open items.**
+**What changed from v3.3:** burn rate / `suggested_qty` (§6.1) is built — the last link in the five-quantity chain. Full detail in the new §6.1. Highlights: `operion-burn-rate-spec.md`'s own build-order step 1 ("confirm stock decrements at take time") turned up a case the spec didn't anticipate — it decremented at **neither** take nor exhaust, a real pre-existing gap, not a spec error. Resolved by wiring `PartInstanceService.take()` to decrement stock (Consumable-scoped, to avoid double-counting the sparepart install path, which already decrements separately). That wiring created a genuine circular bean dependency (`PartStockService` ↔ `PartInstanceService`), fixed with `@Lazy` on an explicit constructor parameter — see new CLAUDE.md rule 7, `@Lazy` on a Lombok `@RequiredArgsConstructor` field does **not** work, Lombok doesn't copy the annotation onto the generated constructor. Spec §7.3's flagged gap (`preferredOrderQty`) turned out to already exist under a different name (`Part.reorderQuantity`, present since the original build, never read anywhere) — reused rather than adding a column. All four spec §8 test cases relevant to non-trivial logic (2, 5, 9, 10) verified live, including the clamp test's exact numbers (`observationDays: 6, burnRate: 2.0000, daysOfCover: 2.0000`, not the wrong-implementation `0.13`/`30`).
+
+**What changed from v3.2 → v3.3:** the one remaining open item (#20, `conversionFactor`) was live-tested with `conversionFactor=6` — and it caught a real bug, not a non-issue. The landed-cost divisor in `GoodsReceiptService.receiveAgainstRealisasi` used `purchasedQty` (purchase UOM) instead of `purchasedQty × conversionFactor` (stock units), so #19's "FIXED" from the previous round was only correct by coincidence (that live test happened to use `conversionFactor=1`). **Fixed and re-verified live**, see §3.3 #19/#20. **The audit is now fully closed — zero open items.**
 
 **What changed from v3.1 → v3.2:** every open item from v3.1's audit was resolved that round — most by reading the actual source directly rather than working from a summary. Two of v3.1's own findings turned out to be wrong and were corrected (§3.2 #11, §3.3 #23; also §3.7 #35). One item was closed empirically with a real concurrency test rather than argued (§3.5 #31). Two genuine gaps were found and fixed (§3.3 #19 — later found incomplete, see above; §3.7 #34). Three blocking decisions were made and implemented (§3.3 #21, §3.6 #36, §6.2).
 
@@ -180,6 +182,8 @@ From the 27 Jul session: users `barcodetest@test.com`, `pra_requester@test.com`,
 
 **Added 28 Jul, later pass** (the `conversionFactor=6` test that closed #20): users `conv_owner2@test.com`, `conv_creator2@test.com`, `conv_receiver2@test.com`; 1 PR/PRA/Realisasi (`externalOrderRef` prefixed `CONVTEST-6-`) against part "AK Hop-Up Chamber Standard Nylon"; 1 goods receipt; 6 `PartInstance` rows (`landedCost: 23700.00` each, correctly summing to the 142,200 subtotal).
 
+**Added 29 Jul** (burn rate build/verification): users `burnratetest1@test.com`, `burnratetest2@test.com`, `case2test@test.com`, `case5test@test.com`, `case9_owner@test.com`, `case9_creator@test.com`, `case9_receiver@test.com`; parts "Green Gas Test Can", "Case2 Clamp Test", "Case5 No Data Test", "Case9 Gas ConvFactor" (all category Consumable, tenant `a720623c-...`); ~20 `PartInstance` rows (scanned-in + taken, mix of manually-adjusted stock); 1 PR/PRA/Realisasi/goods-receipt chain (`externalOrderRef` prefixed `CASE9-`). The Case2 part's 12 takes were deliberately backdated to `now() - 6 days` via a one-off JDBC connection — if inspecting `part_instances` directly, don't mistake that for real historical data.
+
 No DB CLI on this machine. **Delete whole chains, in FK order:** goods receipt items → goods receipts → Realisasi items → Realisasi → PRA items → PRA → users. Barcode allocations are independent. Partial deletion changes ceiling consumption on any PRA left behind.
 
 ### 5.3a Memory-index drift (28 Jul, later pass) — doc unaffected
@@ -198,21 +202,32 @@ Working tenant UUID: `a720623c-28d9-4d6b-b06b-059397718d18`
 
 ## 6. Build plan
 
-### 6.1 Burn rate / `suggested_qty` — the priority, untouched this round
+### 6.1 Burn rate / `suggested_qty` — **DONE 29 Jul 2026**
 
 Completes the five-quantity chain:
 
-`suggested_qty` **(not built)** → `requested_qty` (`PurchaseRequestItem.quantity`) → `authorized_qty` (`PurchaseRequestAuthorizationItem.authorizedQty`) → `purchased_qty` (`RealisasiItem.purchasedQty`) → `received_qty` (`GoodsReceiptItem.quantity`)
+`suggested_qty` **(built)** → `requested_qty` (`PurchaseRequestItem.quantity`) → `authorized_qty` (`PurchaseRequestAuthorizationItem.authorizedQty`) → `purchased_qty` (`RealisasiItem.purchasedQty`) → `received_qty` (`GoodsReceiptItem.quantity`)
 
-**Step 0: does `PartInstance` store both take and exhaust timestamps?** Burn rate is derivable only if it does — confirmed yes (`takenAt`, `exhaustedAt` both present), so this is a computation problem, not a schema gap.
+Built per `operion-burn-rate-spec.md`, computed on read (no stored burn-rate column, same reasoning as the PRA ceiling), new `module/burnrate` (`BurnRateService`, `BurnRateController`: `GET /burn-rate`, `GET /burn-rate/{partId}`), four modes (`COMPUTED`/`MANUAL_RATE`/`MANUAL_LEVEL`/`NONE`), thresholds sourced from four new nullable `maintenance_rule` columns with code-level fallback to spec defaults (30/21/10/14 — nullable rather than `NOT NULL`, since the table already has a row per tenant and Hibernate can't `ALTER ... NOT NULL` a populated table).
 
-1. **Manual reorder point per item** — nullable field plus CRUD, the cold-start path.
-2. **Burn-rate computation** — completed take→exhaust cycles per item per outlet. Decide the window (trailing 30 days vs all-time).
-3. **Switchover at 10 completed cycles** (decision #6). Read path must say *which* source it used.
-4. **Days-of-cover target** — configurable via `maintenance_rule`, not a second settings mechanism.
-5. **Expose on read path** — burn rate, days of cover, and source.
+**A pre-flight check (spec's own §9 step 1) found a real gap the spec didn't anticipate.** "Confirm stock decrements at take time, not exhaust" — grepped every `adjustStock`/`setCurrentStock` call site: `PartInstanceService.take()`/`.exhaust()` called **neither**. Taking or exhausting a barcoded item had zero effect on `Part.currentStock`. Decided with the user: wire `take()` to decrement stock via the existing `adjustStock(-1, ...)` pattern, **scoped to Consumable-category parts only** — non-Consumable (sparepart) instances already get their stock decrement at `AirsoftUnitPartService.installPart()`/`replacePart()`, unconditionally, regardless of whether the instance was taken first (`markInstalled` explicitly allows both `IN_STOCK` and `TAKEN` as valid prior states); decrementing at take too would have double-counted every taken-then-installed sparepart. `exhaust()` is unchanged — pure state transition, the stock effect already happened at take.
 
-**Blocks two completed UI designs** (PR creation's suggested basket, the days-of-cover gauge).
+**That wiring created a real circular bean dependency**, not just a design smell: `PartStockService` already injects `PartInstanceService` (for `generateInstances` on receipt); having `PartInstanceService` call back into `PartStockService` fails at Spring startup (`UnsatisfiedDependencyException`, constructor cycle). First fix attempt — `@Lazy` on the field with `@RequiredArgsConstructor` still generating the constructor — **did not work and still failed the same way**: Lombok does not copy field annotations onto its generated constructor parameters. Fixed by replacing `@RequiredArgsConstructor` with an explicit constructor and `@Lazy` directly on the parameter. New standing rule, `CLAUDE.md` §Rules #7.
+
+Two new enum values on the already-existing `stock_movements` table (`StockMovementType.CONSUMABLE_TAKE`, `StockReferenceType.PART_INSTANCE`) — pre-flighted per rule 3, but this time the insert succeeded immediately with no CHECK-constraint fix needed (confirmed live, not assumed): `stock_movements` apparently never had an explicit CHECK constraint on these columns to begin with, unlike `notifications` in the 27 Jul incident. Worth remembering the rule 3 gotcha is a *risk to check*, not a guaranteed failure every time.
+
+**Spec §7.3's flagged gap resolved for free.** The spec asks for a `preferredOrderQty` per part so `suggestedQty` doesn't degenerate to "buy 13 cans" on bulk-buy items. `Part.reorderQuantity` already existed (default `10`, wired through Create/Update/Response since the original build) but was never read by any computation anywhere in the codebase — reused instead of adding a column. `suggestedQty` now returns `reorderQuantity` whenever the computed top-up figure would be `> 0`; `0` (no reorder needed) is returned unmodified. Caveat: `reorderQuantity` is `NOT NULL` defaulting to `10` for every part, so a part nobody has configured suggests exactly `10` regardless of its real consumption pattern — sane default, but not the same as a deliberately-set value.
+
+**Verified live**, all four spec §8 cases with non-trivial logic:
+- **Case 2 (the clamp test)** — 12 takes backdated to 6 days ago (via a one-off JDBC connection, no `psql` on this machine, same pattern as the 27 Jul CHECK-constraint fixes), stock 4, `burn_rate_min_observation_days` temporarily lowered to 1 to let the item clear the `COMPUTED` threshold. Result: `observationDays: 6, burnRate: 2.0000, daysOfCover: 2.0000` — exactly the spec's expected numbers, not the wrong-implementation `0.13`/`30` an unclamped `observationDays` would produce. Threshold restored to `null` (default) afterward.
+- **Case 5** — brand-new part, zero takes, no manual values: `burnRateSource: NONE, burnRate: null, daysOfCover: null` — no divide-by-zero, no false `0`.
+- **Cases 9/10** — a `conversionFactor=6` Realisasi/goods-receipt (reusing the exact scenario from §3.3 #20), then 6 cans manually scanned in and taken (Consumable parts don't auto-generate `PartInstance` rows on receipt, confirmed — receiving only moves `currentStock`; a real outlet would scan each can as it's shelved, same as this test). Result: `eventCount: 6`, not `1` (the take count, not the purchase-line count) — and unaffected by zero `exhaustedAt` values, confirming burn rate counts takes, not completed cycles, per decision #6's correction in the spec.
+- **Stock decrement** — confirmed live: a taken Consumable instance drops `Part.currentStock` by exactly 1 and logs a `StockMovement` (`CONSUMABLE_TAKE`/`PART_INSTANCE`).
+- **Single grouped query (§6.1 performance)** — confirmed via the Hibernate SQL log: `GET /burn-rate` issues exactly one `count(...) group by part_id` query and one `min(taken_at) group by part_id` query for the whole catalog, plus one `parts` query — no per-part N+1 pattern.
+
+**Still open, not built this round:** `windowDays`/threshold values are only configurable by direct DB edit — no `MaintenancePolicyController` exists at all (pre-existing gap, predates this feature, out of scope here). Seeding `manualDailyUsage` from `Data_Ops.xlsx` (spec §7.4) is a one-time data task, not code. Lead time (spec §7.1) remains unmodelled.
+
+**Unblocks the two UI designs** (PR creation's suggested basket, the days-of-cover gauge) — frontend work, not tracked here.
 
 ### 6.2 Legacy PO path — **decided and documented 28 Jul**
 
@@ -236,7 +251,7 @@ Outbox queue and offline code consumption are React Native work. Only backend co
 
 ## 7. Document sync — still not done
 
-- [ ] `CLAUDE.md` — cloud-only (DL-06), PRA/Realisasi chain (DL-08), current module inventory, the §5.1 enum pre-flight rule, the §0.2 "summary vs source" rule. Loads at the start of every Claude Code session; stale content here propagates directly into code.
+- [x] `CLAUDE.md` — cloud-only (DL-06), PRA/Realisasi chain (DL-08), current module inventory, the §5.1 enum pre-flight rule, the §0.2 "summary vs source" rule. **Done** — confirmed present as of the 10 Aug UI-planning sync (rules 1–7, superseded/procurement/PRA tables, module inventory all in current `CLAUDE.md`). Loads at the start of every Claude Code session; stale content here propagates directly into code, so re-check this box if `CLAUDE.md` drifts again.
 - [ ] BRD / FRS / HLD / LLD — amendment checklist in `Operion-Decision-Log-Tambahan.md` §"Dampak ke dokumen" still unexecuted. HLD §3.2 still describes the Local Agent as resolved.
 - [ ] Decision Log — record #36 (kept as-is) and the §6.2 PO-scope decision.
 
@@ -249,7 +264,7 @@ Unchanged from v3.1 — no design-artifact work happened this round.
 | Prototype                                      | Status                                                                       |
 | ------------------------------------------------ | ------------------------------------------------------------------------------ |
 | Outlet scan loop (take → print → board → scan) | Current. Needs RN rebuild.                                                   |
-| PR creation (mobile)                           | Layout current; **chain stale** (shows PR → PO → Invoice). Blocked on §6.1.  |
+| PR creation (mobile)                           | Layout current; **chain stale** (shows PR → PO → Invoice). Backend for §6.1 no longer blocks it — needs a frontend pass. |
 | PR approval console (web)                      | Layout current; **chain stale** — issues a PO, should produce a PRA ceiling. |
 | Realisasi entry (web)                          | Current. Matches DL-08/09/10/11 as built.                                   |
 
@@ -259,7 +274,9 @@ Unchanged from v3.1 — no design-artifact work happened this round.
 
 1. ~~PRA↔PR cardinality~~ — **resolved 28 Jul**, kept as-is (§3.6 #36)
 2. ~~Legacy PO path~~ — **resolved 28 Jul**, kept + scope documented (§6.2)
-3. Burn-rate window — trailing 30 days vs all-time (§6.1)
+3. ~~Burn-rate window~~ — **resolved 28 Jul, built 29 Jul**: 30 days, calibrated from real sales data, not the earlier 90-day guess (§6.1)
 4. Flyway/Liquibase before the schema grows further (§5.1) — two bugs from this root cause so far
 5. Barcode redemption semantics (§6.3)
 6. Outlet connectivity — still unmeasured; determines whether the outbox queue is urgent or deferrable (DL-06)
+7. **New:** no `MaintenancePolicyController` exists — `maintenance_rule` thresholds (including the four new burn-rate ones) are only editable by direct DB edit. Pre-existing gap, surfaced while building §6.1, not caused by it.
+8. **New:** should PRA carry a header-level `maxValue` cap in addition to per-line ceilings? (carried over from v3.2/v3.3, still unresolved — see §3.2 #11's note)

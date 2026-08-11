@@ -2,10 +2,12 @@
 
 **Tanggal:** 10 Agustus 2026
 **Source:** `screens/00-backend-state.md` (verification sweep, all `[C]`) +
-`OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.2 (now v1.3 — this queue's §11 items are what
-moved it there)
-**Status:** BE-01, BE-02 done. BE-03, BE-04 executed same session. BE-05 … BE-08 blocked
-or deferred — see each.
+`OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.2 (now v1.4 — this queue's §11 items and BE-09/
+BE-10 are what moved it there)
+**Status:** BE-01, BE-02, BE-03, BE-04, BE-05, BE-06, BE-09, BE-10 done. Flyway is live
+(`ddl-auto=validate`, confirmed zero schema drift). BE-10's live check found real tenant
+hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) got done
+immediately instead of waiting on module 1. BE-07, BE-08 open — both need module 1.
 
 ---
 
@@ -284,10 +286,58 @@ adjacent work"), this is flagged, not fixed, here.
 
 ## BE-05 — Flyway or Liquibase migration
 
-**Priority:** High structurally. Do before BE-06 and BE-07.
+**Priority:** High structurally. Do before BE-07.
 **Type:** Infrastructure.
 **Effort:** Half a day to a day.
-**Status:** Open decision — `OPERION_BE_PLAN.md` §9 Q4.
+**Status: DONE, 11 Aug 2026.** All four steps complete, all `[V]` against the live
+instance. Confirmation was sought before step 3 specifically (`ddl-auto=validate`
+changes boot behavior for anyone running against this DB, unlike BE-06's pure-code
+change) — approved, then applied and verified. See "What was done" below.
+
+### What was done
+
+1. **Picked Flyway.** `flyway-core` + `flyway-database-postgresql` added to `pom.xml`
+   (no explicit version — managed by `spring-boot-starter-parent` 3.5.14's dependency
+   management; resolved to 11.7.2). Lighter fit than Liquibase for plain-SQL migrations
+   on a modular monolith, per this task's original note.
+2. **Baselined without a DDL dump.** The only existing schema artifact
+   (`dump-operion-202605152101.sql`) is binary `pg_dump` custom format, and `pg_dump`/
+   `pg_restore`/`psql` are still unavailable in this environment (same constraint BE-01
+   and BE-10.1 worked around via direct JDBC). Rather than hand-reconstructing full DDL
+   from `information_schema`, used Flyway's own answer to "adopt Flyway on a non-empty
+   database": `spring.flyway.baseline-on-migrate=true` +
+   `spring.flyway.baseline-version=1`. **Verified live**: booted the app with
+   `ddl-auto` still `update` — `flyway_schema_history` table created, baseline recorded
+   at V1, zero errors. Confirmed via full log, not assumed from a clean exit code.
+   `db/migration` is currently empty (no migration files yet); the next schema change
+   that needs one (candidates: BE-07's `NotificationType`/`NotificationReferenceType`
+   values) will be `V2__...sql`.
+3. **Hibernate/JPA confirmed compatible with Flyway active.** Same boot log:
+   `EntityManagerFactory` initialized cleanly after Flyway's baseline ran, under the
+   still-active `ddl-auto=update`. No schema-validation errors, no exceptions from
+   either engine touching the same DB in sequence.
+
+4. **Switched `ddl-auto` to `validate`, confirmed after go-ahead.** `application.properties:9`.
+   **Verified live, twice:** `./mvnw spring-boot:run` (alternate port, to avoid an
+   unrelated already-running instance on 8080) booted clean — `Started
+   OperionApplication in 9.659 seconds`, zero `SchemaManagementException` /
+   schema-validation errors in the full log, not just a non-zero exit code check. Then
+   the full test suite re-run under `validate` (every `@SpringBootTest` now boots the
+   full context through Flyway + `validate`, not just `update`): 17 tests, same single
+   pre-existing `PartStockServiceTest` failure as before this task touched anything, zero
+   new failures. **Current entity mappings have zero drift from the live schema** — this
+   result is itself useful signal, not just a pass/fail gate: it means nothing here
+   quietly relied on `ddl-auto=update`'s silent tolerance.
+
+### What this means going forward
+
+Any future column/constraint change to an existing table now needs a real
+`db/migration/V*.sql` file — `validate` will refuse to boot on drift instead of
+`update`'s silent no-op. This is what makes BE-07 (adding a `NotificationType` +
+`NotificationReferenceType` value to the pre-existing `notifications` table) safe to do
+by the book: write `V2__add_pra_notification_types.sql` with the `ALTER TABLE ... DROP
+CONSTRAINT ... ADD CONSTRAINT ...` shape BE-01 already worked out, rather than hand-editing
+the live DB and hoping `ddl-auto` doesn't need to touch it.
 
 ### Why
 
@@ -319,9 +369,15 @@ tooling.)
 
 ## BE-06 — DTO-level cost redaction below OWNER scope
 
-**Priority:** After module 1 inventory.
+**Status: DONE, 11 Aug 2026.**
+
+**Priority:** Was "after module 1 inventory" — done early instead, once BE-10.1 showed
+the exposure is live between real tenants (`Franchise HQ` → `Outlet 2`), not deferred.
 **Type:** Requirement gap.
-**Blocked by:** Module 1 Gate 4 output; BE-05 if any schema change is involved.
+**Blocked by:** ~~Module 1 Gate 4 output; BE-05 if any schema change is involved.~~ Turned
+out to need neither — no schema change (DTO/service layer only), and Gate 4's field list
+was already fully specified in this task's own "Cost fields at issue" line below;
+module 1 wasn't needed to enumerate them.
 
 ### Why
 
@@ -339,9 +395,15 @@ components (`subtotal`, `sellerDiscount`, `platformVoucher`, `shipping`, `insura
 
 ### Why not row-level scope filtering
 
-Tenancy is flat — tenant ≈ outlet. There is no cross-outlet data for a Supervisor to leak
-into. Row filtering would guard a hierarchy that does not exist yet. Build it when
-franchise/principal tenancy lands, and build it knowing what the tiers mean.
+~~Tenancy is flat — tenant ≈ outlet. There is no cross-outlet data for a Supervisor to
+leak into.~~ **Superseded by BE-10.1, 10 Aug: this premise is false.** Live query
+confirms `Franchise HQ` → `Outlet 2` is a real parent-child tenant pair today — tenancy
+is not uniformly flat, and `getEffectiveTenantIds()`-based aggregation already crosses
+that boundary with zero scope-based redaction. Field-level DTO redaction (this task) is
+still the right fix — it targets the actual exposure regardless of whether it's
+row-level or field-level — but this section's original justification for deferring row-
+level filtering no longer holds for any tenant with children. Re-scope this task's
+urgency accordingly; it is not waiting on a hypothetical.
 
 ### Why this waits
 
@@ -350,11 +412,34 @@ first means guessing at the field list.
 
 ### Task (after module 1)
 
-1. Take the Gate 4 findings — every screen showing cost data to a sub-OWNER tier.
-2. Redact those fields at the DTO mapping layer, keyed on `ScopeContext`.
-3. Redact — do not omit the field. A null with a known meaning is easier for a client to
-   render than a missing key.
-4. Test each affected endpoint at SUPERVISOR, MANAGER, and OWNER scope.
+1. ~~Take the Gate 4 findings — every screen showing cost data to a sub-OWNER tier.~~
+   Used this task's own field list instead (see "Cost fields at issue" above) — grepped
+   for every DTO actually carrying those fields, found exactly two:
+   `RealisasiResponse`/`RealisasiItemResponse` (`module/procurement/dto/`) and
+   `PartInstanceResponse` (`module/partinstance/dto/`). No dedicated "supplier pricing"
+   field exists separately from `RealisasiItem.actualUnitPrice`.
+2. Redact those fields at the DTO mapping layer, keyed on `ScopeContext`. **Done** — both
+   services already had exactly one private `map()` method each
+   (`RealisasiService.map()`, `PartInstanceService.map()`), so one redaction point per
+   service covers every public method that returns the DTO (`getAll`, `getById`,
+   `create`, `approveEscalated`, `reject`, `supersede` for Realisasi;
+   `scanIn`/`take`/`exhaust`/`getByPart` for PartInstance) — no per-endpoint duplication
+   needed. Gate: `ScopeContext.hasAtLeast(Scope.OWNER)`, computed once per `map()` call.
+3. Redact — do not omit the field. **Done** — fields are set to `null` via ternary at
+   construction (e.g. `.subtotal(canSeeCost ? realisasi.getSubtotal() : null)`), not
+   skipped; every other field on the response is unaffected.
+4. Test each affected endpoint at SUPERVISOR, MANAGER, and OWNER scope. **Done, plus
+   PRINCIPAL.** `RealisasiServiceCostRedactionTest` and
+   `PartInstanceServiceCostRedactionTest` (`@SpringBootTest`, real datasource, fixtures
+   built directly via repositories, `@Transactional` auto-rollback — same pattern as
+   BE-03's test). 8/8 pass: SUPERVISOR and MANAGER get `null` on every cost field
+   (`subtotal`, `sellerDiscount`, `platformVoucher`, `shipping`, `insurance`,
+   `serviceFee`, `totalCost`, `actualUnitPrice`, `allocatedLandedCost`, `landedCost`)
+   with the rest of the response intact (`status`, `purchasedQty` still present); OWNER
+   and PRINCIPAL see the real values. Full suite re-run after: 17 tests, 1 failure — the
+   pre-existing `PartStockServiceTest` NPE already flagged in BE-04 (unmocked
+   `tenantHierarchyService`, unrelated to this change, not touched here per this file's
+   own rule 3). No regressions from this change.
 
 ---
 
@@ -484,6 +569,92 @@ instruction.
 
 ---
 
+## BE-10 — Tenant hierarchy status and the open-in-view exposure
+
+**Priority:** Before running Gate 4 on any module.
+**Type:** Investigation, no code change (unless BE-10.2 finds a live bug).
+**Effort:** ~20 minutes.
+**Status: Partially resolved during the 10 Aug UI-planning sync (this repo).** Two
+sub-questions; one moved from `[?]` to `[C]`, one is still open.
+
+### Why
+
+This task is cited by `OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.4 (§4 Gate 4, §12 Q4 and
+Q6) but had no entry in this file — added here so the citation resolves to something.
+
+### BE-10.1 — Is tenant hierarchy real or flat?
+
+**Status: DONE, 10 Aug 2026 (live query, `[V]`).**
+
+Gate 4 defers row-level scope filtering on the premise that tenancy is flat (tenant ≈
+outlet, nothing to leak across). BE-04 found `PartStockService` depends on a
+`tenantHierarchyService`, introduced in commit `3894c5e`, which put that premise in
+doubt.
+
+**Found earlier this sync, `[C]`:** `TenantHierarchyService.java` is not a stub.
+`Tenant.parent` is a real self-referential `@ManyToOne` FK
+(`tenant/entity/Tenant.java:31-33`), backed by `TenantRepository.findByParentId` and
+`findParentIdById`. `getEffectiveTenantIds()` walks down to every descendant,
+`getAncestorTenantIds()` walks up to every ancestor, `getRootTenantId()` uses the latter.
+Both `PartStockService` and `BurnRateService` already call `getEffectiveTenantIds()` to
+aggregate across tenants.
+
+**Confirmed live, `[V]`:** queried `tenants` directly (JDBC, `postgresql-42.7.10.jar`
+against `localhost:5432/operion` — no `psql` needed, same workaround pattern as BE-01).
+**3 tenants total, 1 has a non-null `parent_id`:**
+
+| id | code | name | parent |
+|---|---|---|---|
+| `a720623c-28d9-4d6b-b06b-059397718d18` | `BLITZ_BDG` | Blitz Tactical | none (root, flat) |
+| `aa950bb6-cb01-41ca-b134-56bb42b730bc` | `FRANCHISE_HQ` | Franchise HQ | none (root) |
+| `8417979f-b99b-4df6-b1a8-368f791e81fb` | `OUTLET_2` | Outlet 2 | `aa950bb6…` (Franchise HQ) |
+
+**This is not theoretical.** Tenant hierarchy is live, two-level, and real today —
+`Blitz Tactical` remains flat/standalone, but `Franchise HQ` → `Outlet 2` is an actual
+parent-child pair. A Franchise HQ-scoped `GET /purchase-requests` (or any endpoint using
+`getEffectiveTenantIds()`) aggregates Outlet 2's rows right now, cost fields included,
+with zero scope-based redaction (`BE-06`'s finding). Gate 4's row-level clause is not a
+"when hierarchy lands" deferral — the leak is live with real tenant data as of this
+query. **This elevates BE-06's priority**: it is not waiting on a hypothetical, it is
+closing an exposure that already exists between two real tenants.
+
+### BE-10.2 — Open-in-view exposure on `BurnRateService`
+
+**Status: DONE, resolved this sync — `[C]`, not just found latent.**
+
+`00-backend-state.md` §F5 / `OPERION_BE_CHANGE_QUEUE.md` BE-03 found `BurnRateService`
+has no `@Transactional` of its own and relies on Spring Boot's default
+`open-in-view=true` to keep a session open for a lazy `part.getCategory()` load. Confirmed
+`[C]`: `application.properties` has no `spring.jpa.open-in-view` override, so the default
+(`true`) is what's protecting it today.
+
+**Traced `LOW_STOCK` end to end.** `NotificationService.notifyLowStock(Part)` is called
+from exactly one place: `PartStockService.adjustStock()` (`PartStockService.java:68`), a
+plain synchronous method with no `@Scheduled`/`@Async` — it fires inline wherever stock
+changes (goods receipt, consumable take, stock adjustment), always inside the web request
+that triggered the change. `LOW_STOCK` is a simple `currentStock <= minimumStock`
+threshold check in `PartStockService`; it does not call `BurnRateService` at all — the
+two "low stock" concepts (`InventoryStockStatus.LOW_STOCK` vs
+`NotificationType.LOW_STOCK`) are independent of `BurnRateService`'s days-of-cover
+calculation.
+
+**Answer to Q6:** nothing today calls `BurnRateService` outside a web request. The
+open-in-view dependency is real but currently unreached — latent, not live. It becomes
+live the moment anything calls `BurnRateService` from a scheduled job or event listener
+(e.g. a future proactive reorder-suggestion job), so the fix (give `BurnRateService` its
+own `@Transactional`) is still worth doing before such a caller is added, but it is not
+blocking today.
+
+### Done when
+
+`[V]` answer obtained for the live parent-tenant data check (see BE-10.1 above — 1 of 3
+tenants has a parent). Gate 4's row-level deferral is **lifted, not re-justified**: real
+hierarchy exists today. **BE-10 fully met.** Still to do: record this in
+`screens/00-backend-state.md` (currently only in this file), and reflect the elevated
+BE-06 urgency wherever module 1's Gate 4 output gets consumed.
+
+---
+
 ## Ordering
 
 ```
@@ -492,15 +663,17 @@ BE-01 ──┬─→ BE-07 (also needs module 1)
 BE-02 ──┤
 BE-03 ──┤
 BE-04 ──┘
-BE-05 ──────→ (recommended before BE-06, BE-07)
+BE-10 ──────→ BE-06 (done — didn't end up needing module 1, see BE-06)
+BE-05 ──────→ (done — recommended before BE-07, which is still open)
 
-module 1 inventory ──┬─→ BE-06
-                     ├─→ BE-07
+module 1 inventory ──┬─→ BE-07
                      └─→ BE-08
 ```
 
-BE-01 through BE-04 are independent of the UI work and can run in parallel with module 1.
-BE-05 is the highest structural priority once those are clear.
+BE-01 through BE-06, BE-09, BE-10 are all done, none of them ended up needing module 1.
+BE-07 and BE-08 are the only tasks left, and both are genuinely blocked on module 1's
+screen inventory (which role/scope for BE-07's notification; which filters for BE-08's
+list endpoint).
 
 ---
 

@@ -1,9 +1,38 @@
 # Operion — UI Screen Inventory Plan
 
-**Versi:** 1.3
-**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1, v1.2, v1.3)
+**Versi:** 1.4
+**Tanggal:** 8 Agustus 2026 (v1.0), corrected 10 Agustus 2026 (v1.1–v1.4)
 **Status:** Plan — belum dieksekusi
 **Owner:** Blitz (product owner)
+
+### Changelog — v1.4
+
+BE-01's constraint dump surfaced schema facts that no document described. These are not
+corrections to v1.3 — they are **screens nobody had counted**. All `[C]`, read from live
+`information_schema`.
+
+- **§5.1 — reimbursement flow added.** `realisasis.payment_method` and
+  `reimbursement_status` exist at DB level. This is an undocumented workflow with its own
+  screens and its own segregation-of-duties question.
+- **§5.1 — PRA is one-to-many over PRs**, and has four lifecycle states, not two. Both
+  change the PRA screen's shape.
+- **§5.1 — `realisasis.pra_id` is NOT NULL.** No ad-hoc purchase path exists.
+- **§5.1 gap 2 — BE-07 needs two `ALTER TABLE`s**, not one. `reference_type` has no PRA
+  value either.
+- **§2 — the `ServiceableUnit` rename now carries a DB migration.** `AIRSOFT_UNIT` is a
+  value inside `notifications_reference_type_check`.
+- **Gate 4 — premise flagged as unstable.** `PartStockService` has a
+  `tenantHierarchyService` dependency; flat tenancy may be changing underneath this plan.
+  ⚠️ **Backend-repo sync note (this session, same day):** this is no longer just `[?]`.
+  `TenantHierarchyService` was read directly — `Tenant.parent` is a real self-referential
+  FK, `getEffectiveTenantIds()`/`getAncestorTenantIds()` are fully implemented (not
+  stubs), and both `PartStockService` and `BurnRateService` already call
+  `getEffectiveTenantIds()` for multi-tenant aggregation. The *mechanism* for cross-outlet
+  data is `[C]`, live in code today — what remains open is whether tenants are actually
+  configured with parents in current data. Gate 4's "nothing to leak into" premise is
+  weaker than this changelog entry assumed. See the new `BE-10` entry in
+  `OPERION_BE_CHANGE_QUEUE.md`, added during this sync since the queue had no BE-10
+  section despite being cited below.
 
 ### Changelog — v1.3
 
@@ -145,6 +174,15 @@ states, not two: confirmed, queued, failed.
 Accurate/Jurnal, where "asset" means a depreciable fixed asset. Operion will eventually
 talk to one of those ledgers. `ServiceableUnit` is clunkier but unambiguous.
 
+⚠️ **`[C]` 10 Aug (BE-01): the rename now carries a database migration.** `AIRSOFT_UNIT`
+is an allowed value inside `notifications_reference_type_check` on the pre-existing
+`notifications` table. Under `ddl-auto=update` that constraint will **not** update itself
+(`CLAUDE.md` rule 3), so renaming the enum value without an explicit `ALTER TABLE` breaks
+every notification insert referencing a unit — silently, at insert time, with a clean
+compile and a clean startup.
+
+This is an argument for landing BE-05 (Flyway/Liquibase) **before** the rename, not after.
+
 **This runs in parallel with the screen inventory, not before it.** The rename is
 mechanical, needs no product judgment, and is verifiable by compilation — good work to
 hand to the dev team via Claude Code. The inventory needs Blitz specifically, because it
@@ -238,6 +276,13 @@ later promotion cannot retroactively legalize a past pairing.
 action and surface the rejection. They do not need to pre-compute eligibility — but they
 should explain the refusal in domain terms, not as a raw error.
 
+⚠️ **A third pairing exists and has no rule yet.** `[C]` 10 Aug (BE-01):
+`realisasis.reimbursement_status` implies someone marks a personal-money purchase as
+reimbursed. **May the purchaser mark their own claim paid?** Neither documented rule
+covers it. This is the single highest fraud surface in module 1 — it is the one place
+money moves to an individual. Decide it during the module and record it as a third row in
+the table above.
+
 ⚠️ **Do not skip this on modules that feel non-financial.** Stock adjustment (module 2)
 is an approval workflow with real fraud surface, scope-gated at OWNER.
 
@@ -255,8 +300,18 @@ Two consequences:
 
 1. **Row-level scope leak is not currently checkable**, because there is nothing to leak
    into — tenancy is flat, so tenant ≈ outlet, and cross-outlet data does not exist yet.
-   Principal and Owner see the same rows today, differing only in approval rights. This
-   gate gets a row-level clause when franchise/principal tenancy lands, not before.
+   ~~Principal and Owner see the same rows today, differing only in approval rights.
+   This gate gets a row-level clause when franchise/principal tenancy lands, not
+   before.~~
+
+   🔴 **`[V]` 10 Aug — this premise is false, confirmed against live data.** BE-10.1
+   queried `tenants` directly: 3 rows, 1 with a non-null `parent_id` —
+   `Franchise HQ` → `Outlet 2` is a real parent-child pair today, not a future
+   possibility. `getEffectiveTenantIds()` already aggregates Outlet 2's rows into any
+   Franchise HQ request, cost fields included, with **no scope-based redaction**. Row-
+   level scope leakage is not deferred by this gate anymore — it is a live finding.
+   Gate 4 must get its row-level clause **now**, and BE-06's priority moves up
+   accordingly (see `OPERION_BE_CHANGE_QUEUE.md` BE-06 and BE-10.1).
 
 2. **Cost visibility is checkable, and is a live requirement.** Blueprint §2.1 states a
    Supervisor has no access to financial reporting. Today a Supervisor can read landed
@@ -374,6 +429,10 @@ are in different UOMs and the mismatch is a live source of user error.
    `notifications_type_check`'s exact allowed-value shape is known, so the migration for
    this gap is a known `ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT ... CHECK
    (type IN (..., 'NEW_VALUE'))`, not an open question anymore.
+   ⚠️ **Two constraints, not one.** `notifications_reference_type_check` is
+   `{PURCHASE_REQUEST, PART, AIRSOFT_UNIT, REALISASI}` — there is no PRA value either. A
+   PRA notification needs a new `NotificationType` **and** a new
+   `NotificationReferenceType`. Doing one and forgetting the other is rule 3 again.
 3. **`retroPurchaseFlag` is written but never queried** (§C6). An Owner-facing filter is a
    *new* requirement, not an existing capability.
 4. ~~**Unverified:** does `PurchaseRequestAuthorization` hold an FK back to its
@@ -385,6 +444,78 @@ are in different UOMs and the mismatch is a live source of user error.
    `PurchaseRequestRepository.findByPurchaseRequestAuthorizationId()` populates
    `purchaseRequestIds` on **every** PRA API response today. **PRA screens already have
    navigation back to origin PR(s) — no gap, no schema change needed.**
+
+#### Undocumented in every prior doc — found by BE-01, `[C]` 10 Aug
+
+These came out of the live CHECK-constraint dump. They appear in no blueprint section, no
+decision log entry, and not in `CLAUDE.md`. **They are screens nobody has counted**, not
+scope creep — do not treat them as optional when they surface during the inventory.
+
+##### 1. Reimbursement flow
+
+`realisasis_payment_method_check`: `payment_method` ∈ `{COMPANY_ACCOUNT,
+PERSONAL_REIMBURSABLE}`
+`realisasis_reimbursement_status_check`: `reimbursement_status` ∈ `{NOT_APPLICABLE,
+PENDING, REIMBURSED}`
+
+An employee buys from a marketplace with **personal money** and claims it back. This is
+the same operational reality that drove DL-08 — almost certainly deliberate, just never
+written down.
+
+Screens this implies, none of which are in any prior count:
+- Payment-method selection at Realisasi creation (`COMPANY_ACCOUNT` vs `PERSONAL_REIMBURSABLE`)
+- A reimbursement queue — outstanding `PENDING` claims, by claimant
+- A `PENDING → REIMBURSED` transition, with an actor and probably an approval
+
+⚠️ **Open SoD question for Gate 3:** may the person who made the purchase mark their own
+reimbursement paid? Neither documented SoD rule covers this pairing. Answer it during the
+module rather than after.
+
+✅ **Resolved by BE-09, 10 Aug (backend repo).** Not aspirational — `RealisasiService.create()`
+(lines 170-183) sets `reimbursementStatus` at creation (`PENDING` when
+`paymentMethod == PERSONAL_REIMBURSABLE`, `NOT_APPLICABLE` otherwise). The queue screen is
+real, has real data to show. But `REIMBURSED` is declared and **never set anywhere** —
+grepped the whole codebase, exactly 3 files touch `Reimburs*` (entity, enum,
+`RealisasiService`), none write `REIMBURSED`. No `markReimbursed` endpoint exists. The
+queue screen is not an orphan; the "mark as reimbursed" *action* on it is — flag the
+action, not the screen, and treat whether to build that endpoint as a product decision.
+See `screens/00-backend-state.md` §C7 and `OPERION_BE_CHANGE_QUEUE.md` BE-09.
+
+##### 2. PRA has four lifecycle states, not two
+
+`purchase_request_authorizations_status_check`: `status` ∈ `{ACTIVE, PARTIALLY_FULFILLED,
+FULFILLED, CANCELLED}`
+
+`CLAUDE.md` frames the PRA lifecycle around `ACTIVE`/`CANCELLED` only.
+`PARTIALLY_FULFILLED` and `FULFILLED` exist at DB and enum level.
+
+✅ **Resolved by BE-09, 10 Aug (backend repo).** Fully wired, not spare enum values.
+`PurchaseRequestAuthorizationService.refreshStatus(UUID)` (lines 192-235) computes all
+four states live — comparing each line's approved purchased quantity against
+`authorizedQty`, same "no mutable remaining column" pattern as the rest of this module —
+and fires from **four** call sites in `RealisasiService`: `create()`, `approveEscalated()`
+(233), `reject()` (258), `supersede()` (275). Every Realisasi transition that changes
+APPROVED-status aggregation triggers a PRA recompute. **The PRA status badge needs all
+four states, not two.** See `screens/00-backend-state.md` §C8.
+
+##### 3. `realisasis.pra_id` is NOT NULL
+
+Every Realisasi **must** reference a PRA. There is no ad-hoc purchase path at the database
+level — the chain is enforced structurally, not by convention.
+
+**Screen consequence:** a "quick purchase" or "record an unplanned buy" screen is
+impossible without a schema change. If the business needs one, that is a decision, not a
+UI task.
+
+##### 4. PRA is one-to-many over PRs
+
+BE-02 confirmed `create()` takes `purchaseRequestIds: List<UUID>` — one PRA can authorize
+several PRs at once.
+
+**Screen consequence:** the PRA screen is not a one-PR detail view. It shows a *set* of
+originating PRs, and per-line ceilings span across them. A line item's ceiling may
+therefore relate to requests from more than one PR — which is exactly the case where the
+absent header cap (see above) is felt most.
 
 Two existing prototypes (PR creation, PR approval console) are **stale** — drawn against
 the old chain. Redrawing them is part of this module.
@@ -497,6 +628,13 @@ this pass is the specific correction for it. Do not skip it.
 
 ## 9. Working notes for Claude Code sessions
 
+- **Why the backend repo runs the inventory, not the design project.** Wireframing
+  happens in a separate Pencil project with no access to this repo — it cannot read
+  `module/procurement/` or `screens/00-backend-state.md`, so it cannot make a `[C]` claim
+  about anything. The split is structural, not a matter of discipline: this repo's
+  sessions are the only place a screen record's `[C]` tags can be trusted, because this is
+  the only place with the source. The design session receives the finished inventory and
+  draws from it, asserting nothing about the backend on its own.
 - This document is a **plan**, not a spec. The inventory output belongs in a separate
   file per module: `screens/01-procurement.md`, `screens/02-inventory-stock.md`, etc.
 - **Directory is `screens/`, not `inventory/`** — deliberately. `inventory` is already a
@@ -597,3 +735,22 @@ these.
       hardcoded string.
 - [x] Create `screens/` and commit `00-backend-state.md` into it.
       **Done** — committed alongside the v1.1 correction pass.
+
+---
+
+## 12. Open questions carried into module 1
+
+None of these block the inventory. They are recorded so that when the inventory hits
+them, they are recognised as known unknowns rather than mistaken for scope creep.
+
+| # | Question | Where it bites | Owner |
+|---|---|---|---|
+| 1 | Does service code write `payment_method` / `reimbursement_status`, or are they aspirational columns? | Whether the reimbursement queue screen is real or an orphan | **Answered by BE-09** — real, see §5.1 #1 |
+| 2 | May a purchaser mark their own reimbursement paid? | Gate 3, third SoD row | Product decision — still open, no `markReimbursed` endpoint to have a rule about yet |
+| 3 | Does any code transition PRA into `PARTIALLY_FULFILLED` / `FULFILLED`? | PRA status badge | **Answered by BE-09** — yes, all four states reachable, see §5.1 #2 |
+| 4 | Is tenant hierarchy being built by the parallel team? | Gate 4's row-level deferral | **Fully answered, `[V]`** — yes, live: `Franchise HQ` → `Outlet 2` is a real parent-child pair in the current DB (1 of 3 tenants has `parent_id` set). Gate 4's flat-tenancy deferral is lifted, not just under suspicion. See `OPERION_BE_CHANGE_QUEUE.md` BE-10.1 |
+| 5 | Should PRA gain a nullable header cap? | PRA screen design | Product decision — likely settled *by* designing the screen |
+| 6 | What generates `LOW_STOCK` notifications, and does it call `BurnRateService` outside a web request? | Latent open-in-view failure (BE-03) | **Answered by BE-10.2** — `PartStockService.adjustStock()` only, synchronous, no `BurnRateService` call. Latent, not live. |
+| 7 | Does the RN client outbox exist as DL-06 describes? | Module 3 scan screens | Client repo — out of backend scope |
+
+**Questions 2 and 5 are yours, not a session's.** The rest are verification tasks.
