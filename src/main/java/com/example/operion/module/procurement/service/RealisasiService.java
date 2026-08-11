@@ -434,6 +434,11 @@ public class RealisasiService {
 
     private RealisasiResponse map(Realisasi realisasi) {
 
+        // BE-06: cost fields redacted below OWNER scope — see
+        // OPERION_BE_CHANGE_QUEUE.md BE-06. Redacted (null), not omitted; a
+        // sub-OWNER caller sees every other field on this response normally.
+        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+
         List<RealisasiItemResponse> items = itemRepository
                 .findByRealisasiId(realisasi.getId())
                 .stream()
@@ -446,8 +451,8 @@ public class RealisasiService {
                         .purchaseUom(item.getPurchaseUom())
                         .conversionFactor(item.getConversionFactor())
                         .purchasedQty(item.getPurchasedQty())
-                        .actualUnitPrice(item.getActualUnitPrice())
-                        .allocatedLandedCost(item.getAllocatedLandedCost())
+                        .actualUnitPrice(canSeeCost ? item.getActualUnitPrice() : null)
+                        .allocatedLandedCost(canSeeCost ? item.getAllocatedLandedCost() : null)
                         .build())
                 .toList();
 
@@ -465,13 +470,13 @@ public class RealisasiService {
                 .reimbursementStatus(
                         realisasi.getReimbursementStatus() != null ? realisasi.getReimbursementStatus().name() : null)
                 .purchasedAt(realisasi.getPurchasedAt())
-                .subtotal(realisasi.getSubtotal())
-                .sellerDiscount(realisasi.getSellerDiscount())
-                .platformVoucher(realisasi.getPlatformVoucher())
-                .shipping(realisasi.getShipping())
-                .insurance(realisasi.getInsurance())
-                .serviceFee(realisasi.getServiceFee())
-                .totalCost(realisasi.getTotalCost())
+                .subtotal(canSeeCost ? realisasi.getSubtotal() : null)
+                .sellerDiscount(canSeeCost ? realisasi.getSellerDiscount() : null)
+                .platformVoucher(canSeeCost ? realisasi.getPlatformVoucher() : null)
+                .shipping(canSeeCost ? realisasi.getShipping() : null)
+                .insurance(canSeeCost ? realisasi.getInsurance() : null)
+                .serviceFee(canSeeCost ? realisasi.getServiceFee() : null)
+                .totalCost(canSeeCost ? realisasi.getTotalCost() : null)
                 .attachments(realisasi.getAttachments())
                 .retroPurchaseFlag(realisasi.getRetroPurchaseFlag())
                 .createdById(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getId() : null)
