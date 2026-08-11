@@ -90,6 +90,20 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- BE-05 (OPERION_BE_CHANGE_QUEUE.md): replaces ddl-auto=update, which
+             does not alter CHECK/UNIQUE constraints on existing tables (CLAUDE.md
+             rule 3, two prior bugs from this). Version managed by
+             spring-boot-starter-parent's dependency management. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
