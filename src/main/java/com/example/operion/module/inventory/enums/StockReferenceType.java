@@ -10,5 +10,7 @@ public enum StockReferenceType {
 
   STOCK_ADJUSTMENT,
 
-  UNIT_INSTALL
+  UNIT_INSTALL,
+
+  PART_INSTANCE
 }

@@ -110,6 +110,8 @@ public class PartService {
                                 .legacyCategory(category.getName())
                                 .minimumStock(request.getMinimumStock())
                                 .reorderQuantity(request.getReorderQuantity())
+                                .manualDailyUsage(request.getManualDailyUsage())
+                                .manualReorderPoint(request.getManualReorderPoint())
                                 .expectedLifespanDays(request.getExpectedLifespanDays())
                                 .notes(request.getNotes())
                                 .build();
@@ -152,6 +154,8 @@ public class PartService {
                                 .currentStock(part.getCurrentStock())
                                 .minimumStock(part.getMinimumStock())
                                 .reorderQuantity(part.getReorderQuantity())
+                                .manualDailyUsage(part.getManualDailyUsage())
+                                .manualReorderPoint(part.getManualReorderPoint())
                                 .notes(part.getNotes())
                                 .retired(part.getRetired())
                                 .retiredAt(part.getRetiredAt())
@@ -258,6 +262,16 @@ public class PartService {
                 if (request.getReorderQuantity() != null) {
                         part.setReorderQuantity(
                                         request.getReorderQuantity());
+                }
+
+                if (request.getManualDailyUsage() != null) {
+                        part.setManualDailyUsage(
+                                        request.getManualDailyUsage());
+                }
+
+                if (request.getManualReorderPoint() != null) {
+                        part.setManualReorderPoint(
+                                        request.getManualReorderPoint());
                 }
 
                 if (request.getNotes() != null) {

@@ -62,6 +62,29 @@ public class MaintenancePolicy {
   @Builder.Default
   private Boolean autoCreateWorkOrder = true;
 
+  /*
+   * =====================================================
+   * Burn rate (operion-burn-rate-spec.md §4.2) — nullable,
+   * unlike the fields above. This table already has a row per
+   * tenant; a NOT NULL column added via ddl-auto=update fails
+   * on a populated table (same class of issue as the Supplier.
+   * tenant migration on 25 Jul). BurnRateService falls back to
+   * the spec's defaults (30/21/10/14) when null.
+   * =====================================================
+   */
+
+  @Column(name = "burn_rate_window_days")
+  private Integer burnRateWindowDays;
+
+  @Column(name = "burn_rate_min_observation_days")
+  private Integer burnRateMinObservationDays;
+
+  @Column(name = "burn_rate_min_events")
+  private Integer burnRateMinEvents;
+
+  @Column(name = "days_of_cover_target")
+  private Integer daysOfCoverTarget;
+
   @Column(name = "created_at", nullable = false)
   private LocalDateTime createdAt;
 

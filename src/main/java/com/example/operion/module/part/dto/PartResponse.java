@@ -1,5 +1,6 @@
 package com.example.operion.module.part.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -37,6 +38,10 @@ public class PartResponse {
   private Integer minimumStock;
 
   private Integer reorderQuantity;
+
+  private BigDecimal manualDailyUsage;
+
+  private Integer manualReorderPoint;
 
   private Boolean retired;
 

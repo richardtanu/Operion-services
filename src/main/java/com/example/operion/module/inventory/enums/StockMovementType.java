@@ -10,5 +10,7 @@ public enum StockMovementType {
 
   ADJUSTMENT,
 
-  RETURN
+  RETURN,
+
+  CONSUMABLE_TAKE
 }

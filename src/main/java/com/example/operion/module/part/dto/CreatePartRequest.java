@@ -1,5 +1,6 @@
 package com.example.operion.module.part.dto;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import jakarta.validation.constraints.AssertTrue;
@@ -32,6 +33,10 @@ public class CreatePartRequest {
   private Integer minimumStock;
 
   private Integer reorderQuantity;
+
+  private BigDecimal manualDailyUsage;
+
+  private Integer manualReorderPoint;
 
   private String notes;
 
