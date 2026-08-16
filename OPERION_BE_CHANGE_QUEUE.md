@@ -7,7 +7,10 @@ BE-10 are what moved it there)
 **Status:** BE-01, BE-02, BE-03, BE-04, BE-05, BE-06, BE-09, BE-10 done. Flyway is live
 (`ddl-auto=validate`, confirmed zero schema drift). BE-10's live check found real tenant
 hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) got done
-immediately instead of waiting on module 1. BE-07, BE-08 open — both need module 1.
+immediately instead of waiting on module 1. **Module 1 (`screens/01-procurement.md`) is
+now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`PurchaseOrder`
+cost redaction, same shape as BE-06) is a new gap module 1 surfaced. BE-07, BE-08, BE-11
+open.
 
 ---
 
@@ -445,8 +448,14 @@ first means guessing at the field list.
 
 ## BE-07 — PRA notification type
 
-**Priority:** After module 1 inventory.
-**Blocked by:** BE-01 (hard, now resolved — see above), BE-05 (strongly recommended).
+**Priority:** Unblocked — module 1 is complete, BE-01 and BE-05 are both done.
+**Blocked by:** ~~BE-01 (hard, now resolved — see above), BE-05 (strongly
+recommended).~~ Neither blocks anymore. **Task 3 below is only partially answered by
+module 1**: `screens/01-procurement.md` PROC-03/PROC-04 confirm Realisasi creation has
+**no scope or role restriction at all**, so there is no existing scope tier to target the
+way `notifyRealisasiEscalated` targets `OWNER_OR_ABOVE`. "Everyone at the tenant" is a
+defensible default given that, but it's still a product call, not something the
+inventory settled outright — flag this rather than pick silently.
 
 ### Why
 
@@ -477,23 +486,28 @@ BE-05 (proper migration tooling) is still recommended before writing this by han
 
 ## BE-08 — Goods receipt list endpoint
 
-**Priority:** After module 1 inventory.
-**Blocked by:** Module 1 confirming the screen exists and what it must return.
+**Priority:** Unblocked — module 1 confirmed the screen (PROC-05) and, per below, the
+gap is real and unchanged.
+**Blocked by:** ~~Module 1 confirming the screen exists and what it must return.~~ Done —
+see PROC-05 in `screens/01-procurement.md`.
 
 ### Why
 
 `00-backend-state.md` §A2 `[C]`: `GoodsReceiptController` exposes only `POST`,
 `GET /purchase-order/{poId}`, and `GET /realisasi/{realisasiId}`. There is no list
-endpoint and no `GET /goods-receipts/{id}`.
+endpoint and no `GET /goods-receipts/{id}`. Re-confirmed directly against the
+controller while drafting PROC-05, 11 Aug — unchanged.
 
 A "recent receipts" screen — almost certainly needed for module 1 or 2 — is not currently
 servable.
 
-### Task (after module 1)
+### Task
 
-Add `GET /goods-receipts` with filters the inventory shows are actually needed, plus
-`GET /goods-receipts/{id}`. Let the screen record define the response shape rather than
-guessing.
+Add `GET /goods-receipts` with filters PROC-05 identifies as useful (by date range, by
+receiving user, by whether it came via PO or Realisasi — `purchaseOrderId`/`realisasiId`
+being mutually exclusive on the response already gives a natural "path" filter), plus
+`GET /goods-receipts/{id}`. Let the screen record define the response shape (it already
+does — reuse `GoodsReceiptResponse` as-is) rather than guessing.
 
 ---
 
@@ -652,6 +666,42 @@ tenants has a parent). Gate 4's row-level deferral is **lifted, not re-justified
 hierarchy exists today. **BE-10 fully met.** Still to do: record this in
 `screens/00-backend-state.md` (currently only in this file), and reflect the elevated
 BE-06 urgency wherever module 1's Gate 4 output gets consumed.
+
+---
+
+## BE-11 — Redact `PurchaseOrder` cost fields below OWNER scope
+
+**Priority:** Same class as BE-06 — this is the gap BE-06's original grep pass missed.
+**Type:** Requirement gap, same shape as BE-06.
+**Status:** Open. Found `screens/01-procurement.md` PROC-07, 11 Aug 2026, while
+completing module 1's screen inventory.
+
+### Why
+
+BE-06 redacted cost fields on `RealisasiResponse`/`RealisasiItemResponse` and
+`PartInstanceResponse`, found via grepping for
+`landedCost|unitCost|unitPrice|actualUnitPrice|sellerDiscount|platformVoucher
+|serviceFee`. `PurchaseOrderService` was never touched — its cost fields are named
+plainly `totalAmount` (header) and `price` (per item on `PurchaseOrderItemResponse`),
+which didn't match that pattern. `[C]`, confirmed directly: `PurchaseOrderService.java`
+has zero `ScopeContext`/`hasAtLeast` references anywhere, so nothing gates these fields
+today. A Supervisor can read full PO pricing through `GET /purchase-orders` right now —
+same exposure BE-06 fixed for the Realisasi/PartInstance path, just on the other genuine
+transaction type (`CLAUDE.md`'s "two genuinely different transactions" table).
+
+### Task
+
+1. In `PurchaseOrderService`'s private `map()` method, redact `totalAmount` and each
+   item's `price` to `null` below `Scope.OWNER`, same pattern as `RealisasiService.map()`
+   and `PartInstanceService.map()` (BE-06).
+2. Redact — do not omit the field, consistent with BE-06's own rule.
+3. Test at SUPERVISOR, MANAGER, OWNER (and PRINCIPAL for completeness) — real
+   `@SpringBootTest` against the live datasource, not a compile check, matching
+   `RealisasiServiceCostRedactionTest`/`PartInstanceServiceCostRedactionTest`.
+4. Once done, grep the rest of the codebase for other cost-shaped field names that don't
+   match BE-06's original pattern (`amount`, `price`, `cost`, `value` are all candidates
+   that could exist elsewhere) — this task existing at all is evidence that pattern-based
+   grepping under-covers a codebase with inconsistent naming.
 
 ---
 
