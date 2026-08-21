@@ -3,7 +3,8 @@
 Context for Claude Code sessions. Loaded at session start.
 
 **Repo:** `richardtanu/Operion-services` — Java Spring Boot + PostgreSQL, modular monolith
-**Authoritative plan:** `OPERION_BE_PLAN.md` (v3.4, 29 Jul 2026) — this file is a summary, that file is the detail
+**Baseline reference:** `OPERION_BE_BASELINE.md` (22 Aug 2026) — this file is a summary, that file is the detailed, source-verified module-by-module reference (entities, endpoints, business rules, consolidated gap list)
+**Audit history:** `OPERION_BE_PLAN.md` (v3.4, 29 Jul 2026) — the historical round-by-round conformance audit; superseded as a "current state" reference by `OPERION_BE_BASELINE.md` above, but kept for the decision trail
 **Decision rationale:** `Operion-Decision-Log-Tambahan.md` (Indonesian) — `DL-06` … `DL-11`
 
 ---
@@ -164,9 +165,24 @@ One `Role` enum only. No `roles`/`user_roles` table pair.
 - File-upload backing for Realisasi `attachments` (plain text/URL field, by design).
 - A filter surfacing `retroPurchaseFlag=true` records for the Owner. Field exists; nothing queries it.
 
+## Deployment
+
+Live on Railway since 16 Aug 2026, project `imaginative-gratitude`, service `Operion-services`, public URL `https://operion-services-production.up.railway.app`. Separate `Postgres` service in the same project, connected via Railway's private network (`postgres.railway.internal`) — the app service's `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` env vars reference it as `${{Postgres.PGHOST}}` etc., not literal values. Public TCP access to Postgres was enabled once (to load data below) and should stay off otherwise — check `Postgres → Settings → Networking` if in doubt.
+
+**Flyway migrations beyond what §5.1/Q4 of `OPERION_BE_PLAN.md` anticipated**, both required because the dev DB's schema predates Flyway (adopted BE-05, 11 Aug) and had no migration scripts of its own:
+
+- `V1__baseline.sql` — schema-only (`pg_dump --schema-only`) snapshot of the dev DB, needed because `baseline-on-migrate` only baselines a schema that already has tables; a genuinely fresh database (any new Railway Postgres) had nothing to baseline and `ddl-auto=validate` would fail at boot with zero tables. Note: pg_dump 18's `\restrict`/`\unrestrict` meta-commands and the `flyway_schema_history` table itself both had to be stripped out of the dump by hand before Flyway would accept it as a migration.
+- `V2__seed_default_tenant.sql` — inserts the `BLITZ_BDG` tenant. `AuthService.register()` requires an existing `Tenant` row matching `tenantCode` (default `"BLITZ_BDG"`), and every endpoint except `/auth/login`/`/auth/register` requires a JWT — so a database with zero tenants has no way to bootstrap its first user via the API at all. `MasterDataSyncRunner` only re-seeds *existing* tenants on boot, it never creates the first one.
+
+**Prod DB currently holds an exact 1:1 copy of the dev DB's data** (loaded 17 Aug 2026, `pg_dump --data-only` → `psql`, verified row-count-identical across all 38 tables). This means every caveat in the paragraph below about dev DB test junk is now equally true of prod, not just dev.
+
+`OPERION PROD.postman_collection.json` (repo root) — URLs point at the Railway public domain, not `localhost:8080`. The `register` request's `tenantCode` was previously a broken placeholder string; fixed to the literal `"BLITZ_BDG"`.
+
+**Open:** a 405 seen testing from an iPhone had a Cloudflare-shaped error envelope (`{success, result, errors: [{code, message}]}`), confirmed **not** to originate from `GlobalExceptionHandler`/`ApiResponse` (neither produces that shape) — so the request likely never reached the app. Root cause not yet identified; suspect a GET hitting a POST-only endpoint (e.g. `/part-instances/scan-in`) at the edge, but unconfirmed.
+
 ## Housekeeping
 
-Test data from four verification sessions is still in the dev DB (`OPERION_BE_PLAN.md` §5.2 lists it with FK deletion order). Delete whole chains — partial deletion changes ceiling consumption on any PRA left behind. Also outstanding: duplicate `part_categories` cleanup from the July seed session (§5.3).
+Test data from four verification sessions is still in the dev DB, **and now in prod too** (see Deployment above) (`OPERION_BE_PLAN.md` §5.2 lists it with FK deletion order). Delete whole chains — partial deletion changes ceiling consumption on any PRA left behind. Also outstanding: duplicate `part_categories` cleanup from the July seed session (§5.3).
 
 ---
 
