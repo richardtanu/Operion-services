@@ -588,6 +588,43 @@
                                                    ]
                                   },
                                   {
+                                      "name":  "parts-get-all-grouped-by-category",
+                                      "protocolProfileBehavior":  {
+                                                                      "disableBodyPruning":  true
+                                                                  },
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  ""
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/parts/grouped-by-category",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "parts",
+                                                                               "grouped-by-category"
+                                                                           ]
+                                                              }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
                                       "name":  "parts-update",
                                       "request":  {
                                                       "method":  "PUT",

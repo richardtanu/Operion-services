@@ -19,9 +19,6 @@ public interface PartRepository
         @Query("select p from Part p where p.tenant.id in :tenantIds and p.active = true")
         List<Part> findByTenantIdInAndActiveTrue(@Param("tenantIds") List<UUID> tenantIds);
 
-        @Query("select p from Part p where p.tenant.id in :tenantIds and p.active = true group by p.categoryName")
-        List<Part> findByTenantIdInAndActiveTrueGroupByCategory(@Param("tenantIds") List<UUID> tenantIds);
-
         @Query("select p from Part p where p.tenant.id in :tenantIds")
         List<Part> findByTenantIdIn(@Param("tenantIds") List<UUID> tenantIds);
 
