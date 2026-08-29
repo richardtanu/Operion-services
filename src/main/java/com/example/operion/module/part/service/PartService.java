@@ -1,14 +1,19 @@
 package com.example.operion.module.part.service;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.part.dto.CreatePartRequest;
 import com.example.operion.module.part.dto.PartResponse;
+import com.example.operion.module.part.dto.PartsByCategoryResponse;
 import com.example.operion.module.part.dto.RetirePartRequest;
 import com.example.operion.module.part.dto.UpdatePartRequest;
 import com.example.operion.module.part.entity.Part;
@@ -131,6 +136,39 @@ public class PartService {
                 return repository.findByTenantIdInAndActiveTrue(tenantIds)
                                 .stream()
                                 .map(this::map)
+                                .toList();
+        }
+
+        public List<PartsByCategoryResponse> getAllGroupByCategory() {
+
+                UUID tenantId = UUID.fromString(
+                                TenantContext.getTenantId());
+
+                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+                List<Part> parts = repository.findByTenantIdInAndActiveTrue(tenantIds);
+
+                Map<UUID, List<Part>> byCategoryId = parts.stream()
+                                .collect(Collectors.groupingBy(
+                                                p -> p.getCategory().getId(),
+                                                LinkedHashMap::new,
+                                                Collectors.toList()));
+
+                return byCategoryId.values()
+                                .stream()
+                                .map(group -> {
+
+                                        PartCategory category = group.get(0).getCategory();
+
+                                        return PartsByCategoryResponse.builder()
+                                                        .categoryId(category.getId())
+                                                        .categoryName(category.getName())
+                                                        .parts(group.stream().map(this::map).toList())
+                                                        .build();
+                                })
+                                .sorted(Comparator.comparing(
+                                                PartsByCategoryResponse::getCategoryName,
+                                                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                                 .toList();
         }
 

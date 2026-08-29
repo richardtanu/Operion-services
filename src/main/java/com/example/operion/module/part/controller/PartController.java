@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.part.dto.CreatePartRequest;
 import com.example.operion.module.part.dto.PartResponse;
+import com.example.operion.module.part.dto.PartsByCategoryResponse;
 import com.example.operion.module.part.dto.RetirePartRequest;
 import com.example.operion.module.part.dto.UpdatePartRequest;
 import com.example.operion.module.part.service.PartService;
@@ -20,70 +21,81 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PartController {
 
-    private final PartService service;
+        private final PartService service;
 
-    @PostMapping
-    public ApiResponse<PartResponse> create(
-            @Valid @RequestBody CreatePartRequest request) {
+        @PostMapping
+        public ApiResponse<PartResponse> create(
+                        @Valid @RequestBody CreatePartRequest request) {
 
-        return ApiResponse
-                .<PartResponse>builder()
-                .success(true)
-                .message("Part created")
-                .data(service.create(request))
-                .build();
-    }
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("Part created")
+                                .data(service.create(request))
+                                .build();
+        }
 
-    @GetMapping
-    public ApiResponse<List<PartResponse>> getAll() {
+        @GetMapping
+        public ApiResponse<List<PartResponse>> getAll() {
 
-        return ApiResponse
-                .<List<PartResponse>>builder()
-                .success(true)
-                .message("Parts fetched")
-                .data(service.getAll())
-                .build();
-    }
+                return ApiResponse
+                                .<List<PartResponse>>builder()
+                                .success(true)
+                                .message("Parts fetched")
+                                .data(service.getAll())
+                                .build();
+        }
 
-    @PutMapping("/{partId}")
-    public ApiResponse<PartResponse> update(
-            @PathVariable UUID partId,
-            @RequestBody UpdatePartRequest request) {
+        @GetMapping("/grouped-by-category")
+        public ApiResponse<List<PartsByCategoryResponse>> getAllGroupByCategory() {
 
-        return ApiResponse
-                .<PartResponse>builder()
-                .success(true)
-                .message("Part updated")
-                .data(
-                        service.update(
-                                partId,
-                                request))
-                .build();
-    }
+                return ApiResponse
+                                .<List<PartsByCategoryResponse>>builder()
+                                .success(true)
+                                .message("Parts fetched")
+                                .data(service.getAllGroupByCategory())
+                                .build();
+        }
 
-    @PatchMapping("/{partId}/retire")
-    public ApiResponse<PartResponse> retire(
-            @PathVariable UUID partId,
-            @Valid @RequestBody RetirePartRequest request) {
+        @PutMapping("/{partId}")
+        public ApiResponse<PartResponse> update(
+                        @PathVariable UUID partId,
+                        @RequestBody UpdatePartRequest request) {
 
-        return ApiResponse
-                .<PartResponse>builder()
-                .success(true)
-                .message("Part retired")
-                .data(service.retire(partId, request))
-                .build();
-    }
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("Part updated")
+                                .data(
+                                                service.update(
+                                                                partId,
+                                                                request))
+                                .build();
+        }
 
-    @PatchMapping("/{partId}/restore")
-    public ApiResponse<PartResponse> restore(
-            @PathVariable UUID partId) {
+        @PatchMapping("/{partId}/retire")
+        public ApiResponse<PartResponse> retire(
+                        @PathVariable UUID partId,
+                        @Valid @RequestBody RetirePartRequest request) {
 
-        return ApiResponse
-                .<PartResponse>builder()
-                .success(true)
-                .message("Part restored")
-                .data(service.restore(partId))
-                .build();
-    }
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("Part retired")
+                                .data(service.retire(partId, request))
+                                .build();
+        }
+
+        @PatchMapping("/{partId}/restore")
+        public ApiResponse<PartResponse> restore(
+                        @PathVariable UUID partId) {
+
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("Part restored")
+                                .data(service.restore(partId))
+                                .build();
+        }
 
 }

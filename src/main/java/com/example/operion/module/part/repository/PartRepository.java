@@ -12,39 +12,42 @@ import org.springframework.data.repository.query.Param;
 import com.example.operion.module.part.entity.Part;
 
 public interface PartRepository
-        extends JpaRepository<Part, UUID> {
+                extends JpaRepository<Part, UUID> {
 
-    Optional<Part> findByIdAndTenantId(UUID id, UUID tenantId);
+        Optional<Part> findByIdAndTenantId(UUID id, UUID tenantId);
 
-    @Query("select p from Part p where p.tenant.id in :tenantIds and p.active = true")
-    List<Part> findByTenantIdInAndActiveTrue(@Param("tenantIds") List<UUID> tenantIds);
+        @Query("select p from Part p where p.tenant.id in :tenantIds and p.active = true")
+        List<Part> findByTenantIdInAndActiveTrue(@Param("tenantIds") List<UUID> tenantIds);
 
-    @Query("select p from Part p where p.tenant.id in :tenantIds")
-    List<Part> findByTenantIdIn(@Param("tenantIds") List<UUID> tenantIds);
+        @Query("select p from Part p where p.tenant.id in :tenantIds and p.active = true group by p.categoryName")
+        List<Part> findByTenantIdInAndActiveTrueGroupByCategory(@Param("tenantIds") List<UUID> tenantIds);
 
-    @Query("select p from Part p where p.tenant.id in :tenantIds order by p.currentStock asc")
-    List<Part> findByTenantIdInOrderByCurrentStockAsc(@Param("tenantIds") List<UUID> tenantIds);
+        @Query("select p from Part p where p.tenant.id in :tenantIds")
+        List<Part> findByTenantIdIn(@Param("tenantIds") List<UUID> tenantIds);
 
-    long countByTenantId(UUID tenantId);
+        @Query("select p from Part p where p.tenant.id in :tenantIds order by p.currentStock asc")
+        List<Part> findByTenantIdInOrderByCurrentStockAsc(@Param("tenantIds") List<UUID> tenantIds);
 
-    List<Part> findByTenantId(UUID tenantId);
+        long countByTenantId(UUID tenantId);
 
-    List<Part> findByTenantIdOrderByCurrentStockAsc(UUID tenantId);
+        List<Part> findByTenantId(UUID tenantId);
 
-    boolean existsByPartTypeId(UUID partTypeId);
+        List<Part> findByTenantIdOrderByCurrentStockAsc(UUID tenantId);
 
-    List<Part> findByTenantIdAndPartTypeId(
-            UUID tenantId,
-            UUID partTypeId);
+        boolean existsByPartTypeId(UUID partTypeId);
 
-    List<Part> findByTenantIdAndPartTypeIdOrderByBrandAsc(
-            UUID tenantId,
-            UUID partTypeId);
+        List<Part> findByTenantIdAndPartTypeId(
+                        UUID tenantId,
+                        UUID partTypeId);
 
-    List<Part> findByTenantIdAndActiveTrue(UUID tenantId);
+        List<Part> findByTenantIdAndPartTypeIdOrderByBrandAsc(
+                        UUID tenantId,
+                        UUID partTypeId);
 
-    Optional<Part> findByIdAndTenantIdAndActiveTrue(
-            UUID id,
-            UUID tenantId);
+        List<Part> findByTenantIdAndActiveTrue(UUID tenantId);
+
+        Optional<Part> findByIdAndTenantIdAndActiveTrue(
+                        UUID id,
+                        UUID tenantId);
 
 }
