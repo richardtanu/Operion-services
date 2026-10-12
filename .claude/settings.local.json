@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD=root psql -h localhost -U postgres -d operion -c \"select pc.name, count\\(p.id\\) as parts_using from part_categories pc left join parts p on p.category_id = pc.id group by pc.id, pc.name order by pc.name;\")",
+      "PowerShell($env:PGPASSWORD='root'; & psql -h localhost -U postgres -d operion -c \"select pc.name, pc.id, count\\(p.id\\) as parts_using from part_categories pc left join parts p on p.category_id = pc.id group by pc.id, pc.name order by pc.name;\" 2>&1)",
+      "Bash(find \"/c/Program Files/PostgreSQL\" -iname \"psql.exe\" 2>/dev/null)",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Bash(export PGPASSWORD=root)",
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U postgres -d operion -c \"select pc.name, pc.id, pc.description is not null as has_desc, count\\(p.id\\) as parts_using from part_categories pc left join parts p on p.category_id = pc.id group by pc.id, pc.name, pc.description order by pc.name;\")",
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U postgres -d operion -c \"select pc.name, pc.id, count\\(pt.id\\) as part_types_using from part_categories pc left join part_types pt on pt.category_id = pc.id group by pc.id, pc.name order by pc.name;\")",
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U postgres -d operion -c \"\\\\dt\")",
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -h localhost -U postgres -d operion -c \"select pc.name, pc.id, count\\(pt.id\\) as part_types_using from part_categories pc left join part_type pt on pt.category_id = pc.id group by pc.id, pc.name order by pc.name;\")",
+      "Bash('/c/Program Files/PostgreSQL/18/bin/psql.exe' -h localhost -U postgres -d operion -c ' *)",
+      "PowerShell(Get-Command pg_dump -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command psql -ErrorAction SilentlyContinue)",
+      "Bash(docker --version)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique\")",
+      "Bash(read pid *)",
+      "Bash(powershell -Command 'Stop-Process -Id __TRACKED_VAR__ -Force -ErrorAction SilentlyContinue')",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue\")",
+      "Bash(openssl rand *)"
+    ]
+  }
+}
