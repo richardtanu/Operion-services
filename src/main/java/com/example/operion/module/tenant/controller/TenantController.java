@@ -3,6 +3,7 @@ package com.example.operion.module.tenant.controller;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
@@ -20,7 +21,11 @@ public class TenantController {
 
     private final TenantService service;
 
+    // BE-12: previously no authorization at all — any authenticated user
+    // could create tenants. Tree containment / PRINCIPAL-for-root rules live
+    // in TenantService; the GETs are tree-scoped there too.
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<TenantResponse> create(
             @Valid @RequestBody CreateTenantRequest request) {
 

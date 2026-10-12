@@ -3,9 +3,12 @@ package com.example.operion.module.tenant.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.config.MasterDataInitializer;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.tenant.dto.CreateTenantRequest;
 import com.example.operion.module.tenant.dto.TenantResponse;
 import com.example.operion.module.tenant.entity.Tenant;
@@ -21,15 +24,31 @@ public class TenantService {
 
     private final MasterDataInitializer masterDataInitializer;
 
+    private final TenantHierarchyService tenantHierarchyService;
+
+    /**
+     * BE-12: caller must be ADMIN (see {@code TenantController}). A child
+     * tenant may only be created under the caller's own tenant tree. A new
+     * root tenant is a new customer business, not something an outlet or HQ
+     * admin does — it additionally requires {@code PRINCIPAL} scope. No user
+     * holds PRINCIPAL today, so in practice new roots arrive via a Flyway
+     * seed (as {@code V2__seed_default_tenant.sql} did).
+     */
     public TenantResponse create(CreateTenantRequest request) {
 
         Tenant parent = null;
 
         if (request.getParentId() != null) {
 
+            tenantHierarchyService.requireWithinCallerTenantTree(request.getParentId());
+
             parent = repository
                     .findById(request.getParentId())
                     .orElseThrow(() -> new RuntimeException("Parent tenant not found"));
+
+        } else if (!ScopeContext.hasAtLeast(Scope.PRINCIPAL)) {
+
+            throw new AccessDeniedException("Only Principal-level users can create a root tenant");
         }
 
         Tenant tenant = Tenant.builder()
@@ -46,7 +65,11 @@ public class TenantService {
         return map(saved);
     }
 
+    // Containment is checked before the lookup so an out-of-tree id answers
+    // 403 whether or not it exists — no probing for other tenants' ids.
     public TenantResponse getById(UUID id) {
+
+        tenantHierarchyService.requireWithinCallerTenantTree(id);
 
         return map(
                 repository.findById(id)
@@ -54,6 +77,8 @@ public class TenantService {
     }
 
     public List<TenantResponse> getChildren(UUID id) {
+
+        tenantHierarchyService.requireWithinCallerTenantTree(id);
 
         return repository.findByParentId(id)
                 .stream()
