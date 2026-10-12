@@ -33,7 +33,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 String path = request.getServletPath();
 
-                if (path.equals("/auth/login") || path.equals("/auth/register")) {
+                // BE-12: /auth/register is no longer skipped — it now needs the
+                // caller's JWT parsed so @PreAuthorize can see ROLE_ADMIN
+                if (path.equals("/auth/login")) {
                         filterChain.doFilter(request, response);
                         return;
                 }

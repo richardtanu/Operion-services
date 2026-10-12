@@ -6,8 +6,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
 
@@ -60,6 +62,22 @@ public class TenantHierarchyService {
         }
 
         return result;
+    }
+
+    /**
+     * BE-12: throws {@link AccessDeniedException} (→ 403) unless the target
+     * tenant is the caller's own tenant or one of its descendants. Ancestors
+     * are deliberately excluded — an outlet admin must not reach upward into
+     * HQ. Reads the caller's tenant from the JWT-populated
+     * {@link TenantContext}.
+     */
+    public void requireWithinCallerTenantTree(UUID targetTenantId) {
+
+        UUID callerTenantId = UUID.fromString(TenantContext.getTenantId());
+
+        if (!getEffectiveTenantIds(callerTenantId).contains(targetTenantId)) {
+            throw new AccessDeniedException("Tenant is outside your tenant hierarchy");
+        }
     }
 
     /**
