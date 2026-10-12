@@ -1,11 +1,9 @@
 package com.example.operion.module.auth.service;
 
-import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.dto.UserProfileResponse;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Scope;
@@ -27,13 +25,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        UUID tenantId = UUID.fromString(TenantContext.getTenantId());
-
-        List<UUID> effectiveTenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
-
-        if (!effectiveTenantIds.contains(user.getTenant().getId())) {
-            throw new RuntimeException("User is outside your tenant hierarchy");
-        }
+        tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
 
         user.setScope(scope);
         userRepository.save(user);

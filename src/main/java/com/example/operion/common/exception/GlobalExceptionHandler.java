@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -23,6 +24,22 @@ public class GlobalExceptionHandler {
                 response.put("error", ex.getMessage());
 
                 return ResponseEntity.badRequest().body(response);
+        }
+
+        // BE-12: AccessDeniedException is a RuntimeException, so without this
+        // handler every @PreAuthorize denial and every manual scope gate fell
+        // into handleRuntimeException above and surfaced as 400. Spring picks
+        // the most specific matching handler, so this one wins. Also covers
+        // AuthorizationDeniedException (Spring Security 6.3+), a subclass.
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<?> handleAccessDenied(AccessDeniedException ex) {
+
+                Map<String, Object> response = new HashMap<>();
+
+                response.put("timestamp", LocalDateTime.now());
+                response.put("error", ex.getMessage());
+
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
         }
 
         @ExceptionHandler(BadCredentialsException.class)

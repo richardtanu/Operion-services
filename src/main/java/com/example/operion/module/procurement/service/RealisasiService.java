@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -397,7 +398,7 @@ public class RealisasiService {
     private void requireOwnerScope() {
 
         if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
-            throw new RuntimeException("Only Owner-level users or higher can approve an escalated realisasi");
+            throw new AccessDeniedException("Only Owner-level users or higher can approve an escalated realisasi");
         }
     }
 
