@@ -10,7 +10,8 @@ hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) g
 immediately instead of waiting on module 1. **Module 1 (`screens/01-procurement.md`) is
 now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`PurchaseOrder`
 cost redaction, same shape as BE-06) is a new gap module 1 surfaced. BE-07, BE-08, BE-11
-open.
+open. **BE-12 (auth/tenant hardening) done 12 Oct 2026** on branch
+`fix/be-12-auth-hardening`, pending deploy.
 
 ---
 
@@ -702,6 +703,79 @@ transaction type (`CLAUDE.md`'s "two genuinely different transactions" table).
    match BE-06's original pattern (`amount`, `price`, `cost`, `value` are all candidates
    that could exist elsewhere) — this task existing at all is evidence that pattern-based
    grepping under-covers a codebase with inconsistent naming.
+
+---
+
+## BE-12 — Close self-assigned scope, lock down tenants, 403 for denials
+
+**Priority:** Urgent — exploitable on the public prod URL against a full copy of real data.
+**Type:** Security fix.
+**Status: DONE, 12 Oct 2026** (branch `fix/be-12-auth-hardening`; not yet deployed when
+written — check `git log main` before assuming it's live).
+
+### Why
+
+`POST /auth/register` was `permitAll` and `RegisterRequest` had a caller-chosen `scope`.
+Anyone who found `operion-services-production.up.railway.app` could register into
+`BLITZ_BDG` as `PRINCIPAL` — unredacted landed costs (bypassing BE-06), approve escalated
+Realisasi, PRs and stock adjustments. Even scope-less, an anonymous OPERATOR could read all
+tenant operational data and do every unguarded maintenance write (baseline §5.1).
+`OPERION_BE_BASELINE.md` §1.2 described the field ("`scope` is optional") but not the
+capability — it was absent from its own gap list. `TenantController` had no authorization
+at all.
+
+How every OWNER test account in the dev DB (`pra_owner`, `conv_owner`, `case9_owner`, …)
+was created: by this exact self-assignment.
+
+### What was done
+
+1. `RegisterRequest.scope` removed; `/auth/register` → `hasRole('ADMIN')`, out of
+   `permitAll` and out of the JWT filter's skip list. `tenantCode` defaults to the admin's
+   own tenant (was hardcoded `"BLITZ_BDG"`), must be in the admin's tree.
+2. `TenantHierarchyService.requireWithinCallerTenantTree(UUID)` — one shared
+   self-or-descendant rule, throws `AccessDeniedException`. Used by register, scope grant,
+   and all three tenant endpoints.
+3. `POST /tenants` → ADMIN; parent must be in tree; **root tenant needs `PRINCIPAL`**
+   (nobody holds it → roots come via Flyway seed). `GET /tenants/{id}[/children]` →
+   tree-scoped, checked before lookup.
+4. `GlobalExceptionHandler`: `AccessDeniedException` → 403 (was 400, `[V]`). The four
+   manual gates (3× `requireOwnerScope`, `UserService` tree check) now throw it.
+   Segregation-of-duties checks deliberately still 400.
+5. Catch-all handler honours Spring `ErrorResponse` statuses: unknown URL 500 → 404, wrong
+   method 500 → 405. Found while verifying step 6.
+6. Deleted `TestController`, `GET /part-history/test`, `PartConditionHistoryService`'s
+   `System.out` dump (+ its duplicate query). Postman PROD/DEV synced: debug requests
+   gone, register sends admin token, new `user-update-scope` request.
+
+### Verification
+
+- `AuthHardeningTest` (18) + `GlobalExceptionHandlerStatusTest` (2), MockMvc through the
+  real filter/method-security stack, real JWTs, real `HQ → Outlet` + unrelated-root tree.
+  **Run against pre-BE-12 `main`: 13/18 fail** with the old behaviour (anon register 200,
+  `scope=PRINCIPAL` persisted, 400 instead of 403, tenants open). `[V]`
+- App booted locally (Flyway validate clean), every changed path exercised over HTTP. `[V]`
+- Full suite: 36/37. The 1 failure, `PartStockServiceTest`, pre-dates BE-12 — its Mockito
+  setup never mocks `TenantHierarchyService`, which `PartStockService` has used since an
+  earlier commit. Not touched here. `[C]`
+- **Not** verified against prod — needs the deploy.
+
+### Client-visible changes (tell the web console / RN teams)
+
+- `/auth/register` now needs an ADMIN bearer token; `scope` in its body is ignored.
+- Scope gates and `@PreAuthorize` denials: **400 → 403**.
+- Unknown paths: 500 → 404. Wrong method: 500 → 405.
+
+### New test-setup workflow
+
+Log in as an ADMIN → `register` → `user-update-scope`. Self-registering an OWNER no longer
+works by design.
+
+### Deliberately not done
+
+- ADMIN with null scope can still grant `PRINCIPAL` via `PATCH /users/{id}/scope` —
+  belongs in the role × scope × action permission matrix.
+- Unauthenticated → 403 (Spring default entry point), not 401.
+- No role-change endpoint; register still always yields OPERATOR.
 
 ---
 

@@ -149,6 +149,8 @@ Dual dimension: **scope** (`Principal > Owner > Manager > Supervisor`, linear, n
 
 One `Role` enum only. No `roles`/`user_roles` table pair.
 
+**Scope is granted, never self-assigned** (BE-12). `POST /auth/register` is ADMIN-only, has no `scope` field, and always creates an `OPERATOR`; scope comes only from ADMIN-gated `PATCH /users/{id}/scope`. Both — and all `/tenants` endpoints — are tenant-tree-contained via `TenantHierarchyService.requireWithinCallerTenantTree` (self + descendants, never ancestors). Root tenants need `PRINCIPAL`, which nobody holds, so they arrive via Flyway seed. The first ADMIN on a fresh DB is a direct insert. Authorization denials are **403** (`AccessDeniedException`); segregation-of-duties violations stay 400. Test setup: log in as an ADMIN → `register` → `user-update-scope`.
+
 ---
 
 ## Module inventory
@@ -176,9 +178,9 @@ Live on Railway since 16 Aug 2026, project `imaginative-gratitude`, service `Ope
 
 **Prod DB currently holds an exact 1:1 copy of the dev DB's data** (loaded 17 Aug 2026, `pg_dump --data-only` → `psql`, verified row-count-identical across all 38 tables). This means every caveat in the paragraph below about dev DB test junk is now equally true of prod, not just dev.
 
-`OPERION PROD.postman_collection.json` (repo root) — URLs point at the Railway public domain, not `localhost:8080`. The `register` request's `tenantCode` was previously a broken placeholder string; fixed to the literal `"BLITZ_BDG"`.
+`OPERION PROD.postman_collection.json` (repo root) — URLs point at the Railway public domain, not `localhost:8080`; `OPERION DEV.postman_collection.json` mirrors it for localhost. `register` now sends the ADMIN's `{{bearerToken}}` (BE-12). Both files are PowerShell-`ConvertTo-Json`-formatted and round-trip byte-identically through `ConvertFrom-Json | ConvertTo-Json -Depth 100` — edit them that way to keep diffs minimal.
 
-**Open:** a 405 seen testing from an iPhone had a Cloudflare-shaped error envelope (`{success, result, errors: [{code, message}]}`), confirmed **not** to originate from `GlobalExceptionHandler`/`ApiResponse` (neither produces that shape) — so the request likely never reached the app. Root cause not yet identified; suspect a GET hitting a POST-only endpoint (e.g. `/part-instances/scan-in`) at the edge, but unconfirmed.
+**Open:** a 405 seen testing from an iPhone had a Cloudflare-shaped error envelope (`{success, result, errors: [{code, message}]}`), confirmed **not** to originate from `GlobalExceptionHandler`/`ApiResponse` (neither produces that shape) — so the request likely never reached the app. Root cause not yet identified; suspect a GET hitting a POST-only endpoint (e.g. `/part-instances/scan-in`) at the edge, but unconfirmed. Further evidence it never reached the app (12 Oct, `[C]`): before BE-12 the app's catch-all handler turned `HttpRequestMethodNotSupportedException` into **500**, so the app could not have emitted any 405 at all. Since BE-12 it correctly returns 405 with its own `{timestamp, error}` shape — so a *Cloudflare-shaped* 405 seen after deploy is still the edge.
 
 ## Housekeeping
 
