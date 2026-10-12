@@ -21,14 +21,6 @@ public class PartConditionHistoryService {
 
         public List<PartConditionHistoryResponse> getHistory(UUID unitPartId) {
 
-                List<PartConditionHistory> data = repository.findByAirsoftUnitPart_IdOrderByCreatedAtDesc(
-                                unitPartId);
-
-                // System.out.println("HISTORY SIZE = " + data.size());
-
-                data.forEach(item -> System.out.println(
-                                item.getId() + " | " + item.getReason()));
-
                 return repository
                                 .findByAirsoftUnitPart_IdOrderByCreatedAtDesc(
                                                 unitPartId)

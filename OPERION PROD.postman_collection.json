@@ -18,11 +18,16 @@
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json",
                                                                          "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
                                                                      }
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"email\": \"admin@test.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"Admin\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
+                                                                   "raw":  "{\r\n  \"email\": \"new.user@test.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"New User\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -42,7 +47,8 @@
                                                                                "auth",
                                                                                "register"
                                                                            ]
-                                                              }
+                                                              },
+                                                      "description":  "ADMIN only (BE-12). Log in as an ADMIN first. New users start as OPERATOR with no scope; grant scope with user-update-scope. tenantCode is optional (defaults to your own tenant) and must be in your tenant tree."
                                                   },
                                       "response":  [
 
@@ -102,35 +108,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "test",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/test",
-                                                                  "protocol":  "https",
-                                                                  "host":  [
-                                                                               "operion-services-production",
-                                                                               "up",
-                                                                               "railway",
-                                                                               "app"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "test"
-                                                                           ]
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "me",
                                       "request":  {
                                                       "method":  "GET",
@@ -161,18 +138,32 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "admin-only",
+                                      "name":  "user-update-scope",
                                       "request":  {
-                                                      "method":  "GET",
+                                                      "method":  "PATCH",
                                                       "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
                                                                      {
                                                                          "key":  "Authorization",
                                                                          "value":  "Bearer {{bearerToken}}",
                                                                          "type":  "text"
                                                                      }
                                                                  ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"scope\": \"OWNER\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
                                                       "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/admin",
+                                                                  "raw":  "https://operion-services-production.up.railway.app/users/:userId/scope",
                                                                   "protocol":  "https",
                                                                   "host":  [
                                                                                "operion-services-production",
@@ -181,40 +172,18 @@
                                                                                "app"
                                                                            ],
                                                                   "path":  [
-                                                                               "admin"
-                                                                           ]
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "whoami (api-test-me)",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/api/test/me",
-                                                                  "protocol":  "https",
-                                                                  "host":  [
-                                                                               "operion-services-production",
-                                                                               "up",
-                                                                               "railway",
-                                                                               "app"
+                                                                               "users",
+                                                                               ":userId",
+                                                                               "scope"
                                                                            ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "test",
-                                                                               "me"
-                                                                           ]
-                                                              }
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "userId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "ADMIN only. Target user must be in your tenant tree. scope: SUPERVISOR | MANAGER | OWNER | PRINCIPAL | null"
                                                   },
                                       "response":  [
 

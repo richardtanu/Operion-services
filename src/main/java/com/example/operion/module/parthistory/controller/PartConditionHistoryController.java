@@ -22,11 +22,6 @@ public class PartConditionHistoryController {
 
   private final PartStockService stockService;
 
-  @GetMapping("/test")
-  public String test() {
-    return "OK";
-  }
-
   @GetMapping("/unit-part/{unitPartId}")
   public ApiResponse<List<PartConditionHistoryResponse>> getHistory(
       @PathVariable UUID unitPartId) {
