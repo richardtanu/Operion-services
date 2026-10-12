@@ -44,6 +44,7 @@ public class UserService {
                 .fullName(user.getFullName())
                 .role(user.getRole())
                 .scope(user.getScope())
+                .tenantCode(user.getTenant().getCode())
                 .build();
     }
 }
