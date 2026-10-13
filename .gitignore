@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Claude Code ###
+# Per-developer permission allowlist; can hold local credentials.
+# Shared project settings belong in .claude/settings.json instead.
+.claude/settings.local.json
