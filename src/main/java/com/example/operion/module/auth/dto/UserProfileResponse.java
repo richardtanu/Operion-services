@@ -19,5 +19,7 @@ public class UserProfileResponse {
     private String fullName;
     private Role role;
     private Scope scope;
+    /** Tenant.code (e.g. "BLITZ_BDG") — lets a client theme itself per tenant without a separate lookup. */
+    private String tenantCode;
 }
 

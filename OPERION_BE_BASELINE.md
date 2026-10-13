@@ -1,5 +1,6 @@
 # Operion Backend — Baseline Reference
 
+**Updated:** 12 Oct 2026 for BE-12 (auth/tenant hardening — §0, §1.2–§1.5, §2.6, §5.1, §5.5, §5.6).
 **Generated:** 22 Aug 2026, from direct source reading (evidence tier `[C]` throughout — see `CLAUDE.md` §"A summary is evidence tier [D]"). Every claim below traces to a specific file; nothing here is reconstructed from `OPERION_BE_PLAN.md` or other planning docs without independently re-reading the code.
 
 **Purpose:** this is the thing to hand a fresh session (human or AI) that needs to know "what does Operion's backend actually do right now" — one level below `CLAUDE.md`'s summary, one level above reading the whole `src/main/java` tree yourself. `CLAUDE.md` still auto-loads every session and stays the terse rules/conventions file; this document is the detailed module-by-module reference it points to.
@@ -11,12 +12,12 @@
 ## 0. Architecture at a glance
 
 - **Modular monolith**, one Spring Boot app, one PostgreSQL database, no per-module deployment boundary. 18 modules under `module/`: `airsoft`, `analytics`, `auth`, `barcodeblock`, `burnrate`, `dashboard`, `inventory`, `maintenance`, `notification`, `part`, `parthistory`, `partinstance`, `procurement` (6 entities), `serviceevent`, `stockadjustment`, `tenant`, `unitpart`, `workorder`.
-- **Auth**: stateless JWT, `JwtAuthenticationFilter` (a `OncePerRequestFilter`), no session state. Every endpoint requires a valid JWT except `POST /auth/login` and `POST /auth/register` (`SecurityConfig.java:32-37`, `.anyRequest().authenticated()`).
+- **Auth**: stateless JWT, `JwtAuthenticationFilter` (a `OncePerRequestFilter`), no session state. Every endpoint requires a valid JWT except `POST /auth/login` (`SecurityConfig.java`, `.anyRequest().authenticated()`). `POST /auth/register` was also public until BE-12 (12 Oct 2026); it is now ADMIN-only.
 - **RBAC — two independent dimensions**, both plain columns on `users`, no join tables:
   - **Scope** (linear, nullable): `SUPERVISOR &lt; MANAGER &lt; OWNER &lt; PRINCIPAL` (`Scope.java`). Compared by ordinal via `ScopeContext.hasAtLeast(min)`.
   - **Functional role** (flat, `NOT NULL`): `ADMIN, TECHNICIAN, PROCUREMENT, ACCOUNTING, OPERATOR` (`Role.java`).
   - **Critical finding, true across the entire codebase**: `Scope` is carried only in a custom `ThreadLocal` (`ScopeContext`), never placed into Spring Security's `GrantedAuthority` set. `@PreAuthorize` can therefore only ever gate on functional `Role` (as `hasRole('ADMIN')`/`hasAuthority('ROLE_ADMIN')`), never on `Scope`. Every scope-based check in the app (Owner-only approvals, cost redaction) is hand-written inside service methods, not declarative security.
-  - Grep-confirmed: `@PreAuthorize` appears in exactly **three** places in the whole codebase — `UserController` (`/users/{id}/scope`), `TestController` (`/admin`), `AirsoftUnitController.create`. Everything else that's role/scope-gated is gated by hand in service code, or not gated at all.
+  - Grep-confirmed: `@PreAuthorize` appears in exactly **four** places in the whole codebase (after BE-12) — `UserController` (`/users/{id}/scope`), `AuthController.register`, `TenantController.create`, `AirsoftUnitController.create`. Everything else that's role/scope-gated is gated by hand in service code, or not gated at all.
 - **Tenant hierarchy**: `Tenant.parent` self-FK, arbitrary depth (no cap enforced). `TenantHierarchyService` provides three directions, used inconsistently by design across modules: `getEffectiveTenantIds` (self + descendants — used by most list/dashboard endpoints), `getAncestorTenantIds` (self + ancestors — used by notification fan-out and supplier root-scoping), `getRootTenantId` (top of the ancestor chain).
 - **Response envelope**: `ApiResponse&lt;T&gt;{success, message, data}` is the intended convention, but it is **not universal** — `TestController` and `PartCategoryController.update()` return bare objects, and `GlobalExceptionHandler`'s error shapes (`{timestamp, error}` / `{timestamp, error, details}`) don't match `ApiResponse` at all. See §9.1.
 - **JWT claims**: `userId` (subject), `role`, `tenantId`, `scope` (may be a literal absent value). 24h expiry. Signing secret falls back to a **known-committed dev value** if `JWT_SECRET` env var isn't set (`application.properties:26-30`) — production must always set it explicitly (see `CLAUDE.md` Deployment section).
@@ -38,16 +39,19 @@ Legacy/dead tables still physically present in the schema but confirmed by full-
 
 | Verb/Path | Auth | Notes |
 |---|---|---|
-| `POST /auth/register` | Public | `role` is **hardcoded to `OPERATOR` server-side** — the DTO has no `role` field, so there is no way to self-register as anything else via the API. `scope` is optional, defaults to absent. `tenantCode` defaults to `"BLITZ_BDG"` if omitted; **the tenant must already exist** — no auto-create-tenant path. |
+| `POST /auth/register` | `hasRole('ADMIN')` **plus** tenant-tree containment (BE-12, 12 Oct 2026 — was Public) | `role` is **hardcoded to `OPERATOR` server-side**; the DTO has **no `scope` field** (a `scope` key in the body is ignored). `tenantCode` is optional and defaults to the calling admin's own tenant; it must be the admin's tenant or a descendant. **The tenant must already exist** — no auto-create-tenant path. Still returns a JWT *for the new user* (unchanged response shape). |
 | `POST /auth/login` | Public | Unknown email → generic `RuntimeException` → **400**. Wrong password → `BadCredentialsException` → **401**. Inconsistent status for what's conceptually the same "invalid credentials" case. |
-| `GET /auth/me` | Any JWT | Returns id/email/fullName/role/scope. |
-| `PATCH /users/{id}/scope` | `hasRole('ADMIN')` **plus** a manual tenant-hierarchy containment check (caller's tenant + descendants must include the target's tenant) | No scope requirement on the calling admin at all — an `ADMIN` with no scope can promote anyone in their hierarchy straight to `PRINCIPAL`. |
-| `GET /test`, `GET /admin`, `GET /api/test/me` | `/admin` is `hasRole('ADMIN')`, the other two are any-JWT | Confirmed diagnostic/leftover scaffolding — no `ApiResponse` wrapper, no product purpose. |
-| `POST /tenants`, `GET /tenants/{id}`, `GET /tenants/{id}/children` | **No authorization check at all — not even `@PreAuthorize`, not even a manual scope/role check in the service** | Any authenticated user of any role, including a freshly-registered `OPERATOR` with no scope, can create arbitrary root tenants. Not listed in `CLAUDE.md`'s "Deliberately not built" section — reads as an oversight, not a decision. |
+| `GET /auth/me` | Any JWT | Returns id/email/fullName/role/scope/tenantCode. |
+| `PATCH /users/{id}/scope` | `hasRole('ADMIN')` **plus** tenant-tree containment (`TenantHierarchyService.requireWithinCallerTenantTree`, → 403) | **The only way to grant scope** since BE-12. No scope requirement on the calling admin at all — an `ADMIN` with no scope can promote anyone in their hierarchy straight to `PRINCIPAL` (deliberately left for the permission-matrix decision; a "can't grant above your own scope" rule would lock out today's null-scope admins). |
+| ~~`GET /test`, `GET /admin`, `GET /api/test/me`~~ | — | **Deleted (BE-12).** Now 404. |
+| `POST /tenants` | `hasRole('ADMIN')`; `parentId` must be in caller's tree; **root tenant (no `parentId`) requires `PRINCIPAL`** (BE-12) | No user holds `PRINCIPAL` today, so root tenants effectively come only from Flyway seeds (as `V2__seed_default_tenant.sql`). |
+| `GET /tenants/{id}`, `GET /tenants/{id}/children` | Any JWT, but `id` must be caller's tenant or a descendant (BE-12) | Containment checked **before** lookup — out-of-tree ids answer 403 whether or not they exist. Ancestors are not readable; own `TenantResponse` already carries `parentName`. |
+
+> **Baseline miss, recorded per `CLAUDE.md` rule 1:** the 22 Aug version of the register row above said "`scope` is optional, defaults to absent" — accurate, but it never asked what an *optional, caller-supplied* scope on a *public* endpoint allows. It allowed anyone who found the public Railway URL to register as `PRINCIPAL` (verified at test level against pre-BE-12 code: `scope=PRINCIPAL` in the body was persisted). A field description is not a capability analysis.
 
 ### 1.3 JWT → request pipeline (`JwtAuthenticationFilter`)
 
-- Skips `/auth/login`/`/auth/register`. If no `Bearer` header, just continues the filter chain unauthenticated — it's the global `.anyRequest().authenticated()` rule, not this filter, that actually rejects unauthenticated requests.
+- Skips `/auth/login` only (`/auth/register` stopped being skipped in BE-12 — it needs the admin's JWT parsed). If no `Bearer` header, just continues the filter chain unauthenticated — it's the global `.anyRequest().authenticated()` rule, not this filter, that actually rejects unauthenticated requests.
 - On a present token: sets `TenantContext.setTenantId(...)` and `ScopeContext.setScope(...)` (both plain `ThreadLocal`s, not Spring request-scoped beans) *before* building the `Authentication` object, whose only granted authority is `ROLE_&lt;role&gt;`.
 - `finally { TenantContext.clear(); ScopeContext.clear(); }` — always cleared post-request.
 - Invalid/expired signature → responds `401 "Invalid JWT token"` directly from the filter, bypassing `GlobalExceptionHandler` entirely (happens before `DispatcherServlet`).
@@ -58,21 +62,23 @@ Legacy/dead tables still physically present in the schema but confirmed by full-
 | File:line | Gate | Effect |
 |---|---|---|
 | `partinstance/service/PartInstanceService.java:285` | `OWNER` | Redacts `landedCost` on `PartInstance` responses |
-| `stockadjustment/service/StockAdjustmentService.java:177` | `OWNER` | Gates stock-adjustment approve/reject |
-| `procurement/service/PurchaseRequestService.java:201` | `OWNER` | Gates PR approve/reject |
-| `procurement/service/RealisasiService.java:399` | `OWNER` | Gates escalated-Realisasi approval |
-| `procurement/service/RealisasiService.java:440` | `OWNER` | Redacts cost fields on `Realisasi` responses |
+| `stockadjustment/service/StockAdjustmentService.java:178` | `OWNER` | Gates stock-adjustment approve/reject (→ 403 since BE-12) |
+| `procurement/service/PurchaseRequestService.java:202` | `OWNER` | Gates PR approve/reject (→ 403 since BE-12) |
+| `procurement/service/RealisasiService.java:400` | `OWNER` | Gates escalated-Realisasi approval (→ 403 since BE-12) |
+| `procurement/service/RealisasiService.java:441` | `OWNER` | Redacts cost fields on `Realisasi` responses |
+| `tenant/service/TenantService.java` `create()` | `PRINCIPAL` | Gates root-tenant creation (BE-12) |
 
-Nothing in `auth` or `tenant` themselves uses `ScopeContext` at all. `Role` values other than `ADMIN` (`TECHNICIAN`, `PROCUREMENT`, `ACCOUNTING`, `OPERATOR`) are **stored and returned but never checked anywhere** in the codebase — if any product assumption depends on e.g. a `TECHNICIAN`-only endpoint existing, that assumption is currently false.
+Nothing in `auth` uses `ScopeContext`. `Role` values other than `ADMIN` (`TECHNICIAN`, `PROCUREMENT`, `ACCOUNTING`, `OPERATOR`) are **stored and returned but never checked anywhere** in the codebase — if any product assumption depends on e.g. a `TECHNICIAN`-only endpoint existing, that assumption is currently false.
 
 ### 1.5 Notable gaps (auth/tenant/RBAC)
 
-1. `TenantController` — zero authorization, any authenticated user can create tenants (§1.2).
+1. ~~`TenantController` — zero authorization~~ — **closed, BE-12** (§1.2).
 2. Functional roles beyond `ADMIN` are unenforced everywhere.
 3. `CustomUserDetailsService` — dead code.
 4. Login error-status inconsistency (400 vs 401 for two flavors of "wrong credentials").
-5. **`GlobalExceptionHandler` has no handler for `AccessDeniedException`** — `@PreAuthorize` denials fall through to the generic `RuntimeException` handler and likely surface as **400** `{"error": "Access is denied"}` instead of the conventional 403 `[inferred from code, not live-tested — worth confirming live before relying on it]`.
-6. No documented/implemented path to create the very first `ADMIN` user other than a direct DB edit.
+5. ~~`GlobalExceptionHandler` has no handler for `AccessDeniedException`~~ — **closed, BE-12.** The 400 was confirmed (`[V]`, local, MockMvc against pre-fix code) before the fix; denials now answer 403 `{timestamp, error}`. Same change made the catch-all honour Spring's own `ErrorResponse` statuses — unknown URLs were 500, now 404; wrong methods could never be 405, now are.
+6. No documented/implemented path to create the very first `ADMIN` user other than a direct DB edit. Since BE-12 this is also the only way to bootstrap *any* user on a fresh database (registration needs an ADMIN JWT).
+7. **Unauthenticated requests answer 403, not 401** — no `AuthenticationEntryPoint` is configured, so Spring Security's default `Http403ForbiddenEntryPoint` applies. Clients can't distinguish "log in again" from "not allowed". (Invalid/expired tokens *do* get 401, from the filter — §1.3.)
 
 ---
 
@@ -149,7 +155,7 @@ Endpoints (`/work-orders`) — no `@PreAuthorize` anywhere: `POST`, `GET` (pagin
 
 Table `part_condition_history`, extends `BaseEntity`: `airsoftUnitPart, previousCondition, newCondition, reason, technicianAssessment`. No `tenant` FK of its own — scoping is implicit via the parent unit-part. Written only by `replacePart` (removal) and `updateCondition` (manual change) — `installPart` never writes a history row.
 
-Endpoints (`/part-history`): `GET /test` (returns literal `"OK"` — a debug endpoint left in production), `GET /unit-part/{id}`. The controller injects `PartStockService` but never calls it (unused field). The service duplicates its own history query (once for a `System.out.println` debug dump, once for the real return) and carries a dead, unused `map(StockMovement)` method.
+Endpoints (`/part-history`): `GET /unit-part/{id}`. (`GET /test` and the service's duplicated query + `System.out.println` dump were removed in BE-12.) The controller injects `PartStockService` but never calls it (unused field). The service carries a dead, unused `map(StockMovement)` method.
 
 ### 2.7 Overview aggregation — `AirsoftUnitOverviewService`
 
@@ -365,12 +371,13 @@ Grouped by category, pulled from every module above — this is the "if you're p
 
 ### 5.1 Authorization gaps (highest priority — spans nearly every module)
 
-- `TenantController` — zero authorization on tenant create/read (§1.2).
+- ~~`TenantController` — zero authorization on tenant create/read~~ — closed, BE-12 (§1.2).
+- ~~`POST /auth/register` public with caller-chosen scope~~ — closed, BE-12 (§1.2). Was the most severe gap in the codebase and was missing from this list.
 - Entire digital-twin cluster (§2.8) — only unit *creation* is role-gated; installing/replacing parts, marking a part FAILED, all work-order transitions, all service events, all maintenance operations are open to any authenticated user.
 - `POST /inventory/adjust` bypasses the `stockadjustment` module's Owner-approval workflow entirely (§3.4/§3.5).
 - `StockAdjustmentService` has no self-approval prevention (§3.5), unlike the equivalent DL-11 rule in `GoodsReceiptService`.
 - Functional roles beyond `ADMIN` (`TECHNICIAN`/`PROCUREMENT`/`ACCOUNTING`/`OPERATOR`) are stored and returned everywhere but enforced nowhere (§1.4).
-- `GlobalExceptionHandler` has no `AccessDeniedException` handler — `@PreAuthorize` denials likely surface as 400, not 403 (§1.5, unverified live).
+- ~~`GlobalExceptionHandler` has no `AccessDeniedException` handler~~ — closed, BE-12 (§1.5).
 
 ### 5.2 State-machine / data-integrity gaps
 
@@ -402,11 +409,11 @@ Grouped by category, pulled from every module above — this is the "if you're p
 - `ReplacementSuggestionResponse` DTO — fully modeled, no producing service, no endpoint (§2.4).
 - `MaintenanceRecommendationService.processDueSchedules()` — implemented but not wired to any scheduler, only manually reachable (§2.4).
 - Commented-out duplicate routes in `AirsoftUnitPartController` and `WorkOrderService` (§2.2, §2.5).
-- Debug leftovers: `TestController` (`/test`, `/admin`, `/api/test/me`), `PartConditionHistoryController`'s `GET /part-history/test` (returns literal `"OK"`), a `System.out.println` debug dump in `PartConditionHistoryService` (§1.2, §2.6).
+- ~~Debug leftovers: `TestController`, `GET /part-history/test`, `System.out.println` dump in `PartConditionHistoryService`~~ — removed, BE-12.
 
 ### 5.6 API-shape inconsistencies
 
-- `ApiResponse&lt;T&gt;` envelope is not universal — `TestController` and `PartCategoryController.update()` return bare objects; `GlobalExceptionHandler` error shapes don't match the envelope at all (§0, §3.1).
+- `ApiResponse&lt;T&gt;` envelope is not universal — `PartCategoryController.update()` returns a bare object; `GlobalExceptionHandler` error shapes don't match the envelope at all (§0, §3.1).
 - Audit-field coverage is inconsistent — newer entities (`PRA`, `Realisasi`, `Notification`, all `*StatusHistory`) extend `BaseEntity` for `createdAt`/`updatedAt`; older ones (`Supplier`, `PurchaseRequest`, `PurchaseOrder`, `GoodsReceipt`, `AirsoftUnitPart`, `WorkOrder`) hand-roll `createdAt` only, no `updatedAt` (§2.2, §4.2).
 - Login returns inconsistent HTTP status for two "invalid credentials" cases (400 vs 401) (§1.2).
 

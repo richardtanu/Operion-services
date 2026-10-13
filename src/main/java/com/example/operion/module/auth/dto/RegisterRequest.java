@@ -1,7 +1,5 @@
 package com.example.operion.module.auth.dto;
 
-import com.example.operion.module.auth.enums.Scope;
-
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -17,15 +15,14 @@ public class RegisterRequest {
     private String fullName;
 
     /**
-     * Optional: which tenant to register under, by code. Defaults to
-     * BLITZ_BDG if omitted.
+     * Optional: which tenant to register the new user under, by code.
+     * Defaults to the calling admin's own tenant if omitted. Must be the
+     * admin's tenant or one of its descendants.
      */
     private String tenantCode;
 
-    /**
-     * Optional RBAC scope (SUPERVISOR/MANAGER/OWNER/PRINCIPAL). Defaults to
-     * null (no scope) if omitted.
-     */
-    private Scope scope;
+    // BE-12: deliberately no `scope` field. Scope is privilege and is only
+    // granted by an ADMIN via PATCH /users/{id}/scope, never self-assigned at
+    // registration. A `scope` key in the JSON body is silently ignored.
 }
 

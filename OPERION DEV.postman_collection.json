@@ -17,11 +17,16 @@
                                                                          "key":  "Content-Type",
                                                                          "value":  "application/json",
                                                                          "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
                                                                      }
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"email\": \"admin@test.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"Admin\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
+                                                                   "raw":  "{\r\n  \"email\": \"new.user@test.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"New User\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -39,7 +44,8 @@
                                                                                "register"
                                                                            ],
                                                                   "port":  "8080"
-                                                              }
+                                                              },
+                                                      "description":  "ADMIN only (BE-12). Log in as an ADMIN first. New users start as OPERATOR with no scope; grant scope with user-update-scope. tenantCode is optional (defaults to your own tenant) and must be in your tenant tree."
                                                   },
                                       "response":  [
 
@@ -97,33 +103,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "test",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/test",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "test"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "me",
                                       "request":  {
                                                       "method":  "GET",
@@ -152,56 +131,50 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "admin-only",
+                                      "name":  "user-update-scope",
                                       "request":  {
-                                                      "method":  "GET",
+                                                      "method":  "PATCH",
                                                       "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
                                                                      {
                                                                          "key":  "Authorization",
                                                                          "value":  "Bearer {{bearerToken}}",
                                                                          "type":  "text"
                                                                      }
                                                                  ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"scope\": \"OWNER\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
                                                       "url":  {
-                                                                  "raw":  "http://localhost:8080/admin",
+                                                                  "raw":  "http://localhost:8080/users/:userId/scope",
                                                                   "protocol":  "http",
                                                                   "host":  [
                                                                                "localhost"
                                                                            ],
+                                                                  "port":  "8080",
                                                                   "path":  [
-                                                                               "admin"
+                                                                               "users",
+                                                                               ":userId",
+                                                                               "scope"
                                                                            ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "whoami (api-test-me)",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/api/test/me",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "test",
-                                                                               "me"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "userId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "ADMIN only. Target user must be in your tenant tree. scope: SUPERVISOR | MANAGER | OWNER | PRINCIPAL | null"
                                                   },
                                       "response":  [
 

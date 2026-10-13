@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.dto.LoginRequest;
 import com.example.operion.module.auth.dto.RegisterRequest;
 import com.example.operion.module.auth.dto.UserProfileResponse;
@@ -16,6 +17,7 @@ import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.auth.security.JwtUtil;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,7 +29,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final TenantRepository tenantRepository;
+    private final TenantHierarchyService tenantHierarchyService;
 
+    /**
+     * BE-12: ADMIN-only (see {@code AuthController}). The new user always
+     * starts as {@code OPERATOR} with no scope — scope is granted separately
+     * via {@code PATCH /users/{id}/scope}, so nobody can register themselves
+     * into privilege.
+     */
     public String register(RegisterRequest request) {
 
         // 1. Check email exists
@@ -35,24 +44,28 @@ public class AuthService {
             throw new RuntimeException("Email already registered");
         }
 
-        // 2. Create user
+        // 2. Resolve tenant: defaults to the calling admin's own tenant, and
+        // must sit inside the admin's tenant tree either way
+        Tenant tenant = request.getTenantCode() != null
+                ? tenantRepository
+                        .findByCode(request.getTenantCode())
+                        .orElseThrow(() -> new RuntimeException("Tenant not found"))
+                : tenantRepository
+                        .findById(UUID.fromString(TenantContext.getTenantId()))
+                        .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        tenantHierarchyService.requireWithinCallerTenantTree(tenant.getId());
+
+        // 3. Create user
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
         user.setRole(Role.OPERATOR);
-        user.setScope(request.getScope());
-        String tenantCode = request.getTenantCode() != null
-                ? request.getTenantCode()
-                : "BLITZ_BDG";
-
-        Tenant tenant = tenantRepository
-                .findByCode(tenantCode)
-                .orElseThrow(() -> new RuntimeException("Tenant not found"));
         user.setTenant(tenant);
         userRepository.save(user);
 
-        // 3. Generate token
+        // 4. Generate token
         return jwtUtil.generateToken(
                 user.getId().toString(),
                 user.getRole().name(),
@@ -93,6 +106,7 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .role(user.getRole())
                 .scope(user.getScope())
+                .tenantCode(user.getTenant().getCode())
                 .build();
     }
 }

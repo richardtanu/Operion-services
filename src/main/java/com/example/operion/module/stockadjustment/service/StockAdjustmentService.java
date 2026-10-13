@@ -3,6 +3,7 @@ package com.example.operion.module.stockadjustment.service;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -175,7 +176,7 @@ public class StockAdjustmentService {
     private void requireOwnerScope() {
 
         if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
-            throw new RuntimeException(
+            throw new AccessDeniedException(
                     "Only Owner-level users or higher can approve or reject stock adjustments");
         }
     }

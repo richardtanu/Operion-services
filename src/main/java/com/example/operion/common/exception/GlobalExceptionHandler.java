@@ -6,7 +6,9 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -25,6 +27,22 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.badRequest().body(response);
         }
 
+        // BE-12: AccessDeniedException is a RuntimeException, so without this
+        // handler every @PreAuthorize denial and every manual scope gate fell
+        // into handleRuntimeException above and surfaced as 400. Spring picks
+        // the most specific matching handler, so this one wins. Also covers
+        // AuthorizationDeniedException (Spring Security 6.3+), a subclass.
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<?> handleAccessDenied(AccessDeniedException ex) {
+
+                Map<String, Object> response = new HashMap<>();
+
+                response.put("timestamp", LocalDateTime.now());
+                response.put("error", ex.getMessage());
+
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+
         @ExceptionHandler(BadCredentialsException.class)
         public ResponseEntity<?> handleBadCredentials(BadCredentialsException ex) {
 
@@ -38,9 +56,22 @@ public class GlobalExceptionHandler {
 
         @ExceptionHandler(Exception.class)
         public ResponseEntity<?> handleGeneralException(Exception ex) {
-                ex.printStackTrace();
 
                 Map<String, Object> response = new HashMap<>();
+
+                // Spring MVC's own web exceptions (NoResourceFoundException,
+                // HttpRequestMethodNotSupportedException, ...) already carry
+                // the right status. Without this, an unknown URL answered 500
+                // and a wrong HTTP method could never produce a 405.
+                if (ex instanceof ErrorResponse errorResponse) {
+
+                        response.put("timestamp", LocalDateTime.now());
+                        response.put("error", ex.getMessage());
+
+                        return ResponseEntity.status(errorResponse.getStatusCode()).body(response);
+                }
+
+                ex.printStackTrace();
 
                 response.put("timestamp", LocalDateTime.now());
                 response.put("error", "Internal server error");
