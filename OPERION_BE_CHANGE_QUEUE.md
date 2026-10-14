@@ -12,7 +12,9 @@ now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`P
 cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
 (auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08, BE-11 and BE-07 done 14 Oct 2026** (BE-07 widened: requester
 notifications, procurement activity log, role endpoint, migration V3). No change-queue
-items open; next is the permission matrix.
+items open. **BE-13 done 14 Oct
+2026** (requester branch check, PRA spend + service-event cost redaction). Next: the
+permission matrix.
 
 ---
 
@@ -530,13 +532,57 @@ PRA's **own** tenant only (the outlet's buyers, not HQ's), never its creator.
    returned all 13 existing PR history rows (old ones with null actor, as expected).
 8. Postman PROD/DEV: `user-update-role`, new folder `PROCUREMENT ACTIVITY`.
 
-### Found while doing this — not fixed
+### Found while doing this
 
-- `POST /purchase-requests` takes `requestedBy` from the body with no check — any user id,
-  any tenant. That user then receives the new notifications. The log now records the real
-  caller, so it isn't fooled; the PR is. Fixing it changes the client contract.
-- `POST /purchase-authorizations` has no role or scope gate: anyone can perform the
-  authorization act. Permission-matrix item.
+- `POST /purchase-requests` took `requestedBy` from the body with no check. **Fixed in
+  BE-13.**
+- `POST /purchase-authorizations` has no role or scope gate. **Open — see BE-13.**
+
+---
+
+## BE-13 — Requester branch check, PRA spend + service-event cost redaction
+
+**Status: DONE, 14 Oct 2026** (branch `fix/pr-requester-branch-and-cost-fields`, stacked on
+BE-07). Product owner's instructions, same day: follow the business flow so a PR only
+accepts a requester from the filing branch; redact the two money fields BE-11 found.
+
+### What was done
+
+1. **Requester must belong to the filing branch.** `PurchaseRequestService.create()` only
+   accepts a `requestedBy` whose tenant is the caller's own tenant — not the parent HQ,
+   not a child outlet, not another root. Anything else: 400 "Requesting user not found in
+   your branch", identical to a nonexistent id (no probing). Filing on behalf of a
+   same-branch colleague still works; history records the real caller. `requestedBy`
+   stays required, so the request shape is unchanged.
+2. **PRA items below OWNER:** `purchasedValue` and `remainingValue` → null; `maxValue`
+   (the limit) and all quantities stay. `remainingValue` has to go too:
+   `maxValue − remainingValue = purchasedValue`. The buyer doesn't need it to stay within
+   the limit — escalation already catches an over-ceiling buy server-side.
+3. **`ServiceEvent.cost` below OWNER → null**, in `mapToResponse()`, which every
+   service-event endpoint uses.
+4. Tests: 2 requester cases in `ProcurementNotificationAndLogTest` (same-branch on
+   someone's behalf accepted; unrelated root, parent HQ and child outlet all refused with
+   no notification sent); `PraAndServiceEventCostRedactionTest` (3) with 2 paket × factor
+   6 at Rp 300,000 against a 12-unit / Rp 900,000 line (rules 2 and 6). **Against the
+   unfixed code exactly the 3 targeted assertions fail.** `[V]` local.
+
+### PRA creation gate — DONE, 14 Oct 2026 (MANAGER and above, product owner's choice)
+
+`POST /purchase-authorizations` and `PATCH /purchase-authorizations/{id}/cancel` were open to
+any authenticated user, though creating a PRA *is* the authorization act. **Recommended:
+MANAGER scope or above**, because:
+
+- the SoD rule "PRA approver ≠ Realisasi creator, Owner/Principal exempt, **Manager does
+  not qualify**" only makes sense if Managers can approve PRAs, and
+- `OPERION_BE_PLAN.md` row 34 verified a "manager-approved PRA" live (28 Jul).
+
+The PR approve step stays OWNER-only, so the chain reads: Owner approves the *need*,
+Manager or above sets the *spending ceiling*, and an over-ceiling buy escalates back to
+Owner. Alternative: OWNER+ only, if the Manager cases were test data rather than intent.
+**Decided: MANAGER and above** (product owner, 14 Oct 2026). `requireManagerScope()` runs
+first in `create()` and `cancel()` → 403 below MANAGER. Two HTTP tests (no scope with the
+PROCUREMENT role and SUPERVISOR refused, MANAGER allowed, for create and for cancel); both
+fail without the gate. `[V]` local.
 
 ---
 
@@ -794,6 +840,9 @@ transaction type (`CLAUDE.md`'s "two genuinely different transactions" table).
      accept that the buyer sees their own budget.
    - `ServiceEventResponse.cost` (maintenance service cost). Is maintenance spend as
      sensitive as purchase cost?
+
+   **Both resolved in BE-13 (14 Oct 2026):** spend and remaining hidden, limit kept;
+   service-event cost hidden.
 
 ---
 

@@ -68,6 +68,9 @@ Legacy/dead tables still physically present in the schema but confirmed by full-
 | `procurement/service/RealisasiService.java:400` | `OWNER` | Gates escalated-Realisasi approval (→ 403 since BE-12) |
 | `procurement/service/RealisasiService.java:441` | `OWNER` | Redacts cost fields on `Realisasi` responses |
 | `tenant/service/TenantService.java` `create()` | `PRINCIPAL` | Gates root-tenant creation (BE-12) |
+| `PurchaseRequestAuthorizationService.requireManagerScope()` | `MANAGER` | Gates PRA create and cancel (BE-13) |
+| `PurchaseOrderService` / `PurchaseRequestAuthorizationService` / `ServiceEventService` mappers | `OWNER` | Redact PO cost (BE-11), PRA spend + remaining, service-event cost (BE-13) |
+| `ProcurementActivityService.requireLogAccess()` | `OWNER` (or ADMIN/PROCUREMENT role) | Gates the procurement activity log (BE-07) |
 
 Nothing in `auth` uses `ScopeContext`. Of the roles other than `ADMIN`, only `PROCUREMENT` is checked anywhere, and only in two places since BE-07: read access to `GET /procurement/activity`, and as the recipient set for `PURCHASE_AUTHORIZATION_CREATED`. `TECHNICIAN`, `ACCOUNTING` and `OPERATOR` are still **stored and returned but never checked**. Roles can now be changed via ADMIN-only `PATCH /users/{id}/role` (BE-07; tree-contained, never your own); before that only by DB edit.
 
@@ -75,8 +78,8 @@ Nothing in `auth` uses `ScopeContext`. Of the roles other than `ADMIN`, only `PR
 
 1. ~~`TenantController` — zero authorization~~ — **closed, BE-12** (§1.2).
 2. Functional roles beyond `ADMIN` are unenforced everywhere except the BE-07 procurement log (§1.4).
-8. **`POST /purchase-requests` takes `requestedBy` from the request body, unvalidated** — any user id, even from another tenant, can be named as requester; that user then receives the BE-07 notifications. Since BE-07 the PR's history records the *actual* caller, so the log isn't fooled, but the PR itself is. Found 14 Oct 2026, not fixed (client-visible change).
-9. **`POST /purchase-authorizations` has no role or scope gate** — any authenticated user can create a PRA, which *is* the authorization act. Belongs in the permission matrix. Found 14 Oct 2026.
+8. ~~`POST /purchase-requests` takes `requestedBy` unvalidated~~ — **closed 14 Oct 2026**: the requester must be a user of the caller's own tenant (the filing branch); anyone else answers 400 "Requesting user not found in your branch", same as a missing id. Filing on behalf of a same-branch colleague still works; history records the real caller.
+9. ~~`POST /purchase-authorizations` (and `PATCH /{id}/cancel`) has no gate~~ — **closed 14 Oct 2026**: both need MANAGER scope or above (product owner's choice), 403 otherwise (change queue BE-13).
 3. `CustomUserDetailsService` — dead code.
 4. Login error-status inconsistency (400 vs 401 for two flavors of "wrong credentials").
 5. ~~`GlobalExceptionHandler` has no handler for `AccessDeniedException`~~ — **closed, BE-12.** The 400 was confirmed (`[V]`, local, MockMvc against pre-fix code) before the fix; denials now answer 403 `{timestamp, error}`. Same change made the catch-all honour Spring's own `ErrorResponse` statuses — unknown URLs were 500, now 404; wrong methods could never be 405, now are.
@@ -335,8 +338,8 @@ The parallel `receiveAgainstPurchaseOrder` path has no landed-cost division (fla
 | `Realisasi` | `canSeeCost = ScopeContext.hasAtLeast(OWNER)`; nulls all six cost components, `totalCost`, and item `actualUnitPrice`/`allocatedLandedCost` below that | **Done (BE-06)** |
 | `PartInstance` | Same pattern, `landedCost` field | **Done (BE-06)** |
 | `PurchaseOrder` | Same pattern in `PurchaseOrderService.map()`: header `totalAmount` and item `price` | **Done (BE-11, 14 Oct 2026)** |
-| `PurchaseRequestAuthorization` items | **None** — `maxValue`, `purchasedValue`, `remainingValue` returned to everyone. `purchasedValue` is summed from Realisasi spend that BE-06 hides | **Open — product decision**: the buyer needs the ceiling to buy within it (found by BE-11's follow-up grep) |
-| `ServiceEvent` | **None** — `cost` returned to everyone | **Open — product decision** (found by BE-11's follow-up grep) |
+| `PurchaseRequestAuthorization` items | `purchasedValue` and `remainingValue` nulled below OWNER; **`maxValue` (the buyer's limit) and all quantities stay visible**. `remainingValue` goes too because limit − remaining = spend | **Done, 14 Oct 2026** (BE-13) |
+| `ServiceEvent` | `cost` nulled below OWNER in `ServiceEventService.mapToResponse()` (every endpoint) | **Done, 14 Oct 2026** (BE-13) |
 
 ### 4.8 `supersede()` — correction mechanics (lives on `RealisasiService`, not the PRA service)
 
@@ -383,7 +386,7 @@ Grouped by category, pulled from every module above — this is the "if you're p
 - Entire digital-twin cluster (§2.8) — only unit *creation* is role-gated; installing/replacing parts, marking a part FAILED, all work-order transitions, all service events, all maintenance operations are open to any authenticated user.
 - `POST /inventory/adjust` bypasses the `stockadjustment` module's Owner-approval workflow entirely (§3.4/§3.5).
 - `StockAdjustmentService` has no self-approval prevention (§3.5), unlike the equivalent DL-11 rule in `GoodsReceiptService`.
-- Functional roles beyond `ADMIN` are enforced nowhere except `PROCUREMENT` on the BE-07 activity log (§1.4). `POST /purchase-authorizations` (the authorization act) has no gate at all (§1.5 #9).
+- Functional roles beyond `ADMIN` are enforced nowhere except `PROCUREMENT` on the BE-07 activity log (§1.4). PRA create/cancel are scope-gated at MANAGER+ since 14 Oct 2026 (§1.5 #9).
 - ~~`GlobalExceptionHandler` has no `AccessDeniedException` handler~~ — closed, BE-12 (§1.5).
 
 ### 5.2 State-machine / data-integrity gaps

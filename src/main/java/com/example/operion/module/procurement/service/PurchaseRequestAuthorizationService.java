@@ -4,11 +4,14 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
@@ -68,6 +71,8 @@ public class PurchaseRequestAuthorizationService {
 
     @Transactional
     public PurchaseRequestAuthorizationResponse create(CreatePurchaseRequestAuthorizationRequest request) {
+
+        requireManagerScope();
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -143,6 +148,8 @@ public class PurchaseRequestAuthorizationService {
 
     @Transactional
     public PurchaseRequestAuthorizationResponse cancel(UUID id) {
+
+        requireManagerScope();
 
         PurchaseRequestAuthorization pra = findOwned(id);
 
@@ -285,6 +292,21 @@ public class PurchaseRequestAuthorizationService {
                 .findByPurchaseRequestAuthorizationItemIdAndRealisasi_Status(praItemId, RealisasiStatus.APPROVED);
     }
 
+    /**
+     * Creating a PRA is the authorization act (sets the spending ceiling), so
+     * it and its cancellation need MANAGER scope or above — decided 14 Oct
+     * 2026. One rung below PR approval (OWNER): Owner approves the need,
+     * Manager+ sets the ceiling, an over-ceiling buy escalates back to Owner.
+     * Checked before any lookup, so a random id answers 403 too.
+     */
+    private void requireManagerScope() {
+
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER)) {
+            throw new AccessDeniedException(
+                    "Only Manager-level users or higher can create or cancel a purchase authorization");
+        }
+    }
+
     private User currentUser() {
 
         UUID userId = UUID.fromString(
@@ -313,6 +335,14 @@ public class PurchaseRequestAuthorizationService {
 
     private PurchaseRequestAuthorizationResponse map(PurchaseRequestAuthorization pra) {
 
+        // Below OWNER: the buyer still sees maxValue (their spending limit) and
+        // all quantities, but not purchasedValue — it is summed from the
+        // Realisasi spend BE-06 hides. remainingValue goes too, because
+        // maxValue − remainingValue would give purchasedValue straight back.
+        // Over-ceiling buys are still caught server-side (escalation), so the
+        // buyer doesn't need the remaining value to stay within the limit.
+        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+
         List<PurchaseRequestAuthorizationItemResponse> items = itemRepository
                 .findByPurchaseRequestAuthorizationId(pra.getId())
                 .stream()
@@ -328,9 +358,9 @@ public class PurchaseRequestAuthorizationService {
                             .authorizedQty(item.getAuthorizedQty())
                             .maxValue(item.getMaxValue())
                             .purchasedQty(purchasedQty)
-                            .purchasedValue(purchasedValue)
+                            .purchasedValue(canSeeCost ? purchasedValue : null)
                             .remainingQty(item.getAuthorizedQty() - purchasedQty)
-                            .remainingValue(item.getMaxValue().subtract(purchasedValue))
+                            .remainingValue(canSeeCost ? item.getMaxValue().subtract(purchasedValue) : null)
                             .build();
                 })
                 .toList();

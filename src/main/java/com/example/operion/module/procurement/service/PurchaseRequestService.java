@@ -65,9 +65,13 @@ public class PurchaseRequestService {
                 .findById(tenantId)
                 .orElseThrow();
 
+        // The requester must belong to the branch filing the PR (the caller's
+        // own tenant: not a parent, child or other tenant). A user from anywhere
+        // else answers exactly like a missing one, so ids can't be probed.
         User requestedBy = userRepository
                 .findById(request.getRequestedBy())
-                .orElseThrow(() -> new RuntimeException("Requesting user not found"));
+                .filter(u -> u.getTenant().getId().equals(tenantId))
+                .orElseThrow(() -> new RuntimeException("Requesting user not found in your branch"));
 
         PurchaseRequest pr = PurchaseRequest.builder()
                 .tenant(tenant)
@@ -92,7 +96,7 @@ public class PurchaseRequestService {
         }
 
         // BE-07: history records who actually made the call, which can differ
-        // from requestedBy (still taken from the request body).
+        // from requestedBy (a colleague in the same branch filing on their behalf).
         writeHistory(pr, null, PurchaseRequestStatus.PENDING, currentUser(), null);
 
         notificationService.notifyNewPurchaseRequest(pr);
