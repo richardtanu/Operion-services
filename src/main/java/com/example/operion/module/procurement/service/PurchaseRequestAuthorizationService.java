@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.repository.UserRepository;
+import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.procurement.dto.CreatePurchaseRequestAuthorizationRequest;
@@ -21,6 +22,7 @@ import com.example.operion.module.procurement.entity.PurchaseRequest;
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorization;
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorizationItem;
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorizationStatusHistory;
+import com.example.operion.module.procurement.entity.PurchaseRequestStatusHistory;
 import com.example.operion.module.procurement.entity.RealisasiItem;
 import com.example.operion.module.procurement.enums.PurchaseRequestAuthorizationStatus;
 import com.example.operion.module.procurement.enums.PurchaseRequestStatus;
@@ -29,6 +31,7 @@ import com.example.operion.module.procurement.repository.PurchaseRequestAuthoriz
 import com.example.operion.module.procurement.repository.PurchaseRequestAuthorizationRepository;
 import com.example.operion.module.procurement.repository.PurchaseRequestAuthorizationStatusHistoryRepository;
 import com.example.operion.module.procurement.repository.PurchaseRequestRepository;
+import com.example.operion.module.procurement.repository.PurchaseRequestStatusHistoryRepository;
 import com.example.operion.module.procurement.repository.RealisasiItemRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
@@ -58,6 +61,10 @@ public class PurchaseRequestAuthorizationService {
     private final TenantRepository tenantRepository;
 
     private final TenantHierarchyService tenantHierarchyService;
+
+    private final PurchaseRequestStatusHistoryRepository purchaseRequestHistoryRepository;
+
+    private final NotificationService notificationService;
 
     @Transactional
     public PurchaseRequestAuthorizationResponse create(CreatePurchaseRequestAuthorizationRequest request) {
@@ -110,12 +117,26 @@ public class PurchaseRequestAuthorizationService {
 
         for (PurchaseRequest pr : linkedRequests) {
 
+            PurchaseRequestStatus previous = pr.getStatus();
             pr.setPurchaseRequestAuthorization(pra);
             pr.setStatus(PurchaseRequestStatus.AUTHORIZED);
             purchaseRequestRepository.save(pr);
+
+            // BE-07: this transition never reached the PR's own history before
+            // (and needed V3 to widen the history CHECK constraint to allow it)
+            purchaseRequestHistoryRepository.save(PurchaseRequestStatusHistory.builder()
+                    .purchaseRequest(pr)
+                    .previousStatus(previous)
+                    .newStatus(PurchaseRequestStatus.AUTHORIZED)
+                    .changedBy(approvedBy)
+                    .build());
+
+            notificationService.notifyPurchaseRequestAuthorized(pr, approvedBy);
         }
 
         writeHistory(pra, null, PurchaseRequestAuthorizationStatus.ACTIVE, approvedBy, null);
+
+        notificationService.notifyPurchaseAuthorizationCreated(pra, approvedBy);
 
         return map(pra);
     }

@@ -20,6 +20,7 @@ import com.example.operion.module.notification.enums.NotificationType;
 import com.example.operion.module.notification.repository.NotificationRepository;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.procurement.entity.PurchaseRequest;
+import com.example.operion.module.procurement.entity.PurchaseRequestAuthorization;
 import com.example.operion.module.procurement.entity.Realisasi;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.service.TenantHierarchyService;
@@ -49,6 +50,11 @@ public class NotificationService {
 
         for (User target : approversIn(tenantIds)) {
 
+            // BE-07: an approver filing their own PR isn't told about it
+            if (pr.getRequestedBy() != null && target.getId().equals(pr.getRequestedBy().getId())) {
+                continue;
+            }
+
             create(
                     pr.getTenant(),
                     target,
@@ -74,6 +80,81 @@ public class NotificationService {
                 "Your purchase request has been ordered from the supplier",
                 NotificationReferenceType.PURCHASE_REQUEST,
                 pr.getId());
+    }
+
+    // BE-07: the requester hears about every decision on their own PR. Nobody
+    // is notified about their own action (an Owner deciding their own PR).
+
+    public void notifyPurchaseRequestApproved(PurchaseRequest pr, User actor) {
+
+        notifyRequester(pr, actor,
+                NotificationType.PURCHASE_REQUEST_APPROVED,
+                "Purchase Request Approved",
+                "Your purchase request was approved by " + nameOf(actor));
+    }
+
+    public void notifyPurchaseRequestRejected(PurchaseRequest pr, User actor, String reason) {
+
+        notifyRequester(pr, actor,
+                NotificationType.PURCHASE_REQUEST_REJECTED,
+                "Purchase Request Rejected",
+                "Your purchase request was rejected by " + nameOf(actor)
+                        + (reason != null && !reason.isBlank() ? ": " + reason : ""));
+    }
+
+    public void notifyPurchaseRequestAuthorized(PurchaseRequest pr, User actor) {
+
+        notifyRequester(pr, actor,
+                NotificationType.PURCHASE_REQUEST_AUTHORIZED,
+                "Purchase Request Authorized",
+                "Your purchase request was authorized for purchase by " + nameOf(actor));
+    }
+
+    /**
+     * BE-07: PROCUREMENT users in the PRA's own tenant do the buying, so they
+     * are told a new authorization is ready. Own tenant only — an outlet's
+     * buyer, not HQ's — and never the PRA's creator.
+     */
+    public void notifyPurchaseAuthorizationCreated(PurchaseRequestAuthorization pra, User actor) {
+
+        for (User target : userRepository.findByTenantIdAndRole(pra.getTenant().getId(), Role.PROCUREMENT)) {
+
+            if (actor != null && target.getId().equals(actor.getId())) {
+                continue;
+            }
+
+            create(
+                    pra.getTenant(),
+                    target,
+                    NotificationType.PURCHASE_AUTHORIZATION_CREATED,
+                    "New Purchase Authorization",
+                    "A purchase authorization at " + pra.getTenant().getName()
+                            + " is ready to buy against, authorized by " + nameOf(actor),
+                    NotificationReferenceType.PURCHASE_REQUEST_AUTHORIZATION,
+                    pra.getId());
+        }
+    }
+
+    private void notifyRequester(
+            PurchaseRequest pr,
+            User actor,
+            NotificationType type,
+            String title,
+            String message) {
+
+        User requester = pr.getRequestedBy();
+
+        if (requester == null || (actor != null && requester.getId().equals(actor.getId()))) {
+            return;
+        }
+
+        create(pr.getTenant(), requester, type, title, message,
+                NotificationReferenceType.PURCHASE_REQUEST, pr.getId());
+    }
+
+    private static String nameOf(User user) {
+
+        return user != null && user.getFullName() != null ? user.getFullName() : "Unknown";
     }
 
     public void notifyRealisasiEscalated(Realisasi realisasi) {
