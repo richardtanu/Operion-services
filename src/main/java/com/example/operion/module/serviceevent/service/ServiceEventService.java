@@ -6,10 +6,12 @@ import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.airsoft.entity.AirsoftUnit;
 import com.example.operion.module.airsoft.repository.AirsoftUnitRepository;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.serviceevent.dto.CreateServiceEventRequest;
 import com.example.operion.module.serviceevent.dto.ServiceEventResponse;
@@ -143,7 +145,9 @@ public class ServiceEventService {
                 .eventType(event.getEventType().name())
                 .issue(event.getIssue())
                 .actionTaken(event.getActionTaken())
-                .cost(event.getCost())
+                // Same rule as BE-06/BE-11: money is redacted below OWNER scope,
+                // including for the technician who entered it.
+                .cost(ScopeContext.hasAtLeast(Scope.OWNER) ? event.getCost() : null)
                 .serviceDate(event.getServiceDate())
                 .nextCheckDate(event.getNextCheckDate())
                 .build();
