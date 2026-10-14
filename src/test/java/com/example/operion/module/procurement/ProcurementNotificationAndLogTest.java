@@ -232,6 +232,44 @@ class ProcurementNotificationAndLogTest {
                 + outletPart.getId() + "\",\"quantity\":6}]}";
     }
 
+    // ---- PRA create/cancel need MANAGER scope or above ----
+
+    @Test
+    void praCreate_needsManagerOrAbove() throws Exception {
+
+        User supervisor = user("be07-sup-" + UUID.randomUUID().toString().substring(0, 8),
+                Role.PROCUREMENT, Scope.SUPERVISOR, outlet);
+
+        String prId = createPr(requester);
+        mvc.perform(as(outletOwner, patch("/purchase-requests/" + prId + "/approve")))
+                .andExpect(status().isOk());
+
+        // no scope (even with the PROCUREMENT role), and SUPERVISOR: refused
+        mvc.perform(as(outletBuyer, post("/purchase-authorizations")).content(praBody(prId)))
+                .andExpect(status().isForbidden());
+        mvc.perform(as(supervisor, post("/purchase-authorizations")).content(praBody(prId)))
+                .andExpect(status().isForbidden());
+
+        // MANAGER: allowed
+        createPra(outletManager, prId);
+    }
+
+    @Test
+    void praCancel_needsManagerOrAbove() throws Exception {
+
+        String prId = createPr(requester);
+        mvc.perform(as(outletOwner, patch("/purchase-requests/" + prId + "/approve")))
+                .andExpect(status().isOk());
+        String praId = createPra(outletOwner, prId);
+
+        mvc.perform(as(outletBuyer, patch("/purchase-authorizations/" + praId + "/cancel")))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(as(outletManager, patch("/purchase-authorizations/" + praId + "/cancel")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"));
+    }
+
     // ---- activity log ----
 
     @Test
@@ -357,13 +395,17 @@ class ProcurementNotificationAndLogTest {
 
     private String createPra(User asUser, String prId) throws Exception {
 
-        String body = mvc.perform(as(asUser, post("/purchase-authorizations"))
-                .content("{\"purchaseRequestIds\":[\"" + prId + "\"],\"items\":[{\"partId\":\""
-                        + outletPart.getId() + "\",\"authorizedQty\":6,\"maxValue\":600000}]}"))
+        String body = mvc.perform(as(asUser, post("/purchase-authorizations")).content(praBody(prId)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         return JsonPath.read(body, "$.data.id");
+    }
+
+    private String praBody(String prId) {
+
+        return "{\"purchaseRequestIds\":[\"" + prId + "\"],\"items\":[{\"partId\":\""
+                + outletPart.getId() + "\",\"authorizedQty\":6,\"maxValue\":600000}]}";
     }
 
     private List<NotificationType> typesFor(User u) {

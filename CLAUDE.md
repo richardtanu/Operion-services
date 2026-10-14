@@ -104,7 +104,7 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 ### PRA / Realisasi semantics
 
 - **PRA is an authorization ceiling**, not an order. `authorizedQty` and `maxValue` are both **per-line** on `PurchaseRequestAuthorizationItem`. There is no header-level ceiling field. (Whether to add a nullable header cap is an open decision — per-line ceilings cannot express "spend at most Rp 2.1M on this authorization", and ten lines each individually within ceiling can still overrun a total that was never stated.)
-- **PRA creation _is_ the authorization act.** No approve endpoint exists. (`approvedBy` reads as though a step is missing — it isn't.)
+- **PRA creation _is_ the authorization act.** No approve endpoint exists. (`approvedBy` reads as though a step is missing — it isn't.) Create and cancel need **MANAGER scope or above** (BE-13): Owner approves the need (PR), Manager+ sets the ceiling (PRA), an over-ceiling buy escalates back to Owner.
 - **No mutable `remaining` column anywhere.** Consumption is aggregated live from `RealisasiItem` rows counting **only `APPROVED`** status. This single choice is what makes failed-realisasi-releases-its-hold and partial fulfilment work with zero extra bookkeeping. **Do not add a `remaining` column** — it would silently break both.
 - Below ceiling → auto-passes. Above → whole Realisasi goes `PENDING_APPROVAL`/`ESCALATED`, Owner+ notified, Owner-only approval. Hard limit, no tolerance band.
 - `supersede()` is append-only correction: new record via self-FK, re-runs every check, flips the original to `SUPERSEDED`. Nothing overwritten in place.

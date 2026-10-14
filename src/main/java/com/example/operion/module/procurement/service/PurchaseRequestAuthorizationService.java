@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -70,6 +71,8 @@ public class PurchaseRequestAuthorizationService {
 
     @Transactional
     public PurchaseRequestAuthorizationResponse create(CreatePurchaseRequestAuthorizationRequest request) {
+
+        requireManagerScope();
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -145,6 +148,8 @@ public class PurchaseRequestAuthorizationService {
 
     @Transactional
     public PurchaseRequestAuthorizationResponse cancel(UUID id) {
+
+        requireManagerScope();
 
         PurchaseRequestAuthorization pra = findOwned(id);
 
@@ -285,6 +290,21 @@ public class PurchaseRequestAuthorizationService {
 
         return realisasiItemRepository
                 .findByPurchaseRequestAuthorizationItemIdAndRealisasi_Status(praItemId, RealisasiStatus.APPROVED);
+    }
+
+    /**
+     * Creating a PRA is the authorization act (sets the spending ceiling), so
+     * it and its cancellation need MANAGER scope or above — decided 14 Oct
+     * 2026. One rung below PR approval (OWNER): Owner approves the need,
+     * Manager+ sets the ceiling, an over-ceiling buy escalates back to Owner.
+     * Checked before any lookup, so a random id answers 403 too.
+     */
+    private void requireManagerScope() {
+
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER)) {
+            throw new AccessDeniedException(
+                    "Only Manager-level users or higher can create or cancel a purchase authorization");
+        }
     }
 
     private User currentUser() {

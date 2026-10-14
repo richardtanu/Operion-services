@@ -12,7 +12,7 @@ now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`P
 cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
 (auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08, BE-11 and BE-07 done 14 Oct 2026** (BE-07 widened: requester
 notifications, procurement activity log, role endpoint, migration V3). No change-queue
-items open except BE-13's PRA-creation gate (awaiting a decision). **BE-13 done 14 Oct
+items open. **BE-13 done 14 Oct
 2026** (requester branch check, PRA spend + service-event cost redaction). Next: the
 permission matrix.
 
@@ -566,9 +566,9 @@ accepts a requester from the filing branch; redact the two money fields BE-11 fo
    6 at Rp 300,000 against a 12-unit / Rp 900,000 line (rules 2 and 6). **Against the
    unfixed code exactly the 3 targeted assertions fail.** `[V]` local.
 
-### Open — PRA creation has no gate
+### PRA creation gate — DONE, 14 Oct 2026 (MANAGER and above, product owner's choice)
 
-`POST /purchase-authorizations` and `PATCH /purchase-authorizations/{id}/cancel` are open to
+`POST /purchase-authorizations` and `PATCH /purchase-authorizations/{id}/cancel` were open to
 any authenticated user, though creating a PRA *is* the authorization act. **Recommended:
 MANAGER scope or above**, because:
 
@@ -579,7 +579,10 @@ MANAGER scope or above**, because:
 The PR approve step stays OWNER-only, so the chain reads: Owner approves the *need*,
 Manager or above sets the *spending ceiling*, and an over-ceiling buy escalates back to
 Owner. Alternative: OWNER+ only, if the Manager cases were test data rather than intent.
-Awaiting the product owner's decision.
+**Decided: MANAGER and above** (product owner, 14 Oct 2026). `requireManagerScope()` runs
+first in `create()` and `cancel()` → 403 below MANAGER. Two HTTP tests (no scope with the
+PROCUREMENT role and SUPERVISOR refused, MANAGER allowed, for create and for cancel); both
+fail without the gate. `[V]` local.
 
 ---
 
