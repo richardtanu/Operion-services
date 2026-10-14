@@ -331,7 +331,9 @@ The parallel `receiveAgainstPurchaseOrder` path has no landed-cost division (fla
 |---|---|---|
 | `Realisasi` | `canSeeCost = ScopeContext.hasAtLeast(OWNER)`; nulls all six cost components, `totalCost`, and item `actualUnitPrice`/`allocatedLandedCost` below that | **Done (BE-06)** |
 | `PartInstance` | Same pattern, `landedCost` field | **Done (BE-06)** |
-| `PurchaseOrder` | **No `ScopeContext` import, no check anywhere in `PurchaseOrderService.map()`** — `totalAmount` and every item's `price` return unconditionally to any authenticated caller | **Still open (BE-11)** — confirmed by direct reading, not inferred from the change queue |
+| `PurchaseOrder` | Same pattern in `PurchaseOrderService.map()`: header `totalAmount` and item `price` | **Done (BE-11, 14 Oct 2026)** |
+| `PurchaseRequestAuthorization` items | **None** — `maxValue`, `purchasedValue`, `remainingValue` returned to everyone. `purchasedValue` is summed from Realisasi spend that BE-06 hides | **Open — product decision**: the buyer needs the ceiling to buy within it (found by BE-11's follow-up grep) |
+| `ServiceEvent` | **None** — `cost` returned to everyone | **Open — product decision** (found by BE-11's follow-up grep) |
 
 ### 4.8 `supersede()` — correction mechanics (lives on `RealisasiService`, not the PRA service)
 
@@ -361,7 +363,7 @@ Endpoints (`/notifications`): `GET` (mine), `GET /unread-count`, `PATCH /{id}/re
 | BE-06 — cost redaction on Realisasi/PartInstance | **Done** |
 | BE-07 — PRA notification type | **Open** — `NotificationType` has no PRA value; `PurchaseRequestAuthorizationService` doesn't call `NotificationService` at all |
 | BE-08 — `GET /goods-receipts` list + `GET /goods-receipts/{id}` | **Done**, 14 Oct 2026 (`GoodsReceiptListTest`, 8 tests) |
-| BE-11 — `PurchaseOrder` cost redaction | **Open** — confirmed no redaction code exists |
+| BE-11 — `PurchaseOrder` cost redaction | **Done**, 14 Oct 2026 (`PurchaseOrderServiceCostRedactionTest`, 6 tests) |
 
 ---
 

@@ -10,8 +10,8 @@ hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) g
 immediately instead of waiting on module 1. **Module 1 (`screens/01-procurement.md`) is
 now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`PurchaseOrder`
 cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
-(auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08 done 14 Oct 2026.**
-BE-07 and BE-11 open.
+(auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08 and BE-11 done 14 Oct 2026.**
+BE-07 open (scope widened and decided 14 Oct — see its entry).
 
 ---
 
@@ -690,8 +690,8 @@ BE-06 urgency wherever module 1's Gate 4 output gets consumed.
 
 **Priority:** Same class as BE-06 — this is the gap BE-06's original grep pass missed.
 **Type:** Requirement gap, same shape as BE-06.
-**Status:** Open. Found `screens/01-procurement.md` PROC-07, 11 Aug 2026, while
-completing module 1's screen inventory.
+**Status:** DONE, 14 Oct 2026 (see end of entry). Found `screens/01-procurement.md`
+PROC-07, 11 Aug 2026, while completing module 1's screen inventory.
 
 ### Why
 
@@ -719,6 +719,26 @@ transaction type (`CLAUDE.md`'s "two genuinely different transactions" table).
    match BE-06's original pattern (`amount`, `price`, `cost`, `value` are all candidates
    that could exist elsewhere) — this task existing at all is evidence that pattern-based
    grepping under-covers a codebase with inconsistent naming.
+
+### What was done — DONE, 14 Oct 2026
+
+1–2. `PurchaseOrderService.map()` now nulls `totalAmount` and item `price` below OWNER
+   (`canSeeCost`, same as BE-06). Covers every PO response: create, get, list, send,
+   cancel.
+3. `PurchaseOrderServiceCostRedactionTest` (6): no scope, SUPERVISOR, MANAGER redacted;
+   OWNER, PRINCIPAL visible; list path redacted too. Item quantity is 6, not 1, so
+   `price` and `totalAmount` are different numbers (rule 6). **Run against the unfixed
+   service: 4 of 6 fail** (exactly the redaction cases). `[V]` local.
+4. Follow-up grep over every `*Response*` DTO for
+   `amount|price|cost|value|fee|total|subtotal|discount|voucher|shipping|insurance`.
+   Two more unredacted money fields — **left unchanged, each is a product decision**:
+   - `PurchaseRequestAuthorizationItemResponse.maxValue` / `purchasedValue` /
+     `remainingValue`. `purchasedValue` is summed from the very Realisasi spend BE-06
+     hides, so it partially undoes BE-06 at the line level. But the buyer (often below
+     OWNER) needs the ceiling to buy within it. Options: hide only `purchasedValue`, or
+     accept that the buyer sees their own budget.
+   - `ServiceEventResponse.cost` (maintenance service cost). Is maintenance spend as
+     sensitive as purchase cost?
 
 ---
 

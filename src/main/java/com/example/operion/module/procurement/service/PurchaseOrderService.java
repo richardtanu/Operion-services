@@ -7,8 +7,10 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
@@ -303,6 +305,11 @@ public class PurchaseOrderService {
 
     private PurchaseOrderResponse map(PurchaseOrder po) {
 
+        // BE-11: same rule as BE-06 on Realisasi/PartInstance — cost fields
+        // (header totalAmount, per-item price) redacted to null below OWNER
+        // scope. Redacted, not omitted; every other field is unchanged.
+        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+
         List<PurchaseOrderItemResponse> items = itemRepository
                 .findByPurchaseOrderId(po.getId())
                 .stream()
@@ -311,7 +318,7 @@ public class PurchaseOrderService {
                         .partId(item.getPart().getId())
                         .partName(item.getPart().getName())
                         .quantity(item.getQuantity())
-                        .price(item.getPrice())
+                        .price(canSeeCost ? item.getPrice() : null)
                         .build())
                 .toList();
 
@@ -328,7 +335,7 @@ public class PurchaseOrderService {
                 .supplierId(po.getSupplier() != null ? po.getSupplier().getId() : null)
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getName() : null)
                 .orderDate(po.getOrderDate())
-                .totalAmount(po.getTotalAmount())
+                .totalAmount(canSeeCost ? po.getTotalAmount() : null)
                 .items(items)
                 .purchaseRequestIds(purchaseRequestIds)
                 .createdAt(po.getCreatedAt())
