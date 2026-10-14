@@ -10,8 +10,9 @@ hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) g
 immediately instead of waiting on module 1. **Module 1 (`screens/01-procurement.md`) is
 now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`PurchaseOrder`
 cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
-(auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08 and BE-11 done 14 Oct 2026.**
-BE-07 open (scope widened and decided 14 Oct — see its entry).
+(auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08, BE-11 and BE-07 done 14 Oct 2026** (BE-07 widened: requester
+notifications, procurement activity log, role endpoint, migration V3). No change-queue
+items open; next is the permission matrix.
 
 ---
 
@@ -482,6 +483,60 @@ BE-05 (proper migration tooling) is still recommended before writing this by han
 2. Emit from `PurchaseRequestAuthorizationService.create()`.
 3. Target per module 1's inventory — which role and scope should receive it.
 4. Verify by inserting a real notification row, not by compiling.
+
+### Decisions (product owner, 13–14 Oct 2026)
+
+The first proposal ("everyone in the PRA's tenant except its creator") was rejected: a
+PRA's creator *is* its approver, so it aimed at the wrong person. Decided instead:
+
+- The **PR requester** hears about every decision on their PR: approved, rejected (with
+  reason), authorized.
+- **PROCUREMENT** users get a notification when a PRA is created — they do the buying.
+- HQ needs a **log** of who requested and who approved what, readable by **ADMIN,
+  PROCUREMENT, or OWNER scope and above**.
+
+Claude's default, open to revision: the PRA notification goes to PROCUREMENT users in the
+PRA's **own** tenant only (the outlet's buyers, not HQ's), never its creator.
+
+### What was done — DONE, 14 Oct 2026
+
+1. **Who-did-it was being lost.** `PurchaseRequestService` approve/reject/cancel and every
+   `PurchaseOrderService` history write passed `changedBy = null` (`[V]` local DB: 6 of 6
+   APPROVED rows had no actor). All now record `currentUser()`. PR creation records the
+   real caller too, which can differ from `requestedBy` (see finding below).
+2. **PRA creation now writes the PR's APPROVED → AUTHORIZED history row.** It never did —
+   and couldn't have: `purchase_request_status_history`'s CHECK constraints didn't allow
+   `AUTHORIZED` (rule 3, third time).
+3. **Migration `V3__procurement_notifications_and_authorized_history.sql`** recreates four
+   constraints: `notifications_type_check` (+4 types), `notifications_reference_type_check`
+   (+`PURCHASE_REQUEST_AUTHORIZATION`), and both `purchase_request_status_history` status
+   checks (+`AUTHORIZED`). Applied cleanly to the local DB (`[V]`, "now at version v3",
+   existing rows re-validated). **Not yet applied to prod** — Flyway will run it on the
+   next deploy.
+4. **Notifications** (`NotificationService`): `PURCHASE_REQUEST_APPROVED` /
+   `_REJECTED` / `_AUTHORIZED` to the requester; `PURCHASE_AUTHORIZATION_CREATED` to the
+   PRA tenant's PROCUREMENT users. Nobody is notified of their own action — this also
+   changed the existing `NEW_PURCHASE_REQUEST`, which used to tell an approver about a PR
+   they filed themselves.
+5. **`GET /procurement/activity`** (`ProcurementActivityService`): a merged, newest-first
+   feed over the four `*StatusHistory` tables, nothing new stored. Tree-scoped; filters
+   `from`/`to`/`tenantId`/`actorId`/`type`/`limit` (default 100, max 500). Access is
+   checked in the service because it's role **or** scope.
+6. **`PATCH /users/{id}/role`** — ADMIN-only, tree-contained, never your own role. The
+   local DB had zero PROCUREMENT users and no API way to make one.
+7. `ProcurementNotificationAndLogTest` (9), end to end over HTTP on an HQ → Outlet tree +
+   unrelated root, with the approving Owner also holding PROCUREMENT so the
+   creator-exclusion has someone to exclude. Smoke-tested against real dev data: the log
+   returned all 13 existing PR history rows (old ones with null actor, as expected).
+8. Postman PROD/DEV: `user-update-role`, new folder `PROCUREMENT ACTIVITY`.
+
+### Found while doing this — not fixed
+
+- `POST /purchase-requests` takes `requestedBy` from the body with no check — any user id,
+  any tenant. That user then receives the new notifications. The log now records the real
+  caller, so it isn't fooled; the PR is. Fixing it changes the client contract.
+- `POST /purchase-authorizations` has no role or scope gate: anyone can perform the
+  authorization act. Permission-matrix item.
 
 ---
 

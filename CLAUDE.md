@@ -50,7 +50,7 @@ Symptom: no compile error, no startup error, failure only at insert. Adding `REA
 
 **Pre-flight: before adding a value to an enum used by an existing entity, check for a DB CHECK constraint on that column and plan the migration in the same change.** Same applies to adding `@Column(unique=true)` to an existing table.
 
-Two bugs from this root cause. `ddl-auto=update` is not a migration strategy — Flyway/Liquibase is an open decision (`OPERION_BE_PLAN.md` §9 Q4).
+Two bugs from this root cause. A third was caught by this pre-flight in BE-07: `PurchaseRequestStatus.AUTHORIZED` existed in Java for months but `purchase_request_status_history`'s CHECK never allowed it — invisible only because nothing had written that row yet. `ddl-auto=update` is not a migration strategy — Flyway/Liquibase is an open decision (`OPERION_BE_PLAN.md` §9 Q4).
 
 ### 4. Verify at the service layer, not just controllers
 
@@ -149,7 +149,11 @@ Dual dimension: **scope** (`Principal > Owner > Manager > Supervisor`, linear, n
 
 One `Role` enum only. No `roles`/`user_roles` table pair.
 
-**Scope is granted, never self-assigned** (BE-12). `POST /auth/register` is ADMIN-only, has no `scope` field, and always creates an `OPERATOR`; scope comes only from ADMIN-gated `PATCH /users/{id}/scope`. Both — and all `/tenants` endpoints — are tenant-tree-contained via `TenantHierarchyService.requireWithinCallerTenantTree` (self + descendants, never ancestors). Root tenants need `PRINCIPAL`, which nobody holds, so they arrive via Flyway seed. The first ADMIN on a fresh DB is a direct insert. Authorization denials are **403** (`AccessDeniedException`); segregation-of-duties violations stay 400. Test setup: log in as an ADMIN → `register` → `user-update-scope`.
+**Scope is granted, never self-assigned** (BE-12). `POST /auth/register` is ADMIN-only, has no `scope` field, and always creates an `OPERATOR`; scope comes only from ADMIN-gated `PATCH /users/{id}/scope`. Both — and all `/tenants` endpoints — are tenant-tree-contained via `TenantHierarchyService.requireWithinCallerTenantTree` (self + descendants, never ancestors). Root tenants need `PRINCIPAL`, which nobody holds, so they arrive via Flyway seed. The first ADMIN on a fresh DB is a direct insert. Authorization denials are **403** (`AccessDeniedException`); segregation-of-duties violations stay 400. Test setup: log in as an ADMIN → `register` → `user-update-scope` / `user-update-role`.
+
+**Roles are settable but barely enforced** (BE-07). ADMIN-only `PATCH /users/{id}/role` (tree-contained, never your own). The only non-ADMIN role check anywhere is `PROCUREMENT`: it may read `GET /procurement/activity` (as may ADMIN and OWNER+ scope) and receives the PRA-created notification. Role-**or**-scope checks live in the service, because `@PreAuthorize` only sees roles.
+
+**Procurement notifications** go to the PR requester (approved / rejected / authorized) and to PROCUREMENT users in the PRA's own tenant (PRA created). Nobody is notified about their own action. Every PR and PO status-history row now records its actor; rows written before 14 Oct 2026 may have a null actor.
 
 ---
 

@@ -5,12 +5,14 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Scope;
+import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
@@ -63,6 +65,8 @@ public class PurchaseOrderService {
     private final TenantHierarchyService tenantHierarchyService;
 
     private final NotificationService notificationService;
+
+    private final UserRepository userRepository;
 
     @Transactional
     public PurchaseOrderResponse create(CreatePurchaseOrderRequest request) {
@@ -151,7 +155,7 @@ public class PurchaseOrderService {
             notificationService.notifyPurchaseRequestOrdered(pr);
         }
 
-        writeHistory(po, null, PurchaseOrderStatus.DRAFT, null);
+        writeHistory(po, null, PurchaseOrderStatus.DRAFT, currentUser());
 
         return map(po);
     }
@@ -183,7 +187,7 @@ public class PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.ORDERED);
         po = repository.save(po);
 
-        writeHistory(po, previous, PurchaseOrderStatus.ORDERED, null);
+        writeHistory(po, previous, PurchaseOrderStatus.ORDERED, currentUser());
 
         return map(po);
     }
@@ -209,7 +213,7 @@ public class PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         po = repository.save(po);
 
-        writeHistory(po, previous, PurchaseOrderStatus.CANCELLED, null);
+        writeHistory(po, previous, PurchaseOrderStatus.CANCELLED, currentUser());
 
         for (PurchaseRequest pr : purchaseRequestRepository.findByPurchaseOrderId(po.getId())) {
 
@@ -299,8 +303,18 @@ public class PurchaseOrderService {
                         .purchaseRequest(pr)
                         .previousStatus(previous)
                         .newStatus(next)
+                        .changedBy(currentUser())
                         .reason(reason)
                         .build());
+    }
+
+    private User currentUser() {
+
+        UUID userId = UUID.fromString(
+                SecurityContextHolder.getContext().getAuthentication().getName());
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Current user not found"));
     }
 
     private PurchaseOrderResponse map(PurchaseOrder po) {

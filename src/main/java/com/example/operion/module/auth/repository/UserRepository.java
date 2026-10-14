@@ -16,6 +16,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    List<User> findByTenantIdAndRole(UUID tenantId, Role role);
+
     @Query("select u from User u where u.tenant.id in :tenantIds and (u.role = :role or u.scope in :scopes)")
     List<User> findByTenantIdInAndRoleOrScopeIn(
             @Param("tenantIds") List<UUID> tenantIds,

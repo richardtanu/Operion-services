@@ -6,6 +6,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.module.auth.dto.UpdateUserRoleRequest;
 import com.example.operion.module.auth.dto.UpdateUserScopeRequest;
 import com.example.operion.module.auth.dto.UserProfileResponse;
 import com.example.operion.module.auth.service.UserService;
@@ -30,6 +31,19 @@ public class UserController {
                 .success(true)
                 .message("User scope updated")
                 .data(service.updateScope(id, request.getScope()))
+                .build();
+    }
+
+    @PatchMapping("/{id}/role")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<UserProfileResponse> updateRole(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserRoleRequest request) {
+
+        return ApiResponse.<UserProfileResponse>builder()
+                .success(true)
+                .message("User role updated")
+                .data(service.updateRole(id, request.getRole()))
                 .build();
     }
 }

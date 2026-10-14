@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.ScopeContext;
@@ -90,7 +91,9 @@ public class PurchaseRequestService {
                             .build());
         }
 
-        writeHistory(pr, null, PurchaseRequestStatus.PENDING, requestedBy, null);
+        // BE-07: history records who actually made the call, which can differ
+        // from requestedBy (still taken from the request body).
+        writeHistory(pr, null, PurchaseRequestStatus.PENDING, currentUser(), null);
 
         notificationService.notifyNewPurchaseRequest(pr);
 
@@ -114,7 +117,11 @@ public class PurchaseRequestService {
         pr.setStatus(PurchaseRequestStatus.APPROVED);
         pr = repository.save(pr);
 
-        writeHistory(pr, previous, PurchaseRequestStatus.APPROVED, null, null);
+        User actor = currentUser();
+
+        writeHistory(pr, previous, PurchaseRequestStatus.APPROVED, actor, null);
+
+        notificationService.notifyPurchaseRequestApproved(pr, actor);
 
         return map(pr);
     }
@@ -136,7 +143,11 @@ public class PurchaseRequestService {
         pr.setStatus(PurchaseRequestStatus.REJECTED);
         pr = repository.save(pr);
 
-        writeHistory(pr, previous, PurchaseRequestStatus.REJECTED, null, request.getReason());
+        User actor = currentUser();
+
+        writeHistory(pr, previous, PurchaseRequestStatus.REJECTED, actor, request.getReason());
+
+        notificationService.notifyPurchaseRequestRejected(pr, actor, request.getReason());
 
         return map(pr);
     }
@@ -157,7 +168,7 @@ public class PurchaseRequestService {
         pr.setStatus(PurchaseRequestStatus.CANCELLED);
         pr = repository.save(pr);
 
-        writeHistory(pr, previous, PurchaseRequestStatus.CANCELLED, null, null);
+        writeHistory(pr, previous, PurchaseRequestStatus.CANCELLED, currentUser(), null);
 
         return map(pr);
     }
@@ -230,6 +241,15 @@ public class PurchaseRequestService {
                         .changedBy(changedBy)
                         .reason(reason)
                         .build());
+    }
+
+    private User currentUser() {
+
+        UUID userId = UUID.fromString(
+                SecurityContextHolder.getContext().getAuthentication().getName());
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Current user not found"));
     }
 
     private PurchaseRequestResponse map(PurchaseRequest pr) {

@@ -1,6 +1,6 @@
 # Operion Backend — Baseline Reference
 
-**Updated:** 12 Oct 2026 for BE-12 (auth/tenant hardening — §0, §1.2–§1.5, §2.6, §5.1, §5.5, §5.6).
+**Updated:** 14 Oct 2026 for BE-08, BE-11, BE-07 (§1.4, §1.5, §4.3, §4.7, §4.9, §4.10, §5.1); 12 Oct 2026 for BE-12 (auth/tenant hardening — §0, §1.2–§1.5, §2.6, §5.1, §5.5, §5.6).
 **Generated:** 22 Aug 2026, from direct source reading (evidence tier `[C]` throughout — see `CLAUDE.md` §"A summary is evidence tier [D]"). Every claim below traces to a specific file; nothing here is reconstructed from `OPERION_BE_PLAN.md` or other planning docs without independently re-reading the code.
 
 **Purpose:** this is the thing to hand a fresh session (human or AI) that needs to know "what does Operion's backend actually do right now" — one level below `CLAUDE.md`'s summary, one level above reading the whole `src/main/java` tree yourself. `CLAUDE.md` still auto-loads every session and stays the terse rules/conventions file; this document is the detailed module-by-module reference it points to.
@@ -43,6 +43,7 @@ Legacy/dead tables still physically present in the schema but confirmed by full-
 | `POST /auth/login` | Public | Unknown email → generic `RuntimeException` → **400**. Wrong password → `BadCredentialsException` → **401**. Inconsistent status for what's conceptually the same "invalid credentials" case. |
 | `GET /auth/me` | Any JWT | Returns id/email/fullName/role/scope/tenantCode. |
 | `PATCH /users/{id}/scope` | `hasRole('ADMIN')` **plus** tenant-tree containment (`TenantHierarchyService.requireWithinCallerTenantTree`, → 403) | **The only way to grant scope** since BE-12. No scope requirement on the calling admin at all — an `ADMIN` with no scope can promote anyone in their hierarchy straight to `PRINCIPAL` (deliberately left for the permission-matrix decision; a "can't grant above your own scope" rule would lock out today's null-scope admins). |
+| `PATCH /users/{id}/role` | `hasRole('ADMIN')` **plus** tenant-tree containment; never your own role (BE-07, 14 Oct 2026) | The only API path to set a functional role; added so `PROCUREMENT` users can exist for BE-07's notifications and log. |
 | ~~`GET /test`, `GET /admin`, `GET /api/test/me`~~ | — | **Deleted (BE-12).** Now 404. |
 | `POST /tenants` | `hasRole('ADMIN')`; `parentId` must be in caller's tree; **root tenant (no `parentId`) requires `PRINCIPAL`** (BE-12) | No user holds `PRINCIPAL` today, so root tenants effectively come only from Flyway seeds (as `V2__seed_default_tenant.sql`). |
 | `GET /tenants/{id}`, `GET /tenants/{id}/children` | Any JWT, but `id` must be caller's tenant or a descendant (BE-12) | Containment checked **before** lookup — out-of-tree ids answer 403 whether or not they exist. Ancestors are not readable; own `TenantResponse` already carries `parentName`. |
@@ -68,12 +69,14 @@ Legacy/dead tables still physically present in the schema but confirmed by full-
 | `procurement/service/RealisasiService.java:441` | `OWNER` | Redacts cost fields on `Realisasi` responses |
 | `tenant/service/TenantService.java` `create()` | `PRINCIPAL` | Gates root-tenant creation (BE-12) |
 
-Nothing in `auth` uses `ScopeContext`. `Role` values other than `ADMIN` (`TECHNICIAN`, `PROCUREMENT`, `ACCOUNTING`, `OPERATOR`) are **stored and returned but never checked anywhere** in the codebase — if any product assumption depends on e.g. a `TECHNICIAN`-only endpoint existing, that assumption is currently false.
+Nothing in `auth` uses `ScopeContext`. Of the roles other than `ADMIN`, only `PROCUREMENT` is checked anywhere, and only in two places since BE-07: read access to `GET /procurement/activity`, and as the recipient set for `PURCHASE_AUTHORIZATION_CREATED`. `TECHNICIAN`, `ACCOUNTING` and `OPERATOR` are still **stored and returned but never checked**. Roles can now be changed via ADMIN-only `PATCH /users/{id}/role` (BE-07; tree-contained, never your own); before that only by DB edit.
 
 ### 1.5 Notable gaps (auth/tenant/RBAC)
 
 1. ~~`TenantController` — zero authorization~~ — **closed, BE-12** (§1.2).
-2. Functional roles beyond `ADMIN` are unenforced everywhere.
+2. Functional roles beyond `ADMIN` are unenforced everywhere except the BE-07 procurement log (§1.4).
+8. **`POST /purchase-requests` takes `requestedBy` from the request body, unvalidated** — any user id, even from another tenant, can be named as requester; that user then receives the BE-07 notifications. Since BE-07 the PR's history records the *actual* caller, so the log isn't fooled, but the PR itself is. Found 14 Oct 2026, not fixed (client-visible change).
+9. **`POST /purchase-authorizations` has no role or scope gate** — any authenticated user can create a PRA, which *is* the authorization act. Belongs in the permission matrix. Found 14 Oct 2026.
 3. `CustomUserDetailsService` — dead code.
 4. Login error-status inconsistency (400 vs 401 for two flavors of "wrong credentials").
 5. ~~`GlobalExceptionHandler` has no handler for `AccessDeniedException`~~ — **closed, BE-12.** The 400 was confirmed (`[V]`, local, MockMvc against pre-fix code) before the fix; denials now answer 403 `{timestamp, error}`. Same change made the catch-all honour Spring's own `ErrorResponse` statuses — unknown URLs were 500, now 404; wrong methods could never be 405, now are.
@@ -346,7 +349,9 @@ Genuinely append-only: the original row's data is never mutated except `status`/
 
 ### 4.9 Notification, Dashboard, Analytics
 
-**`notification` module** — polling only, no WebSocket/SSE/broker/scheduled job; a plain `notifications` table read via `GET`. `NotificationType`: `NEW_PURCHASE_REQUEST, PURCHASE_REQUEST_ORDERED, PART_END_OF_LIFE, LOW_STOCK, REALISASI_ESCALATED`. **No PRA-creation type exists** — `PurchaseRequestAuthorizationService` never even injects `NotificationService`. This is BE-07, confirmed still open.
+**`notification` module** — polling only, no WebSocket/SSE/broker/scheduled job; a plain `notifications` table read via `GET`. `NotificationType`: `NEW_PURCHASE_REQUEST, PURCHASE_REQUEST_ORDERED, PART_END_OF_LIFE, LOW_STOCK, REALISASI_ESCALATED`, plus since BE-07 (14 Oct 2026, migration V3): `PURCHASE_REQUEST_APPROVED`, `PURCHASE_REQUEST_REJECTED` (with reason), `PURCHASE_REQUEST_AUTHORIZED` (all three to the PR's `requestedBy`), and `PURCHASE_AUTHORIZATION_CREATED` (to `PROCUREMENT`-role users in the PRA's own tenant only, never its creator). Nobody is notified about their own action, including an approver filing their own PR (`NEW_PURCHASE_REQUEST` skips the requester).
+
+**Procurement activity log** (BE-07) — `GET /procurement/activity`: one newest-first feed of every status change on PRs, PRAs, Realisasi and POs, read from their existing `*StatusHistory` tables (nothing new stored). Caller's tenant tree; optional `from`/`to`/`tenantId` (subtree, must be in tree)/`actorId`/`type`/`limit` (default 100, max 500). Readable by `ADMIN` or `PROCUREMENT` role, or `OWNER`+ scope — checked in `ProcurementActivityService`, since `@PreAuthorize` can't see scope. Rows written before 14 Oct 2026 have a null actor on PR approve/reject/cancel and all PO transitions: those writes passed `changedBy = null` until BE-07.
 
 Recipient resolution (`approversIn`): any user in the target tenant set who is **either** `Role.ADMIN` **or** scope `OWNER`/`PRINCIPAL` (an OR, not AND). New-PR and escalated-Realisasi notifications fan out to `getAncestorTenantIds` (bubbles upward toward HQ, not downward to children).
 
@@ -361,7 +366,7 @@ Endpoints (`/notifications`): `GET` (mine), `GET /unread-count`, `PATCH /{id}/re
 | Item | Verified status |
 |---|---|
 | BE-06 — cost redaction on Realisasi/PartInstance | **Done** |
-| BE-07 — PRA notification type | **Open** — `NotificationType` has no PRA value; `PurchaseRequestAuthorizationService` doesn't call `NotificationService` at all |
+| BE-07 — PRA notification type | **Done**, 14 Oct 2026, widened to requester notifications + procurement activity log + role endpoint (`ProcurementNotificationAndLogTest`, 9 tests; migration V3) |
 | BE-08 — `GET /goods-receipts` list + `GET /goods-receipts/{id}` | **Done**, 14 Oct 2026 (`GoodsReceiptListTest`, 8 tests) |
 | BE-11 — `PurchaseOrder` cost redaction | **Done**, 14 Oct 2026 (`PurchaseOrderServiceCostRedactionTest`, 6 tests) |
 
@@ -378,7 +383,7 @@ Grouped by category, pulled from every module above — this is the "if you're p
 - Entire digital-twin cluster (§2.8) — only unit *creation* is role-gated; installing/replacing parts, marking a part FAILED, all work-order transitions, all service events, all maintenance operations are open to any authenticated user.
 - `POST /inventory/adjust` bypasses the `stockadjustment` module's Owner-approval workflow entirely (§3.4/§3.5).
 - `StockAdjustmentService` has no self-approval prevention (§3.5), unlike the equivalent DL-11 rule in `GoodsReceiptService`.
-- Functional roles beyond `ADMIN` (`TECHNICIAN`/`PROCUREMENT`/`ACCOUNTING`/`OPERATOR`) are stored and returned everywhere but enforced nowhere (§1.4).
+- Functional roles beyond `ADMIN` are enforced nowhere except `PROCUREMENT` on the BE-07 activity log (§1.4). `POST /purchase-authorizations` (the authorization act) has no gate at all (§1.5 #9).
 - ~~`GlobalExceptionHandler` has no `AccessDeniedException` handler~~ — closed, BE-12 (§1.5).
 
 ### 5.2 State-machine / data-integrity gaps
