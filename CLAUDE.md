@@ -110,6 +110,8 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 - `supersede()` is append-only correction: new record via self-FK, re-runs every check, flips the original to `SUPERSEDED`. Nothing overwritten in place.
 - Landed cost allocated **by value**; all six cost components stored separately (`subtotal`, `sellerDiscount`, `platformVoucher`, `shipping`, `insurance`, `serviceFee`). List price is not cost — ~17% error on a real receipt.
 - **Specific-identification costing**: `PartInstance.landedCost` stamped per instance. Divisor is `allocatedLandedCost ÷ (purchasedQty × conversionFactor)` — see rule 2 for why that took two attempts.
+- **Money is redacted (null, not omitted) below OWNER scope** in the response mapper: Realisasi + PartInstance (BE-06), PurchaseOrder (BE-11), PRA `purchasedValue`/`remainingValue` and ServiceEvent `cost` (BE-13). Exception by design: PRA `maxValue` stays visible — it's the buyer's limit. Any new money field on a response needs the same `canSeeCost` check.
+- **A PR's `requestedBy` must belong to the filing branch** (the caller's own tenant), never a parent, child or other tenant (BE-13).
 
 ### Five quantities per line — all stored, never overwritten
 

@@ -75,8 +75,8 @@ Nothing in `auth` uses `ScopeContext`. Of the roles other than `ADMIN`, only `PR
 
 1. ~~`TenantController` — zero authorization~~ — **closed, BE-12** (§1.2).
 2. Functional roles beyond `ADMIN` are unenforced everywhere except the BE-07 procurement log (§1.4).
-8. **`POST /purchase-requests` takes `requestedBy` from the request body, unvalidated** — any user id, even from another tenant, can be named as requester; that user then receives the BE-07 notifications. Since BE-07 the PR's history records the *actual* caller, so the log isn't fooled, but the PR itself is. Found 14 Oct 2026, not fixed (client-visible change).
-9. **`POST /purchase-authorizations` has no role or scope gate** — any authenticated user can create a PRA, which *is* the authorization act. Belongs in the permission matrix. Found 14 Oct 2026.
+8. ~~`POST /purchase-requests` takes `requestedBy` unvalidated~~ — **closed 14 Oct 2026**: the requester must be a user of the caller's own tenant (the filing branch); anyone else answers 400 "Requesting user not found in your branch", same as a missing id. Filing on behalf of a same-branch colleague still works; history records the real caller.
+9. **`POST /purchase-authorizations` (and `PATCH /{id}/cancel`) has no role or scope gate** — any authenticated user can create a PRA, which *is* the authorization act. Recommendation pending the product owner's call: MANAGER scope or above (see change queue BE-13). Found 14 Oct 2026.
 3. `CustomUserDetailsService` — dead code.
 4. Login error-status inconsistency (400 vs 401 for two flavors of "wrong credentials").
 5. ~~`GlobalExceptionHandler` has no handler for `AccessDeniedException`~~ — **closed, BE-12.** The 400 was confirmed (`[V]`, local, MockMvc against pre-fix code) before the fix; denials now answer 403 `{timestamp, error}`. Same change made the catch-all honour Spring's own `ErrorResponse` statuses — unknown URLs were 500, now 404; wrong methods could never be 405, now are.
@@ -335,8 +335,8 @@ The parallel `receiveAgainstPurchaseOrder` path has no landed-cost division (fla
 | `Realisasi` | `canSeeCost = ScopeContext.hasAtLeast(OWNER)`; nulls all six cost components, `totalCost`, and item `actualUnitPrice`/`allocatedLandedCost` below that | **Done (BE-06)** |
 | `PartInstance` | Same pattern, `landedCost` field | **Done (BE-06)** |
 | `PurchaseOrder` | Same pattern in `PurchaseOrderService.map()`: header `totalAmount` and item `price` | **Done (BE-11, 14 Oct 2026)** |
-| `PurchaseRequestAuthorization` items | **None** — `maxValue`, `purchasedValue`, `remainingValue` returned to everyone. `purchasedValue` is summed from Realisasi spend that BE-06 hides | **Open — product decision**: the buyer needs the ceiling to buy within it (found by BE-11's follow-up grep) |
-| `ServiceEvent` | **None** — `cost` returned to everyone | **Open — product decision** (found by BE-11's follow-up grep) |
+| `PurchaseRequestAuthorization` items | `purchasedValue` and `remainingValue` nulled below OWNER; **`maxValue` (the buyer's limit) and all quantities stay visible**. `remainingValue` goes too because limit − remaining = spend | **Done, 14 Oct 2026** (BE-13) |
+| `ServiceEvent` | `cost` nulled below OWNER in `ServiceEventService.mapToResponse()` (every endpoint) | **Done, 14 Oct 2026** (BE-13) |
 
 ### 4.8 `supersede()` — correction mechanics (lives on `RealisasiService`, not the PRA service)
 
