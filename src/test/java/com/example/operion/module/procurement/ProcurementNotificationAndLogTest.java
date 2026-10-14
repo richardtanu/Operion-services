@@ -189,6 +189,49 @@ class ProcurementNotificationAndLogTest {
         assertEquals(outletOwner.getId(), actorOf(prId, PurchaseRequestStatus.AUTHORIZED));
     }
 
+    // ---- requester must belong to the filing branch ----
+
+    @Test
+    void requester_fromSameBranch_isAccepted_evenOnSomeonesBehalf() throws Exception {
+
+        // the outlet's buyer files on behalf of a colleague in the same outlet
+        String body = mvc.perform(as(outletBuyer, post("/purchase-requests"))
+                .content(prBody(requester)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.requestedById").value(requester.getId().toString()))
+                .andReturn().getResponse().getContentAsString();
+
+        String prId = JsonPath.read(body, "$.data.id");
+        assertEquals(outletBuyer.getId(), actorOf(prId, PurchaseRequestStatus.PENDING),
+                "history records who actually filed it");
+    }
+
+    @Test
+    void requester_fromAnyOtherTenant_isRejected_andNothingIsCreated() throws Exception {
+
+        // unrelated root, the parent HQ, and (from HQ) the child outlet: all refused
+        assertRequesterRefused(outletBuyer, otherBuyer);
+        assertRequesterRefused(outletBuyer, hqBuyer);
+        assertRequesterRefused(hqAdmin, requester);
+
+        assertEquals(List.of(), typesFor(otherBuyer));
+        assertEquals(List.of(), typesFor(hqBuyer));
+        assertEquals(List.of(), typesFor(requester));
+    }
+
+    private void assertRequesterRefused(User caller, User namedRequester) throws Exception {
+
+        mvc.perform(as(caller, post("/purchase-requests")).content(prBody(namedRequester)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Requesting user not found in your branch"));
+    }
+
+    private String prBody(User namedRequester) {
+
+        return "{\"requestedBy\":\"" + namedRequester.getId() + "\",\"items\":[{\"partId\":\""
+                + outletPart.getId() + "\",\"quantity\":6}]}";
+    }
+
     // ---- activity log ----
 
     @Test
