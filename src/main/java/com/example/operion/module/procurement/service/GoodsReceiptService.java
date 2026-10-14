@@ -1,11 +1,14 @@
 package com.example.operion.module.procurement.service;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
@@ -28,6 +31,7 @@ import com.example.operion.module.procurement.entity.PurchaseOrderItem;
 import com.example.operion.module.procurement.entity.PurchaseOrderStatusHistory;
 import com.example.operion.module.procurement.entity.Realisasi;
 import com.example.operion.module.procurement.entity.RealisasiItem;
+import com.example.operion.module.procurement.enums.GoodsReceiptPath;
 import com.example.operion.module.procurement.enums.PurchaseOrderStatus;
 import com.example.operion.module.procurement.enums.RealisasiStatus;
 import com.example.operion.module.procurement.repository.GoodsReceiptItemRepository;
@@ -39,6 +43,7 @@ import com.example.operion.module.procurement.repository.RealisasiItemRepository
 import com.example.operion.module.procurement.repository.RealisasiRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
+import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +75,8 @@ public class GoodsReceiptService {
     private final UserRepository userRepository;
 
     private final TenantRepository tenantRepository;
+
+    private final TenantHierarchyService tenantHierarchyService;
 
     @Transactional
     public GoodsReceiptResponse receive(CreateGoodsReceiptRequest request) {
@@ -378,6 +385,63 @@ public class GoodsReceiptService {
                 .stream()
                 .map(this::map)
                 .toList();
+    }
+
+    /**
+     * BE-08: receipts across the caller's tenant tree (own tenant + descendants,
+     * like every other procurement list), newest first. All filters optional;
+     * {@code from}/{@code to} are inclusive calendar dates on receivedDate.
+     */
+    public List<GoodsReceiptResponse> getAll(
+            LocalDate from,
+            LocalDate to,
+            UUID receivedBy,
+            GoodsReceiptPath path) {
+
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(
+                UUID.fromString(TenantContext.getTenantId()));
+
+        Specification<GoodsReceipt> spec = (root, query, cb) -> root.get("tenant").get("id").in(tenantIds);
+
+        if (from != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(
+                    root.get("receivedDate"), from.atStartOfDay()));
+        }
+
+        if (to != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThan(
+                    root.get("receivedDate"), to.plusDays(1).atStartOfDay()));
+        }
+
+        if (receivedBy != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(
+                    root.get("receivedBy").get("id"), receivedBy));
+        }
+
+        if (path == GoodsReceiptPath.PO) {
+            spec = spec.and((root, query, cb) -> cb.isNotNull(root.get("purchaseOrder")));
+        } else if (path == GoodsReceiptPath.REALISASI) {
+            spec = spec.and((root, query, cb) -> cb.isNotNull(root.get("realisasi")));
+        }
+
+        return repository.findAll(spec, Sort.by(Sort.Direction.DESC, "receivedDate"))
+                .stream()
+                .map(this::map)
+                .toList();
+    }
+
+    /**
+     * BE-08: one receipt, if it belongs to the caller's tenant tree. A receipt
+     * outside the tree answers exactly like a missing one, so ids can't be
+     * probed.
+     */
+    public GoodsReceiptResponse getById(UUID id) {
+
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(
+                UUID.fromString(TenantContext.getTenantId()));
+
+        return map(repository.findByIdAndTenantIdIn(id, tenantIds)
+                .orElseThrow(() -> new RuntimeException("Goods receipt not found")));
     }
 
     private GoodsReceiptResponse map(GoodsReceipt receipt) {
