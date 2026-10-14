@@ -9,9 +9,9 @@ BE-10 are what moved it there)
 hierarchy (`Franchise HQ` → `Outlet 2`), which is why BE-06 (cost redaction) got done
 immediately instead of waiting on module 1. **Module 1 (`screens/01-procurement.md`) is
 now complete** — BE-07 and BE-08 are unblocked and ready to pick up; BE-11 (`PurchaseOrder`
-cost redaction, same shape as BE-06) is a new gap module 1 surfaced. BE-07, BE-08, BE-11
-open. **BE-12 (auth/tenant hardening) done 12 Oct 2026** on branch
-`fix/be-12-auth-hardening`, pending deploy.
+cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
+(auth/tenant hardening) done 12 Oct 2026**, merged as PR #1. **BE-08 done 14 Oct 2026.**
+BE-07 and BE-11 open.
 
 ---
 
@@ -509,6 +509,22 @@ receiving user, by whether it came via PO or Realisasi — `purchaseOrderId`/`re
 being mutually exclusive on the response already gives a natural "path" filter), plus
 `GET /goods-receipts/{id}`. Let the screen record define the response shape (it already
 does — reuse `GoodsReceiptResponse` as-is) rather than guessing.
+
+### What was done — DONE, 14 Oct 2026
+
+- `GET /goods-receipts`: caller's tenant tree (own + descendants, same as every other
+  procurement list), newest `receivedDate` first. Optional `from`/`to` (inclusive
+  `yyyy-MM-dd`), `receivedBy` (user id), `path` (`PO` | `REALISASI`; anything else → 400).
+  Built with a JPA `Specification` so absent filters add no SQL. Plain list, no paging —
+  matches the other procurement `getAll()` endpoints.
+- `GET /goods-receipts/{id}`: looked up *within* the tree, so an out-of-tree id answers
+  exactly like a missing one (no probing). `GoodsReceiptResponse` reused unchanged — it has
+  no cost fields, so no BE-06-style redaction is needed.
+- `GoodsReceiptListTest` (8): HQ → Outlet tree + unrelated root, receipts on both paths;
+  covers tree scope both directions, each filter, inclusive date ends (a 23:30 receipt on
+  the `to` date is included), bad `path`, and by-id in/out of tree. `[V]` local.
+- Postman PROD/DEV: `goods-receipt-list` (filters present but disabled) and
+  `goods-receipt-get-by-id`.
 
 ---
 

@@ -296,7 +296,7 @@ Audit-trail inconsistency: `PurchaseRequestAuthorization`/`Realisasi`/`Notificat
 | `PurchaseOrderController` (`/purchase-orders`) | `POST` (requires all linked PRs `APPROVED`, sets them `ORDERED`, notifies each requester), `GET`, `GET /{id}` (**no cost redaction — see §4.6**), `PATCH /{id}/send`, `PATCH /{id}/cancel` (reverts linked PRs to `APPROVED`), `GET /{id}/history` |
 | `PurchaseRequestAuthorizationController` (`/purchase-authorizations`) | `POST` (requires linked PRs `APPROVED`, sets them `AUTHORIZED` — this *is* the authorization), `PATCH /{id}/cancel`, `GET`, `GET /{id}` (returns computed per-item purchased/remaining qty/value), `GET /{id}/history` |
 | `RealisasiController` (`/realisasi`) | `POST` (**no scope restriction on creation at all**), `PATCH /{id}/approve` (**OWNER+**, escalated only), `PATCH /{id}/reject`, `POST /{id}/supersede`, `GET`, `GET /{id}` (cost-redacted below OWNER), `GET /{id}/history` |
-| `GoodsReceiptController` (`/goods-receipts`) | `POST`, `GET /purchase-order/{poId}`, `GET /realisasi/{realisasiId}` — **confirmed still missing: no `GET /goods-receipts` list-all, no `GET /goods-receipts/{id}`** |
+| `GoodsReceiptController` (`/goods-receipts`) | `POST`, `GET` (list, BE-08: tenant tree, newest first, optional `from`/`to`/`receivedBy`/`path` = `PO` or `REALISASI`), `GET /{id}` (BE-08: out-of-tree answers like missing), `GET /purchase-order/{poId}`, `GET /realisasi/{realisasiId}` |
 
 ### 4.4 PRA ceiling semantics — exact mechanics
 
@@ -360,7 +360,7 @@ Endpoints (`/notifications`): `GET` (mine), `GET /unread-count`, `PATCH /{id}/re
 |---|---|
 | BE-06 — cost redaction on Realisasi/PartInstance | **Done** |
 | BE-07 — PRA notification type | **Open** — `NotificationType` has no PRA value; `PurchaseRequestAuthorizationService` doesn't call `NotificationService` at all |
-| BE-08 — `GET /goods-receipts` list + `GET /goods-receipts/{id}` | **Open** — controller has exactly 3 methods, confirmed by full read |
+| BE-08 — `GET /goods-receipts` list + `GET /goods-receipts/{id}` | **Done**, 14 Oct 2026 (`GoodsReceiptListTest`, 8 tests) |
 | BE-11 — `PurchaseOrder` cost redaction | **Open** — confirmed no redaction code exists |
 
 ---

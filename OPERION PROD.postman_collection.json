@@ -2742,6 +2742,99 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "goods-receipt-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/goods-receipts",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "goods-receipts"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "from",
+                                                                                    "value":  "2026-10-01",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "inclusive, yyyy-MM-dd"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "to",
+                                                                                    "value":  "2026-10-31",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "inclusive, yyyy-MM-dd"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "receivedBy",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "user id"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "path",
+                                                                                    "value":  "REALISASI",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "PO | REALISASI"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-08. Your tenant + descendants, newest first. All filters optional (tick them on in Params)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "goods-receipt-get-by-id",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/goods-receipts/:id",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "goods-receipts",
+                                                                               ":id"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-08. A receipt outside your tenant tree answers like a missing one."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
