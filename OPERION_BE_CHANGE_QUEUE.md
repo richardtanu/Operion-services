@@ -1132,7 +1132,8 @@ Rp 380,000.
 `CANCELLED`; Realisasi `FAILED` or `SUPERSEDED` (a correction's replacement record counts
 instead); PRAs `CANCELLED` or `FULFILLED`.
 
-**Budget check (warning only):** spent this month + committed now > monthly budget.
+**Budget check (warning only):** spent this month + committed now + other expenses this
+month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
 
 ### Task
 
@@ -1332,7 +1333,7 @@ missing from the response"; supersedes BE-09's "don't build `markReimbursed`" ho
 ## BE-19 — Expense claims: branch spending that isn't stock
 
 **Status: CONFIRMED by the product owner, 20 Oct 2026 — needs a screen-inventory record
-before building; one open point below.** Depends on BE-23 for receipt photos.
+before building.** Depends on BE-23 for receipt photos.
 
 ### Why
 
@@ -1353,11 +1354,15 @@ and tracking their stock.
   amount.
 - **Spending summary (BE-16)** gets a third line, **other expenses**, beside the parts
   spent figures. HQ reads it like the rest.
-- **Two views, by whose cost it is**: the product owner wants expenses split in two
-  tabs/tables — "HQ" and "Branch specific". **[?] Meaning to confirm before building:**
-  read here as a "charged to: HQ / branch" field, for costs HQ should bear versus the
-  branch's own. If so, decide who pays back an HQ-charged personal expense (HQ, not the
-  store Owner?) and whether HQ-charged expenses count in the branch's budget.
+- **Two categories, two tabs: "HQ" and "Branch specific"** (`category` enum on the
+  record). "HQ" = spending the branch does for HQ-related needs (e.g. something HQ asked
+  every branch to buy); "Branch specific" = the branch's own running costs. **The branch
+  pays for both** — this is a label for visibility, not a charge to HQ:
+  - an SM who paid personally is **always paid back by their store Owner**, whatever the
+    category (the SM belongs to the branch and is paid by its Owner);
+  - **both categories count against the branch's monthly budget** (BE-16);
+  - nothing in the app claims money back from HQ.
+  HQ's spending view can show how much of each branch's spending is HQ-related.
 
 ### Rules
 
