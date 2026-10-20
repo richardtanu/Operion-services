@@ -14,7 +14,14 @@ cost redaction, same shape as BE-06) is a new gap module 1 surfaced. **BE-12
 notifications, procurement activity log, role endpoint, migration V3). No change-queue
 items open. **BE-13 done 14 Oct
 2026** (requester branch check, PRA spend + service-event cost redaction). Next: the
-permission matrix.
+permission matrix. **BE-14 open, 16 Oct 2026** (PR creation gate + HQ filing a PR
+for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification).
+**BE-16 open, 16 Oct 2026** (store spending summary + optional monthly budget; HQ can read).
+**BE-17 open, 19 Oct 2026** (Owner sets limits; who logs, rejects, corrects purchases; HQ buying for a store).
+**BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
+**BE-20 open, 19 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
+**BE-21 open, 19 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; starts with an investigation).
+**BE-22 open, 20 Oct 2026** (automatic status changes name what triggered them).
 
 ---
 
@@ -579,7 +586,8 @@ MANAGER scope or above**, because:
 The PR approve step stays OWNER-only, so the chain reads: Owner approves the *need*,
 Manager or above sets the *spending ceiling*, and an over-ceiling buy escalates back to
 Owner. Alternative: OWNER+ only, if the Manager cases were test data rather than intent.
-**Decided: MANAGER and above** (product owner, 14 Oct 2026). `requireManagerScope()` runs
+**Decided: MANAGER and above** (product owner, 14 Oct 2026). **Superseded 19 Oct 2026 by
+BE-17: OWNER and above**: the store Owner sets limits, the Store Manager buys. `requireManagerScope()` runs
 first in `create()` and `cancel()` → 403 below MANAGER. Two HTTP tests (no scope with the
 PROCUREMENT role and SUPERVISOR refused, MANAGER allowed, for create and for cancel); both
 fail without the gate. `[V]` local.
@@ -916,6 +924,663 @@ works by design.
   belongs in the role × scope × action permission matrix.
 - Unauthenticated → 403 (Spring default entry point), not 401.
 - No role-change endpoint; register still always yields OPERATOR.
+
+---
+
+## BE-14 — PR creation gate, and HQ filing a PR for a store
+
+**Status: OPEN.** Product owner's decisions, 16 Oct 2026 (module 1 deferred-decision #1,
+"should PR creation be restricted?"). Mobile side waits on this; see "Client follow-up".
+
+### Why
+
+`POST /purchase-requests` is open to any authenticated user (`API_CONTRACT.md` §1 in the
+mobile repo: "Auth beyond JWT: none"). How the business actually runs:
+
+- **Each store's app is installed on one store phone, used only by the Store Manager.**
+  One person, one account, so the requester on the record is the real person.
+- Technicians don't file PRs. Two technicians visit on separate, non-overlapping
+  schedules and sync what's needed with the Store Manager daily; the SM files it.
+- **ADMIN and PROCUREMENT staff at HQ** use the app on their own phones and must be able to
+  file a PR **for a specific store**.
+- **ACCOUNTING does not create PRs** (view only): the person who asks for a purchase
+  shouldn't also handle the money for it.
+- Stores are independent: each owns its stock and its requests. **No stock moves between
+  stores**, so there is no transfer flow to design for.
+
+Today HQ can't file for a store at all: BE-13 rule 1 refuses a `requestedBy` outside the
+caller's own tenant, and the PR always lands on the caller's tenant.
+
+### Task
+
+1. **Create gate.** `POST /purchase-requests` is allowed for **MANAGER scope or above**
+   (MANAGER, OWNER, PRINCIPAL), **or role ADMIN or PROCUREMENT**. Anyone else → 403, the
+   same shape as BE-13's PRA gate. TECHNICIAN, OPERATOR and ACCOUNTING are refused unless
+   their scope is MANAGER+. Reads (`GET`) are unchanged.
+2. **Target store.** Add optional `tenantId: UUID` to `CreatePurchaseRequestRequest`.
+   - Omitted → the caller's own tenant (today's behaviour; what a Store Manager sends).
+   - Present and different from the caller's tenant → only ADMIN, PROCUREMENT or OWNER+
+     may do this (else 403), and the tenant must be inside the caller's tree (own tenant
+     or a descendant). Outside the tree → 400 with the same message as a nonexistent id,
+     no probing (BE-12/BE-13 convention).
+   - The PR is saved on the **target** tenant.
+3. **Requester when filing for a store — decided 16 Oct 2026.** The requester is **the HQ
+   caller themself**; the PR's tenant says which store it's for. Screens read it as
+   "Requested by Rina Wijaya for Outlet Bandung" (`requestedByName` + `tenantName` from
+   item 5). BE-13 rule 1 changes from "requester must be in the caller's tenant" to
+   "requester must be the caller, or a user in the PR's (target) tenant". Anything else
+   stays 400 "Requesting user not found in your branch". History records the real caller,
+   as now. **No notes field is needed for this** — the store is a real field, not free text.
+4. **Notification routing — verify, don't change.** `NotificationService.notifyNewPurchaseRequest`
+   already notifies approvers in `getAncestorTenantIds(pr.getTenant())` `[C]`, so saving
+   the PR on the target tenant routes it to that store's approvers. Add a test proving an
+   HQ-filed PR for Outlet A notifies Outlet A's chain and nobody at Outlet B.
+5. **Response.** Add `tenantId` and `tenantName` to `PurchaseRequestResponse`, so HQ lists
+   and the approval console can show which store a PR is for.
+6. **Store list for the picker.** The mobile form needs the caller's own tenant plus its
+   descendants (id + name). `GET /tenants/{id}/children` exists `[C]`; check whether it is
+   tree-contained, callable by ADMIN/PROCUREMENT, and enough for today's depth (BE-10.1:
+   HQ → outlets). If not, add a small `GET /tenants/tree` returning exactly that set.
+
+### Tests (rules 2 and 6 where quantities are involved)
+
+- Gate: OPERATOR, TECHNICIAN, ACCOUNTING (no scope) → 403; MANAGER, ADMIN, PROCUREMENT → 201.
+- Target store: ADMIN at HQ files for Outlet A → saved on Outlet A; MANAGER at Outlet A
+  passing HQ's id → 403; ADMIN passing a tenant from another root → 400, same body as a
+  random UUID.
+- Requester: HQ caller as requester for Outlet A accepted; Outlet A user accepted when the
+  target is Outlet A; Outlet B user refused.
+- Notification routing as in item 4.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-01 "Create request" becomes a gated button, badge `MANAGER+·ADMIN·PROC`, disabled
+  for everyone else (client mirror of rule 1 in `auth/permissions.ts`).
+- Store field: a locked derived field ("Store: Outlet Bandung") for a Store Manager; a
+  required picker with **no default** for ADMIN/PROCUREMENT at HQ.
+- PROC-02 rows and the activity log show the store name from item 5; a PR filed from HQ
+  reads "Requested by {name} for {store}".
+- `API_CONTRACT.md` regenerated from source.
+
+### Not in this task
+
+- **Cross-store stock dashboard** ("this part is low at Bandung and Jakarta"). Wanted by the
+  product owner as the reason HQ files PRs; best driven by burn rate ("runs out in ~3 days")
+  rather than zero stock, with a "Create PR for this store" shortcut. Needs a stock-by-store
+  read across the caller's tree — **[?] not known to exist**; belongs with modules 2–3.
+- Optional per-line note on PRs ("needed by Andi, visit 14 Oct") — parked, not decided.
+
+---
+
+## BE-15 — PR cancel: who can cancel, a required reason, and telling the requester
+
+**Status: OPEN.** Product owner's decision, 16 Oct 2026 (module 1 deferred-decision #2,
+"cancel/approve scope asymmetry"). Independent of BE-14, but its "requester" rule reads
+best after BE-14 lands.
+
+### Why
+
+`PurchaseRequestService.cancel()` `[C]` has no scope or role check, takes no reason
+(history row written with `reason = null`) and sends no notification. Anyone signed in,
+including OPERATOR and TECHNICIAN, can cancel a PENDING or APPROVED PR, and the requester
+is never told.
+
+Approve/reject stay OWNER+: approving spends money. Cancel *stops* spending, so the bar
+stays lower — but a needed request must not disappear silently. In practice the Store
+Manager is the gate for requests and sometimes files one wrong (wrong part, wrong
+quantity, duplicate); there is no PR edit, so cancel-and-refile is how they fix it.
+
+### Task
+
+1. **Who can cancel, by status.** Status rules unchanged (only PENDING or APPROVED).
+   | PR status | Allowed | Everyone else |
+   |---|---|---|
+   | PENDING | the PR's requester (`requestedBy` = caller), or OWNER+ | 403 |
+   | APPROVED | OWNER+ only — undoing an Owner's decision takes an Owner | 403 |
+   Check order: tenant containment (`findOwned`) first, then this rule, then status.
+2. **Reason required.** `PATCH /purchase-requests/{id}/cancel` takes
+   `{ reason: string }` `@NotBlank`, the same shape as reject's `RejectRequest`; written to
+   the status-history row, so it shows in the procurement activity log (BE-07).
+3. **Tell the requester.** New `NotificationType.PURCHASE_REQUEST_CANCELLED`, sent to
+   `requestedBy` when someone *other than the requester* cancels (same skip rule as BE-07's
+   "an approver filing their own PR isn't told"). Message includes the reason.
+   `notifications.type` has a CHECK constraint (BE-01) — needs a Flyway migration, like V3.
+
+### Tests
+
+- PENDING: requester → 200; OWNER → 200; another MANAGER in the same store → 403;
+  OPERATOR, TECHNICIAN, ACCOUNTING → 403.
+- APPROVED: requester (MANAGER) → 403; OWNER → 200.
+- Missing or blank reason → 400; reason stored on the history row.
+- OWNER cancels the SM's PR → SM gets `PURCHASE_REQUEST_CANCELLED`; SM cancels own PR →
+  no notification.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-02 "Cancel" becomes a gated button: badge `REQUESTER·OWNER+` while PENDING,
+  `OWNER+` once APPROVED; disabled for anyone else.
+- The reason field there becomes "Reason (required to reject or cancel)".
+- Notifications: label "Request cancelled".
+- `API_CONTRACT.md` regenerated from source.
+
+### Known edge, accepted
+
+- An SM who spots a mistake **after** the Owner approved can't cancel it themselves; they
+  ask the Owner. Accepted: once approved, it's the Owner's decision to undo.
+- A PR filed from HQ for a store (BE-14) has the HQ person as requester, so that store's SM
+  can't withdraw it while pending — the HQ requester or an Owner can.
+
+---
+
+## BE-16 — Store spending summary and an optional monthly budget
+
+**Status: OPEN.** Product owner's decisions, 16 Oct 2026 (module 1 deferred-decision #3,
+"PRA header-level cap").
+
+### Why
+
+Decision #3 is closed **against** a header-level cap on PRAs: ceilings stay per line. The
+real need is a budget, and it sits at store level:
+
+- This is a franchise and **every store is independent**: its own stock, its own budget.
+  The store's Owner (and anyone above) watches what the store spends.
+- **HQ (PRINCIPAL) must see every store's spending** for business intelligence: what each
+  store spends most on, against its budget. HQ uses it to **advise** the store Owner,
+  advice they're free to ignore. HQ does not approve, block or set anything for a store.
+- **Warn, never block.** A budget number must never stop a store from buying what it
+  needs; over-ceiling purchases already escalate (Realisasi `varianceStatus`).
+
+Every number here is money, so it's **OWNER+ only**, consistent with BE-06/BE-11/BE-13.
+
+### Definitions — decided 16 Oct 2026, use these words exactly
+
+These two words mean the same thing in the API, the screens and every document. If code or
+copy needs a third bucket, add it here first.
+
+**Spent** — money the store is now obliged to pay. Counted in the month of the purchase.
+
+| Source | Counts when | Month taken from | Amount |
+|---|---|---|---|
+| Realisasi | status `APPROVED` — auto-approved inside the ceiling, or escalated and then approved by an Owner | `purchasedAt` | `totalCost` |
+| Purchase order | status `ORDERED`, `PARTIALLY_RECEIVED` or `RECEIVED` (sent to the centre) | `orderDate` | `totalAmount` |
+
+Spent is split by **who it was bought from**, not by record type (amended 19 Oct 2026):
+**from the franchise centre** = every PO, plus any Realisasi whose supplier is the centre
+(an urgent buy from HQ paid on the spot, often with the SM's own money — BE-18);
+**outside** = every other Realisasi.
+
+**Committed** — money that's been allowed or is waiting on a decision, but isn't spent
+yet. **A snapshot as of now, not a monthly figure**: it has no purchase date yet.
+
+| Source | Counts when | Amount |
+|---|---|---|
+| PRA line | PRA is `ACTIVE` or `PARTIALLY_FULFILLED` | the line's remaining value |
+| Escalated Realisasi | status `PENDING_APPROVAL` (over its ceiling, waiting for an Owner) | its cost on that line |
+
+**No double counting.** A pending escalated Realisasi will use up the same PRA line's
+remaining value once approved. So per PRA line, committed =
+**the larger of** (the line's remaining value, the total of its pending Realisasi on that
+line) — never the sum. Example: line remaining Rp 380,000, escalated purchase Rp 600,000
+waiting → committed Rp 600,000. After the Owner approves: spent +600,000, committed 0
+(remaining is clamped at 0, not negative). If the Owner rejects: committed goes back to
+Rp 380,000.
+
+**Counted in neither:** purchase requests (they carry no money); POs in `DRAFT` or
+`CANCELLED`; Realisasi `FAILED` or `SUPERSEDED` (a correction's replacement record counts
+instead); PRAs `CANCELLED` or `FULFILLED`.
+
+**Budget check (warning only):** spent this month + committed now > monthly budget.
+
+### Task
+
+1. **Monthly budget (optional).** Nullable `monthlyPurchaseBudget` (`BigDecimal`) per
+   store tenant, Flyway migration. Setting it (**confirmed by the product owner**): the
+   store's own OWNER only — the caller's
+   tenant must *be* that store; HQ PRINCIPAL can read but not set it (the store owns its
+   budget). Clearing it (null) is allowed. Endpoint suggestion:
+   `PATCH /tenants/{id}/purchase-budget { amount: number | null }`.
+2. **Spending summary.** `GET /procurement/spending?month=yyyy-MM[&tenantId=]`. OWNER+
+   only, else 403. Tree-scoped: a store Owner gets their store; an HQ PRINCIPAL gets one
+   row per store in their tree (or one store with `tenantId`). Per store, using the
+   Definitions above exactly:
+   - `spentFromCentre` — spent in the month from the franchise centre (POs + Realisasi
+     with the centre as supplier)
+   - `spentOutside` — spent in the month anywhere else (marketplace etc.)
+   - `committed` — committed now (snapshot, not filtered by `month`)
+   - `budget` — item 1's value or null
+   - `topParts` — top 5 parts by spent in the month (`partId`, `partName`, `amount`)
+   Keep the from-centre/outside split: for a franchisor, "bought from us" vs "bought
+   outside" is itself a business signal. To tell a centre Realisasi apart, add a boolean
+   `franchiseCentre` to `Supplier` (Flyway), set on the root tenant's own supplier record.
+3. **Money arithmetic.** `BigDecimal` throughout; month boundaries in the store's
+   timezone **[?]** (check how `purchasedAt` is stored before choosing).
+
+### Tests (rules 2 and 6)
+
+- Realisasi with `conversionFactor` ≠ 1, mixed statuses: APPROVED counted as spent;
+  PENDING_APPROVAL counted as committed; FAILED and SUPERSEDED in neither. PO statuses
+  DRAFT and CANCELLED not counted; a PRA partly consumed contributes only its remaining
+  value.
+- No double counting: the Rp 380,000 / Rp 600,000 example from Definitions, before
+  approval, after approval and after rejection.
+- A purchase on the last day of the month vs the first day of the next.
+- Scope: MANAGER → 403; store OWNER sees only their store; HQ PRINCIPAL sees all stores in
+  their tree and nothing from another root.
+- Budget: store OWNER sets it; HQ PRINCIPAL setting it → 403; null clears it.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-02 header for OWNER+: "This month · {store}: Spent Rp … · Committed Rp …", plus
+  "of Rp … budget" when set, turning warning-toned (not blocking) when an approval would
+  push spent + committed over budget.
+- Budget field for the store Owner (settings).
+- **HQ spending dashboard** — a new screen; needs a screen-inventory record first (same
+  process as module 1). Pairs with the cross-store stock dashboard parked under BE-14.
+
+### Not in this task
+
+- An in-app channel for HQ to send suggestions to a store Owner — parked; they talk
+  outside the app for now.
+- Hard budget enforcement — rejected: it fights "every store is independent".
+
+---
+
+## BE-17 — Who sets limits, logs, rejects and corrects purchases; HQ buying for a store
+
+**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decision #4,
+"PRA/Realisasi absence of scope gating", the part BE-13 didn't cover).
+
+### Why
+
+How a store actually runs:
+
+- The **store Owner sets the spending limits** (creates the PRA). The **Store Manager
+  mostly does the buying** and logs it (Realisasi); HQ PROCUREMENT staff sometimes buy for
+  a store too.
+- This keeps the DL-08 separation rule (`requireSegregationFromPraApprover` `[C]`: whoever
+  approved a PRA can't log its Realisasi unless OWNER+) working as intended: Owner sets the
+  limit, someone else spends against it, over-limit purchases come back to the Owner.
+  Under BE-13's MANAGER+ gate an SM could set limits and then be refused when buying
+  against them — the business flow above never needs that.
+
+Gaps in `RealisasiService` today `[C]`:
+
+| Action | Today |
+|---|---|
+| `create()` (log a purchase) | any authenticated user; only the DL-08 rule applies |
+| `approveEscalated()` | OWNER+ ✓ |
+| `reject()` | **no check** — and it accepts APPROVED as well as PENDING_APPROVAL, so anyone can mark an approved purchase FAILED, which reopens the PRA's remaining ceiling |
+| `supersede()` | **no check**, and **no status check** on the original (a FAILED or already SUPERSEDED record can be superseded again) |
+| HQ buying for a store | impossible: `create()` looks the PRA up with the caller's own tenant |
+
+### Task
+
+1. **PRA create and cancel → OWNER+** (was MANAGER+, BE-13). Changes BE-13's decision on
+   the product owner's instruction; keep the 403 shape. HQ doesn't set a store's limits
+   (stores are independent): a PRA is only created on the caller's own tenant, as now.
+2. **Log a purchase** (`POST /realisasi`): MANAGER+ scope or the PROCUREMENT role, else
+   403. TECHNICIAN, OPERATOR, ACCOUNTING and ADMIN without MANAGER+ are refused. DL-08
+   unchanged.
+3. **HQ buying for a store.** Optional `tenantId` on `CreateRealisasiRequest`, same rules
+   as BE-14 item 2: omitted → caller's tenant; a different tenant only for the PROCUREMENT
+   role or OWNER+, and only inside the caller's tree (outside → 400, same body as a
+   missing id). The PRA is looked up in, and the Realisasi saved on, the target tenant.
+   Ship together with BE-14 if convenient — same picker, same tenant check.
+4. **Reject → OWNER+**, both from PENDING_APPROVAL and from APPROVED. Deciding on an
+   over-limit purchase is the Owner's call either way, and failing an approved one
+   reopens spending room.
+5. **Supersede (correct) → the original's creator, or OWNER+**, else 403 — same pattern as
+   BE-15's PR cancel. Add a status guard: only PENDING_APPROVAL or APPROVED originals can
+   be superseded (400 otherwise). The correction still goes through `create()`, so items 2
+   and 3 and DL-08 apply to it.
+
+### Tests (rules 2 and 6)
+
+- PRA create/cancel: MANAGER → 403 (was 201), OWNER → 201.
+- Realisasi create: OPERATOR, TECHNICIAN, ACCOUNTING → 403; MANAGER, PROCUREMENT → 201;
+  the Owner who created the PRA can still log it (exempt); a MANAGER-created PRA
+  (pre-existing data) logged by that same MANAGER → still refused by DL-08.
+- HQ PROCUREMENT logs for Outlet A against Outlet A's PRA → saved on Outlet A; a MANAGER
+  passing another tenant → 403; a tenant outside the tree → 400.
+- Reject: MANAGER → 403 on PENDING_APPROVAL and on APPROVED; OWNER → 200; the PRA's
+  remaining reopens only after an OWNER reject (conversion factor ≠ 1).
+- Supersede: creator → 200; another MANAGER → 403; OWNER → 200; superseding a SUPERSEDED
+  or FAILED record → 400.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-03 create button badge `MANAGER+` → `OWNER+`; disabled-state copy "needs Owner or
+  above".
+- PROC-04: Reject becomes gated `OWNER+`; "Supersede" becomes gated `CREATOR·OWNER+`;
+  create gated `MANAGER+·PROC`; store picker for HQ PROCUREMENT (as BE-14).
+- `auth/permissions.ts` mirrors; `API_CONTRACT.md` regenerated from source.
+
+---
+
+## BE-18 — Paying back the Store Manager (reimbursement completion)
+
+**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decisions #5
+"reimbursement completion + its SoD question" and #10 "`reimbursedTo`/`reimbursedAt`
+missing from the response"; supersedes BE-09's "don't build `markReimbursed`" hold).
+
+### Why
+
+- When the Store Manager buys for the branch with their own money, **the store Owner pays
+  them back**. HQ isn't involved: it's the branch's matter.
+- **When** the Owner pays back is up to the branch: one purchase at a time, or several at
+  once, on no fixed schedule. HQ's job is that **the Owner and the SM see the same, clear
+  record** of what's owed and what's been paid, not to impose a process.
+- Today `reimbursementStatus` goes `PENDING` and never moves: no endpoint marks it
+  `REIMBURSED` `[C]`. `reimbursedTo` and `reimbursedAt` exist on `Realisasi` `[C]` but are
+  not on `RealisasiResponse`.
+- **The SM can't see what they're owed.** BE-06 redacts Realisasi cost below OWNER, so a
+  Manager sees PROC-08 as names with no amounts — including the money owed to themself,
+  money they typed in.
+
+### Task
+
+1. **Mark paid back.** `PATCH /realisasi/reimbursements/mark-paid`
+   `{ ids: UUID[], paidAt: yyyy-MM-dd, method: CASH | TRANSFER, reference?: string }`.
+   One id or several — one endpoint, so the Owner can settle one purchase or a whole pile.
+   All-or-nothing: if any id isn't `PENDING` or isn't in the caller's store → 400 and none
+   change. Sets `REIMBURSED`, `reimbursedAt`, and `reimbursedTo` = the Realisasi's
+   `createdBy`. Writes a history row per record.
+2. **Who.** The store's own OWNER (caller's tenant = the Realisasi's tenant), else 403. HQ
+   PRINCIPAL can read, not mark — the store's money is the store's business. The person
+   owed can never mark their own (settles the SoD question in #5).
+3. **Undo.** `PATCH /realisasi/{id}/reimbursement/undo { reason }` `@NotBlank`, same OWNER
+   rule; back to `PENDING`, payment fields cleared, reason in history.
+4. **Tell the SM.** New `NotificationType.REIMBURSEMENT_PAID` to `reimbursedTo`: "Rp … paid
+   back for {ref}" (one notification per mark-paid call, listing the records). Flyway
+   migration for the `notifications.type` CHECK constraint.
+5. **Response.** Add `reimbursedToName`, `reimbursedAt`, `reimbursementMethod`,
+   `reimbursementReference` to `RealisasiResponse` (closes #10).
+6. **Server-side filter.** `GET /realisasi?paymentMethod=PERSONAL_REIMBURSABLE&reimbursementStatus=PENDING`
+   (and `REIMBURSED`), so PROC-08 stops filtering on the device.
+7. **The person owed sees the amount.** Exception to BE-06: `totalCost` is returned
+   unredacted to the caller when the caller is the Realisasi's `createdBy` **and** its
+   payment method is `PERSONAL_REIMBURSABLE`. Nothing else about BE-06 changes.
+8. **A rejected purchase is still owed.** Marking a Realisasi `FAILED` doesn't touch
+   `reimbursementStatus`: the SM's money really was spent. The Owner settles it the same
+   way. (Product default, recorded here so nobody "fixes" it.)
+
+### Tests (rules 2 and 6)
+
+- Mark-paid: store OWNER, 3 ids → all REIMBURSED, `reimbursedTo` = creator; one id already
+  REIMBURSED → 400, none changed; MANAGER (incl. the creator) → 403; HQ PRINCIPAL → 403.
+- Undo: OWNER with reason → PENDING; blank reason → 400.
+- Notification sent once per call to the SM.
+- Visibility: the SM creator sees `totalCost` on their own personal-reimbursable Realisasi,
+  still null on a colleague's and on their own COMPANY_ACCOUNT ones.
+- A FAILED Realisasi with a pending reimbursement can still be marked paid.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-08: tabs "Owed" / "Paid back"; Owner gets select-several + "Mark paid back"
+  (date, cash/transfer, reference); undo with reason. The SM sees their own amounts.
+- The old "no mark-reimbursed endpoint" info card and callouts go.
+- Notifications label "Paid back".
+
+---
+
+## BE-19 — Expense claims for non-stock branch needs (proposal)
+
+**Status: PROPOSED, 19 Oct 2026 — needs a screen-inventory record before building.**
+
+### Why
+
+The SM also spends their own money on **office and branch needs** — stationery, cleaning
+supplies, things bought online. These aren't parts and must not go into stock, so the
+procurement chain (PR → PRA → Realisasi → goods receipt) doesn't fit: logging them would
+mean creating "parts" like paper towels and tracking their stock.
+
+### Proposal
+
+- A separate, lightweight **expense claim**: the SM records what, amount, date, receipt
+  URL. No request, no limits, no stock.
+- Paying back reuses BE-18's rules exactly: store OWNER marks paid (one or several), undo
+  with reason, SM notified, the claimant sees their own amount.
+- BE-16's spending summary gets a third line, **other expenses**, outside the parts
+  "spent" figures.
+
+### Open
+
+- **[?]** Product owner to confirm expense claims are a separate flow, not procurement.
+- Whether the Owner can also record company-paid expenses here (not just reimbursable).
+
+---
+
+## BE-20 — Orders to HQ (who drafts, sends, cancels) and who receives goods
+
+**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decisions #9
+"no scope gating on the PO path" and #6 "PO path has no creator≠receiver check"; also
+reshapes the Realisasi receipt rule).
+
+### Why
+
+`PurchaseOrderService` `[C]`: `create()`, `sendToSupplier()` and `cancel()` have no scope
+or role check. Linking approved PRs is optional, so an order of any size can be sent to the
+centre without an Owner. `cancel()` works on ORDERED and PARTIALLY_RECEIVED orders too.
+`PurchaseOrder` has **no `createdBy`**, which is why no creator≠receiver rule was possible.
+
+`GoodsReceiptService.receive()` `[C]`: no check on who may receive, and `receivedBy` is
+looked up with `userRepository.findById` from the request body — **any user id, from any
+tenant**, the same class of bug BE-13 fixed for PR requesters.
+
+How the business runs:
+
+- **Urgent buys** — the SM buys and logs a Realisasi, within the Owner's limits (BE-17).
+- **Planned restocks from the centre** — the SM drafts a PO, **the Owner sends it**:
+  sending commits the store's money ("spent", BE-16).
+- **The receiver is whoever opens the package** when it arrives. At a store that is
+  usually the SM — who also bought it. Each received item is photographed.
+
+### Task
+
+1. **PO draft:** `create()` → MANAGER+ scope or the PROCUREMENT role, else 403. Add
+   `createdBy` to `PurchaseOrder` (Flyway; existing rows null) and `createdByName` to the
+   response.
+2. **PO send:** `sendToSupplier()` → OWNER+, else 403.
+3. **PO cancel:** DRAFT → the creator or OWNER+; ORDERED or PARTIALLY_RECEIVED → OWNER+
+   only, with `{ reason }` `@NotBlank` written to history. Else 403.
+4. **Receiver is the caller.** `receivedBy` must equal the authenticated user (or drop the
+   field and take it from the token — preferred; keep accepting it for one release and
+   400 when it differs). Receiving requires being in the receipt's store; tree checks as
+   BE-12.
+5. **PO path: no creator≠receiver rule** — deliberate. The Owner sends, the SM receives,
+   and the centre knows what it shipped. Record that decision in `CLAUDE.md`.
+6. **Realisasi path: self-receiving allowed with a photo.** Replace the hard
+   "receiver ≠ Realisasi creator" refusal with:
+   - receiver ≠ creator → as today;
+   - receiver = creator → allowed **only with at least one goods photo**; the receipt is
+     saved with `selfReceived = true` (Flyway column, on the response, filter
+     `GET /goods-receipts?selfReceived=true`).
+   - New `NotificationType.GOODS_SELF_RECEIVED` to the store's OWNER+ chain ("SM
+     received their own purchase {ref} — photo attached"), so prevention becomes
+     visibility. Flyway migration for the CHECK constraint.
+   The Realisasi `attachments` (receipt) requirement is unchanged and separate: the
+   receipt proves the purchase, the photo proves the goods arrived.
+7. **Goods photos.** `goodsPhotos: string[]` on the receipt. **[?] Prerequisite: there is
+   no file upload anywhere in the backend today `[C]`** (`Realisasi.attachments` is a
+   plain string, no `MultipartFile`/storage code). Either build an upload endpoint first
+   (storage choice is a product/infra decision), or accept photo URLs as an interim step,
+   the same way receipts work today.
+
+### Tests
+
+- PO: OPERATOR/TECHNICIAN/ACCOUNTING create → 403; MANAGER creates, MANAGER send → 403,
+  OWNER send → 200; DRAFT cancel by creator → 200, by another MANAGER → 403; ORDERED
+  cancel by MANAGER → 403, by OWNER without reason → 400, with reason → 200.
+- Receipt: `receivedBy` of a user in another tenant → 400; differs from the caller → 400.
+- Realisasi path: creator receives without photo → 400; with photo → 201,
+  `selfReceived = true`, Owner notified; a different receiver → `selfReceived = false`, no
+  notification. Stock quantities with `conversionFactor` ≠ 1 (rule 2).
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-07: draft gated `MANAGER+·PROC`; **Send to supplier** becomes gated `OWNER+`;
+  Cancel gated `CREATOR·OWNER+` (draft) / `OWNER+` (sent) with a reason field.
+- PROC-05 form: "Received by" stays derived (the caller); realisasi path shows
+  "You bought this — add a photo of the goods to receive it" and a camera/photo field
+  instead of the hard block; the old "receiver must differ, no exemption" callout changes.
+- PROC-05 list: a "Self-received" chip, filter.
+
+### Not in this task
+
+- **QR / barcode labels per item**, printed on an outlet sticker printer when goods are
+  received — the product owner's idea. Belongs with module 3 (scan loop): non-consumable
+  parts already get a `PartInstance` row per unit on receipt `[C]`, which is the natural
+  thing a label points at; consumables (BBs) are tracked in aggregate, so they'd be
+  labelled per box or lot, not per piece. Needs its own screen-inventory pass.
+
+---
+
+## BE-21 — HQ catalog and mandatory items: two ways a store buys
+
+**Status: OPEN — starts with an investigation (item 1).** Product owner's decisions,
+19 Oct 2026 (module 1 deferred-decision #7, "non-root outlet silently sees the root's
+supplier list", and the supply model behind it).
+
+### The supply model ("model C")
+
+- **HQ sells what it sells.** Some items are **mandatory**: a store must buy them from
+  HQ. Today: BB, gas, paper targets, plate targets, gel balls. The list will change after
+  internal review, so it's data, not code.
+- **Everything else** (parts, service/maintenance units, operational needs) the store may
+  buy from HQ **or anywhere else**. No restriction for now.
+- **The store decides when and how much** to restock, mandatory or not. HQ's role in
+  restocking is business intelligence and recommendations only.
+- So a store buys in exactly two ways:
+  1. **Buy from HQ** — the order to HQ (PurchaseOrder, PROC-07). The store sees only
+     what HQ offers: mandatory items plus anything else HQ sells.
+  2. **Buy elsewhere** — the purchase record (Realisasi, PROC-04), **non-mandatory items
+     only**. An urgent buy of a mandatory item is still a Realisasi, but only with HQ (the
+     `franchiseCentre` supplier, BE-16) as the seller.
+- **Mandatory ≠ consumable.** Both parts and consumables flow through all of this
+  (`Part`, consumable via `PartCategory.consumable`, BE-04). Plate targets may not be
+  consumable; a part may become mandatory later. Keep the two flags independent.
+- Restock needs (low stock, burn rate) cover **all** items, mandatory or not — this is an
+  ERP; operations break when a non-mandatory part runs out too.
+
+### Why this needs an investigation first
+
+`[C]` Parts are **per store**: `Part.tenant` is required, `currentStock` lives on the
+`Part` row, `PartService.getAll()` reads `getEffectiveTenantIds()` (self + descendants, so a
+store never sees HQ's parts), and `PurchaseRequestService.create()` looks a part up with
+`findByIdAndTenantId(partId, callerTenant)`. So each store has its own copy of "6mm BBs".
+An HQ catalog has to be HQ-owned while each store keeps its own stock.
+
+### Task
+
+1. **Investigate and propose** (report before building): how a store's part relates to an
+   HQ catalog item. Options to weigh:
+   - **Link (recommended):** HQ owns catalog items (root-tenant `Part` rows or a new
+     `CatalogItem`); each store part gets a nullable `catalogItemId`. Stock stays on the
+     store's row; the flags below are read from the catalog item. A store part for a
+     catalog item is created automatically when the store first orders it.
+   - **Copy:** HQ pushes catalog parts into each store with a reference back. Simpler
+     reads, but flags and names drift.
+   Also report how many existing store parts would map to which HQ items (live data,
+   `[V]`).
+2. **Two flags, set by HQ only** (ADMIN or PRINCIPAL at the root; 403 otherwise):
+   `soldByHq` and `mandatoryFromHq` (mandatory implies sold). Flyway.
+3. **HQ catalog read** for stores: `GET /catalog` (or a filter on parts) → the items HQ
+   sells, with `mandatoryFromHq`. Any authenticated user in the tree.
+4. **Buy from HQ:** `PurchaseOrder` items must be HQ catalog items with `soldByHq`, else
+   400. A PO's supplier is the franchise centre (set automatically; the legacy optional
+   `supplierId` stops mattering on this path).
+5. **Buy elsewhere:** `Realisasi` items (and the PRA lines they consume) that are
+   `mandatoryFromHq` are refused (400 "This item must be bought from HQ") **unless** the
+   Realisasi's supplier is the `franchiseCentre` supplier.
+6. **Where it was bought, outside HQ:** add free-text `sellerName` to `Realisasi`
+   (e.g. "Shopee · Toko Airsoft Jaya"). The HQ supplier list stays HQ-managed and isn't
+   needed for outside buys. HQ's spending data (BE-16) can then show which outside
+   sellers stores use most, for the internal review.
+7. **#7 closed by design:** supplier creation stays root-only (as today); stores see HQ's
+   list on purpose. Client labels it "Managed by HQ".
+
+### Tests
+
+- Flags: store MANAGER/OWNER setting either flag → 403; HQ ADMIN → 200.
+- PO with a non-catalog item → 400; with catalog items → 201.
+- Realisasi for a mandatory item from an outside seller → 400; same item with the
+  franchise-centre supplier → 201; a non-mandatory item from an outside seller → 201.
+- A PRA line for a mandatory item can only be consumed by a franchise-centre Realisasi.
+- Stock quantities with `conversionFactor` ≠ 1 (rule 2).
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-07 becomes **"Order from HQ"**: item picker shows the HQ catalog only, mandatory
+  items marked.
+- PROC-04 **"Buy elsewhere"**: item picker hides mandatory items (unless the seller is
+  HQ, for urgent buys); a "Seller" free-text field replaces the supplier picker for outside
+  buys.
+- PROC-06 shows "Managed by HQ".
+- The menu and copy use the product owner's words: "Buy from HQ" / "Buy elsewhere".
+
+---
+
+## BE-22 — Automatic status changes name what triggered them
+
+**Status: OPEN.** Product owner's decision, 20 Oct 2026 (module 1 deferred-decision #12,
+"the activity log's System actor covers two cases").
+
+### Why
+
+The procurement activity log (BE-07) shows a lock and "System" whenever a history row has
+no actor. Two writers produce those rows `[C]`:
+
+- `PurchaseRequestAuthorizationService.refreshStatus()` → `writeHistory(pra, previous,
+  next, null, "Recomputed from Realisasi fulfillment")`, called after a Realisasi is
+  created, approved, rejected or superseded.
+- `GoodsReceiptService` (PO path) saves a `PurchaseOrderStatusHistory` with no
+  `changedBy` and reason `"Goods receipt " + <uuid>` when an order becomes
+  PARTIALLY_RECEIVED or RECEIVED.
+
+Both run inside a real person's request, so every automatic change has a human cause —
+and for an accountability log that cause is the useful part. The other source of
+actor-less rows (written before actors were recorded) **only exists in test data**: the
+product owner confirmed the app isn't live yet, so go-live starts from a clean database
+and that case disappears.
+
+### Task
+
+1. **Record the trigger.** On every status-history table that can receive an automatic
+   row (PRA, PO; check PR and Realisasi for any others), add `automatic boolean not null
+   default false`, `triggered_by` (user FK, nullable) and `trigger_reference`
+   (short human text). Flyway migration.
+   - PRA refresh: `automatic = true`, `triggered_by` = the user whose Realisasi action
+     caused it, reference e.g. "REA-2026-0114 approved".
+   - PO auto-status: `automatic = true`, `triggered_by` = the receiver, reference = the PO
+     number plus "goods received" — not a raw receipt UUID.
+   - `changedBy` stays null on automatic rows: the person didn't make *this* change.
+2. **Activity response.** `GET /procurement/activity` adds `actorKind`
+   (`USER` | `AUTOMATIC` | `NOT_RECORDED`), `triggeredByName` and `triggerReference`.
+   `NOT_RECORDED` = no actor and not automatic (old test rows); kept so the app never has
+   to guess from an empty name.
+3. **History endpoints.** The same three fields on `StatusHistoryResponse`.
+
+### Tests
+
+- Approving a Realisasi that fulfils its PRA → the PRA row is `AUTOMATIC`, triggered by the
+  approving Owner, reference names the Realisasi.
+- A goods receipt that completes a PO → `AUTOMATIC`, triggered by the receiver, reference
+  names the PO number.
+- Manual changes stay `USER`. A legacy row with no actor → `NOT_RECORDED`.
+- Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo, after merge)
+
+- PROC-09 line 3: "Automatic · after Rina Wijaya — REA-2026-0114 approved" (lock icon,
+  italic, the derived treatment); "Not recorded" greyed for `NOT_RECORDED`. The expanded
+  card's "Changed by" row uses the same words.
 
 ---
 
