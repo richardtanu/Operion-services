@@ -200,5 +200,7 @@ Test data from four verification sessions is still in the dev DB, **and now in p
 - **Keep this file in sync as gaps close.** It loads at every session start; stale content here propagates directly into code. A memory-index drift on 28 Jul described an already-built module as unbuilt — exactly this failure mode.
 - **DDL is confirmed only after executing cleanly against a live PostgreSQL instance.** Paper review does not count.
 - A parallel dev team uses other AI tools; outputs are reconciled manually. Assume other sessions may have changed things — check before asserting.
+- **Branches: `feature/<name>`** (e.g. `feature/be-14-pr-create-gate`), cut from an up-to-date `main` (`git checkout main && git pull` first). One task per branch; merge to `main` with a merge commit when done. Product owner's rule, 20 Oct 2026.
+- **After each backend task ships, update the shared status page** ("Operion Project Status", a claude.ai artifact the product owner keeps across the backend, mobile and design chats): move the task to shipped and flip its "Live?" entries.
 
 **Client stack** (context; separate repo): React Native (Expo dev build, `react-native-vision-camera`) for the outlet app; React + Vite for the web console; shared `packages/core` for API client, generated types, and design tokens. UI components are not shared between them.

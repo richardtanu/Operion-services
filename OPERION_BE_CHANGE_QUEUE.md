@@ -1502,7 +1502,8 @@ How the business runs:
 
 ## BE-21 — HQ catalog and mandatory items: two ways a store buys
 
-**Status: OPEN — starts with an investigation (item 1).** Product owner's decisions,
+**Status: OPEN — item 1 (investigation) DONE 20 Oct 2026, report below; waiting on two
+product-owner decisions before items 2–7.** Product owner's decisions,
 19 Oct 2026 (module 1 deferred-decision #7, "non-root outlet silently sees the root's
 supplier list", and the supply model behind it).
 
@@ -1563,6 +1564,65 @@ An HQ catalog has to be HQ-owned while each store keeps its own stock.
    sellers stores use most, for the internal review.
 7. **#7 closed by design:** supplier creation stays root-only (as today); stores see HQ's
    list on purpose. Client labels it "Managed by HQ".
+
+### Item 1 report — investigation, 20 Oct 2026 (nothing built)
+
+**Code `[C]`.** `Part` is a per-store row (`tenant_id NOT NULL`) carrying its own stock,
+category and type; nothing on it points to anything HQ-owned. `PartCategory` and
+`PartType` are *also* per-store copies, seeded by name into each new tenant
+(`MasterDataInitializer`) — so "copy" is already how master data works here, and the open
+duplicate-`part_categories` housekeeping item (`OPERION_BE_PLAN.md` §5.3) is that approach
+drifting. **Ten tables** hold a foreign key to `parts.id`: `airsoft_unit_parts`,
+`goods_receipt_items`, `part_instances`, `purchase_order_items`,
+`purchase_request_authorization_items`, `purchase_request_items`, `realisasi_items`,
+`service_event_parts`, `stock_adjustments`, `stock_movements` (`[V]`, `pg_constraint`).
+
+**Data `[V]`, local DB (a copy of dev, same as prod's 17 Aug load).**
+
+| Tenant | Parent | Parts | Notes |
+|---|---|---|---|
+| `BLITZ_BDG` | — (root) | 31 | The real store. Its own root: **no HQ above it** |
+| `FRANCHISE_HQ` | — (root) | 0 | BE-10 test fixture |
+| `OUTLET_2` | `FRANCHISE_HQ` | 1 | BE-10 test fixture ("Outlet2 Test Gear") |
+
+- **0 store parts map to an HQ item:** no HQ tenant holds any part, and no part name occurs
+  in more than one tenant.
+- **None of the five mandatory items exists as a real part.** The only gas rows are test
+  data ("Green Gas Test Can", "Case9 Gas ConvFactor"); no BB, targets or gel balls.
+- No supplier represents HQ / the franchise centre (6 suppliers, all under `BLITZ_BDG`).
+
+So the catalog starts empty: the choice below is about structure, not about migrating
+existing data.
+
+**Recommendation: Link, with the HQ catalog as the root tenant's own `Part` rows.**
+Add a nullable self-reference `parts.catalog_part_id` (store part → HQ part) and the
+flags `sold_by_hq`, `mandatory_from_hq` on `parts`, meaningful only on root rows.
+
+1. **All ten referencing tables stay untouched.** Stock, part instances, burn rate,
+   procurement lines and unit parts keep pointing at the store's own row.
+2. **HQ needs its own stock anyway.** HQ sells and ships to stores, so it must track what
+   it holds. A root `Part` row is both the catalog entry and HQ's stock record. A separate
+   `CatalogItem` table would still need an HQ `Part` row beside it — two things to keep in
+   step instead of one.
+3. **Flags live in one place.** With Copy, `mandatory_from_hq` would be repeated on every
+   store's row and drift, exactly as `part_categories` already has.
+4. **The store row is created on first order**, copying name, brand and type, and
+   mapping the category to the store's same-named category.
+
+Costs: `PartService.getAll()` at HQ returns its descendants' parts too, so the catalog read
+(item 3) must filter `tenant_id = root`. A name change on the HQ row doesn't rename store
+rows unless the client shows the catalog name (the response can carry both).
+
+**Blocking decision for the product owner — the real tenant tree.** Model C assumes the
+root tenant is HQ. In the data, the real store is the root and there is no HQ. Before
+BE-21 (or BE-16's "from HQ" split) can do anything useful, a real HQ tenant must exist
+above `BLITZ_BDG`: one Flyway migration inserting the HQ tenant and setting
+`BLITZ_BDG.parent_id` to it (root tenants are seed-only since BE-12). Needed: HQ's name and
+code, and confirmation that `FRANCHISE_HQ` / `OUTLET_2` are test data to drop at the
+clean-database go-live.
+
+**Status after item 1:** waiting on the product owner for (a) Link via root `Part` rows vs
+a separate `CatalogItem` table and (b) the HQ tenant. Items 2–7 not started.
 
 ### Tests
 
