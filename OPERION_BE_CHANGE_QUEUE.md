@@ -22,6 +22,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-20 open, 19 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 open, 19 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; starts with an investigation).
 **BE-22 open, 20 Oct 2026** (automatic status changes name what triggered them).
+**BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
 
 ---
 
@@ -1131,7 +1132,8 @@ Rp 380,000.
 `CANCELLED`; Realisasi `FAILED` or `SUPERSEDED` (a correction's replacement record counts
 instead); PRAs `CANCELLED` or `FULFILLED`.
 
-**Budget check (warning only):** spent this month + committed now > monthly budget.
+**Budget check (warning only):** spent this month + committed now + other expenses this
+month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
 
 ### Task
 
@@ -1328,30 +1330,89 @@ missing from the response"; supersedes BE-09's "don't build `markReimbursed`" ho
 
 ---
 
-## BE-19 — Expense claims for non-stock branch needs (proposal)
+## BE-19 — Expense claims: branch spending that isn't stock
 
-**Status: PROPOSED, 19 Oct 2026 — needs a screen-inventory record before building.**
+**Status: CONFIRMED by the product owner, 20 Oct 2026 — needs a screen-inventory record
+before building.** Depends on BE-23 for receipt photos.
 
 ### Why
 
-The SM also spends their own money on **office and branch needs** — stationery, cleaning
-supplies, things bought online. These aren't parts and must not go into stock, so the
-procurement chain (PR → PRA → Realisasi → goods receipt) doesn't fit: logging them would
-mean creating "parts" like paper towels and tracking their stock.
+Branches spend on things that aren't parts and must not go into stock: stationery,
+cleaning supplies, small items bought online. The procurement chain (PR → PRA → Realisasi
+→ goods receipt) doesn't fit — logging them would mean creating "parts" like paper towels
+and tracking their stock.
 
-### Proposal
+### Decided
 
-- A separate, lightweight **expense claim**: the SM records what, amount, date, receipt
-  URL. No request, no limits, no stock.
-- Paying back reuses BE-18's rules exactly: store OWNER marks paid (one or several), undo
-  with reason, SM notified, the claimant sees their own amount.
-- BE-16's spending summary gets a third line, **other expenses**, outside the parts
-  "spent" figures.
+- **A separate, lightweight expense record**: what, amount, date, receipt photo (BE-23).
+  No request, no limits, no stock.
+- **"Paid by: store / me."** The store Owner records expenses paid with the store's money;
+  the SM records ones they paid personally. Both show here, so "other expenses" is *all*
+  branch spending outside parts, not only reimbursements.
+- **Paid personally → paid back** with BE-18's rules exactly: the store OWNER marks paid
+  (one or several), undo with reason, the claimant notified and always sees their own
+  amount.
+- **Spending summary (BE-16)** gets a third line, **other expenses**, beside the parts
+  spent figures. HQ reads it like the rest.
+- **Two categories, two tabs: "HQ" and "Branch specific"** (`category` enum on the
+  record). "HQ" = spending the branch does for HQ-related needs (e.g. something HQ asked
+  every branch to buy); "Branch specific" = the branch's own running costs. **The branch
+  pays for both** — this is a label for visibility, not a charge to HQ:
+  - an SM who paid personally is **always paid back by their store Owner**, whatever the
+    category (the SM belongs to the branch and is paid by its Owner);
+  - **both categories count against the branch's monthly budget** (BE-16);
+  - nothing in the app claims money back from HQ.
+  HQ's spending view can show how much of each branch's spending is HQ-related.
 
-### Open
+### Rules
 
-- **[?]** Product owner to confirm expense claims are a separate flow, not procurement.
-- Whether the Owner can also record company-paid expenses here (not just reimbursable).
+- Create: the store's MANAGER+ (SM, Owner). Paid-by "store" only by OWNER+.
+- Edit: no edit; correct by void-and-recreate with a reason, like supersede.
+- Money visible OWNER+, plus the claimant for their own (same exception as BE-18).
+
+---
+
+## BE-23 — File uploads: photos and receipts on Cloudflare R2
+
+**Status: OPEN.** Product owner's decision, 20 Oct 2026. Prerequisite for BE-20's goods
+photos and BE-19's receipt photos; later for Realisasi receipts and module 3 labels.
+
+### Why
+
+`[C]` There is no file upload in the backend: `Realisasi.attachments` is a plain string and
+the app asks for a URL ("not a file picker"). Photos must not go in Postgres (size, backups,
+query weight) or on the Railway container disk (lost on redeploy unless a volume is
+attached, and a volume ties files to one instance). Object storage is the standard answer.
+
+**Chosen: Cloudflare R2** — S3-compatible (the AWS SDK works unchanged), no charge for
+downloads, a free tier that covers a small franchise for a long time. Supabase Storage was
+considered: it adds a whole platform (its own database, auth) where only storage would be
+used, and its free projects pause when idle — not acceptable for production. Check current
+R2 pricing and limits when setting up.
+
+### Task
+
+1. **R2 bucket + credentials** as Railway env vars (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+   `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). Bucket **private** — no public URLs.
+2. **Upload by presigned URL**: `POST /uploads { purpose, contentType, sizeBytes }` →
+   `{ uploadId, putUrl, expiresAt }` (PUT, ~10 min). The phone uploads straight to R2; the
+   API server never carries the bytes. Allowed: `image/jpeg`, `image/png`, `image/webp`,
+   `application/pdf`; max ~5 MB. Object key `{tenantId}/{purpose}/{uploadId}`.
+3. **`Upload` record**: id, tenant, uploader, purpose, key, content type, size, created,
+   `attachedTo` (type + id, null until used). An upload can be attached once, only by its
+   uploader, only within its tenant. Unattached uploads older than 24 h are deleted by a
+   scheduled job (R2 lifecycle rule or a Spring `@Scheduled` sweep).
+4. **Viewing**: `GET /uploads/{id}` → a short-lived presigned GET URL, after the same tenant
+   and visibility checks as the record it's attached to.
+5. **Phone side (client follow-up)**: take or pick a photo, resize to ~1600 px long edge and
+   JPEG ~0.7 before upload (~200–400 KB), upload, then send `uploadId`s with the record.
+   Uploads go through the outbox so a bad signal never loses a photo.
+
+### Tests
+
+- Wrong content type or oversize → 400. Another tenant's upload attached → 400 (same body
+  as a missing id). Attaching twice → 400. View URL refused across tenants.
+- Presigning is unit-tested against a fake S3 endpoint; no real R2 calls in CI.
 
 ---
 
@@ -1405,11 +1466,9 @@ How the business runs:
      visibility. Flyway migration for the CHECK constraint.
    The Realisasi `attachments` (receipt) requirement is unchanged and separate: the
    receipt proves the purchase, the photo proves the goods arrived.
-7. **Goods photos.** `goodsPhotos: string[]` on the receipt. **[?] Prerequisite: there is
-   no file upload anywhere in the backend today `[C]`** (`Realisasi.attachments` is a
-   plain string, no `MultipartFile`/storage code). Either build an upload endpoint first
-   (storage choice is a product/infra decision), or accept photo URLs as an interim step,
-   the same way receipts work today.
+7. **Goods photos.** `goodsPhotoUploadIds: UUID[]` on the receipt, attached through
+   **BE-23** (Cloudflare R2, decided 20 Oct 2026). Build BE-23 first; there is no file
+   upload anywhere in the backend today `[C]`.
 
 ### Tests
 
