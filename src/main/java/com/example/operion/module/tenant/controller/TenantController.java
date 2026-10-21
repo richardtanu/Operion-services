@@ -36,6 +36,18 @@ public class TenantController {
                 .build();
     }
 
+    // BE-14: the store picker: caller's own tenant + every descendant. Declared
+    // before /{id}; Spring prefers the literal path either way.
+    @GetMapping("/tree")
+    public ApiResponse<List<TenantResponse>> getTree() {
+
+        return ApiResponse.<List<TenantResponse>>builder()
+                .success(true)
+                .message("Tenant tree fetched")
+                .data(service.getTree())
+                .build();
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<TenantResponse> getById(
             @PathVariable UUID id) {

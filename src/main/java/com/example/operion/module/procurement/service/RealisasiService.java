@@ -10,9 +10,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.CallerRoles;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
@@ -80,7 +82,19 @@ public class RealisasiService {
     @Transactional
     public RealisasiResponse create(CreateRealisasiRequest request) {
 
-        UUID tenantId = UUID.fromString(TenantContext.getTenantId());
+        // BE-17: the Store Manager (MANAGER+) mostly logs purchases; HQ
+        // PROCUREMENT staff sometimes buy for a store. TECHNICIAN, OPERATOR,
+        // ACCOUNTING, and ADMIN without MANAGER+ are refused. DL-08 still applies.
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER) && !CallerRoles.hasAny(Role.PROCUREMENT)) {
+            throw new AccessDeniedException(
+                    "Only Manager-level users or higher, or Procurement, can log a purchase");
+        }
+
+        // BE-17: HQ PROCUREMENT (or OWNER+) may log for a store in their tree;
+        // the PRA is looked up in, and the purchase saved on, that store.
+        UUID tenantId = tenantHierarchyService.resolveTargetTenant(
+                request.getTenantId(),
+                CallerRoles.hasAny(Role.PROCUREMENT) || ScopeContext.hasAtLeast(Scope.OWNER));
 
         Tenant tenant = tenantRepository.findById(tenantId).orElseThrow();
 
@@ -239,6 +253,10 @@ public class RealisasiService {
     @Transactional
     public RealisasiResponse reject(UUID id, RejectRealisasiRequest request) {
 
+        // BE-17: OWNER+, from PENDING_APPROVAL and from APPROVED alike. Failing an
+        // approved purchase reopens spending room on its PRA, so it's the Owner's call.
+        requireOwnerScope();
+
         Realisasi realisasi = findOwned(id);
 
         if (realisasi.getStatus() != RealisasiStatus.PENDING_APPROVAL
@@ -265,6 +283,26 @@ public class RealisasiService {
     public RealisasiResponse supersede(UUID id, SupersedeRealisasiRequest request) {
 
         Realisasi original = findOwned(id);
+
+        // BE-17: a correction is made by whoever logged the original, or OWNER+
+        boolean isCreator = original.getCreatedBy() != null
+                && original.getCreatedBy().getId().equals(currentUser().getId());
+
+        if (!isCreator && !ScopeContext.hasAtLeast(Scope.OWNER)) {
+            throw new AccessDeniedException(
+                    "Only the person who logged this purchase, or Owner-level users or higher, can correct it");
+        }
+
+        // BE-17: only a live record can be corrected; a FAILED or already
+        // SUPERSEDED one can't be superseded again
+        if (original.getStatus() != RealisasiStatus.PENDING_APPROVAL
+                && original.getStatus() != RealisasiStatus.APPROVED) {
+
+            throw new RuntimeException("Only PENDING_APPROVAL or APPROVED realizations can be corrected.");
+        }
+
+        // The correction stays on the original's store
+        request.getCorrection().setTenantId(original.getTenant().getId());
 
         RealisasiStatus previous = original.getStatus();
         original.setStatus(RealisasiStatus.SUPERSEDED);

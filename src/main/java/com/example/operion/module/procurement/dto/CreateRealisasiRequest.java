@@ -18,6 +18,13 @@ import lombok.Setter;
 @Setter
 public class CreateRealisasiRequest {
 
+    /**
+     * BE-17: which store the purchase is for. Omitted = the caller's own store.
+     * Another store: PROCUREMENT role or OWNER+ only, inside the caller's tree.
+     * The PRA must belong to that store.
+     */
+    private UUID tenantId;
+
     @NotNull
     private UUID purchaseRequestAuthorizationId;
 

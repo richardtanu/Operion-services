@@ -72,7 +72,7 @@ public class PurchaseRequestAuthorizationService {
     @Transactional
     public PurchaseRequestAuthorizationResponse create(CreatePurchaseRequestAuthorizationRequest request) {
 
-        requireManagerScope();
+        requireOwnerScopeForLimits();
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -149,7 +149,7 @@ public class PurchaseRequestAuthorizationService {
     @Transactional
     public PurchaseRequestAuthorizationResponse cancel(UUID id) {
 
-        requireManagerScope();
+        requireOwnerScopeForLimits();
 
         PurchaseRequestAuthorization pra = findOwned(id);
 
@@ -294,16 +294,19 @@ public class PurchaseRequestAuthorizationService {
 
     /**
      * Creating a PRA is the authorization act (sets the spending ceiling), so
-     * it and its cancellation need MANAGER scope or above — decided 14 Oct
-     * 2026. One rung below PR approval (OWNER): Owner approves the need,
-     * Manager+ sets the ceiling, an over-ceiling buy escalates back to Owner.
+     * it and its cancellation need OWNER scope or above. BE-13 (14 Oct) set
+     * MANAGER+; BE-17 (19 Oct) raised it on the product owner's instruction:
+     * the store Owner sets the limits and the Store Manager buys against them,
+     * which also keeps the DL-08 rule (approver can't log their own PRA's
+     * purchase unless OWNER+) from blocking the normal flow. A PRA is only ever
+     * created on the caller's own store: HQ doesn't set a store's limits.
      * Checked before any lookup, so a random id answers 403 too.
      */
-    private void requireManagerScope() {
+    private void requireOwnerScopeForLimits() {
 
-        if (!ScopeContext.hasAtLeast(Scope.MANAGER)) {
+        if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
             throw new AccessDeniedException(
-                    "Only Manager-level users or higher can create or cancel a purchase authorization");
+                    "Only Owner-level users or higher can create or cancel a purchase authorization");
         }
     }
 
