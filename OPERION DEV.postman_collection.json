@@ -3108,6 +3108,88 @@
                                                    ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "UPLOADS",
+                     "item":  [
+                                  {
+                                      "name":  "upload-create",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"purpose\": \"GOODS_RECEIPT_PHOTO\",\r\n  \"contentType\": \"image/jpeg\",\r\n  \"sizeBytes\": 350000\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/uploads",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "uploads"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-23. Returns uploadId + a 10-minute presigned PUT URL. Then PUT the file to putUrl with the returned Content-Type header and exactly sizeBytes of body. purpose: GOODS_RECEIPT_PHOTO | EXPENSE_RECEIPT | PURCHASE_RECEIPT. Types: image/jpeg, image/png, image/webp, application/pdf. Max 5 MB. 503 if R2 isn\u0027t configured."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "upload-view",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/uploads/:uploadId",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "uploads",
+                                                                               ":uploadId"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "uploadId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-23. A 5-minute presigned GET URL. Unattached uploads: only the uploader. Attached: anyone in the tenant tree (own + descendants)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
                  }
              ],
     "auth":  {

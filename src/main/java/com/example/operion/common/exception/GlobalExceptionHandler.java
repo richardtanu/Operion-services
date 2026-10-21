@@ -12,6 +12,7 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -25,6 +26,20 @@ public class GlobalExceptionHandler {
                 response.put("error", ex.getMessage());
 
                 return ResponseEntity.badRequest().body(response);
+        }
+
+        // BE-23: ResponseStatusException carries its own status (e.g. 503 when
+        // uploads aren't configured). It's a RuntimeException, so without this
+        // more specific handler it would fall into the 400 handler above.
+        @ExceptionHandler(ResponseStatusException.class)
+        public ResponseEntity<?> handleResponseStatus(ResponseStatusException ex) {
+
+                Map<String, Object> response = new HashMap<>();
+
+                response.put("timestamp", LocalDateTime.now());
+                response.put("error", ex.getReason() != null ? ex.getReason() : ex.getMessage());
+
+                return ResponseEntity.status(ex.getStatusCode()).body(response);
         }
 
         // BE-12: AccessDeniedException is a RuntimeException, so without this

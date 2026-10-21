@@ -1374,8 +1374,10 @@ and tracking their stock.
 
 ## BE-23 — File uploads: photos and receipts on Cloudflare R2
 
-**Status: OPEN.** Product owner's decision, 20 Oct 2026. Prerequisite for BE-20's goods
-photos and BE-19's receipt photos; later for Realisasi receipts and module 3 labels.
+**Status: DONE (code), 21 Oct 2026 — the R2 bucket itself is the product owner's step
+(task item 1); until its env vars are set, `/uploads` answers 503.** Product owner's
+decision, 20 Oct 2026. Prerequisite for BE-20's goods photos and BE-19's receipt photos;
+later for Realisasi receipts and module 3 labels.
 
 ### Why
 
@@ -1413,6 +1415,40 @@ R2 pricing and limits when setting up.
 - Wrong content type or oversize → 400. Another tenant's upload attached → 400 (same body
   as a missing id). Attaching twice → 400. View URL refused across tenants.
 - Presigning is unit-tested against a fake S3 endpoint; no real R2 calls in CI.
+
+### What was done — 21 Oct 2026
+
+- **Module `upload`.** `R2Storage` is the only class touching storage: AWS SDK 2.55.0 `s3`
+  (Netty and Apache HTTP clients excluded; the JDK `url-connection-client` instead),
+  endpoint `https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, region `auto`, path-style.
+  `R2_ENDPOINT` optionally overrides it. Missing env vars → the app boots, `/uploads`
+  answers 503 "File uploads are not configured on this server".
+- **`POST /uploads {purpose, contentType, sizeBytes}`** → `{uploadId, putUrl, method:"PUT",
+  headers:{Content-Type}, expiresAt}`, 10-minute URL. JPEG / PNG / WebP / PDF, ≤ 5 MB
+  (exactly 5 MB allowed). **Content-Type and Content-Length are signed into the URL**, so
+  R2 itself rejects a bigger or different file than declared — the declared size is
+  enforced, not just checked. Key `{tenantId}/{purpose}/{uploadId}`.
+  `purpose`: `GOODS_RECEIPT_PHOTO`, `EXPENSE_RECEIPT`, `PURCHASE_RECEIPT`.
+- **`GET /uploads/{id}`** → 5-minute presigned GET. Unattached: uploader only. Attached:
+  the caller's tenant tree (own + descendants), matching how the records that hold uploads
+  are scoped. When BE-20/BE-19 attach to records with stricter visibility, revisit.
+- **`UploadService.attach(uploadId, purpose, attachedType, attachedId)`** for BE-20 and
+  BE-19 to call inside their own transaction. Refused as "Upload not found" (same as a
+  missing id): another tenant's, another user's, wrong purpose, or **a file never actually
+  PUT** (HEAD on the object). Second attach → "Upload is already attached"; the attach is a
+  conditional `UPDATE … WHERE attached_type IS NULL`, so two racing attaches can't both win.
+- **Sweep**: hourly `@Scheduled` deletes unattached uploads older than 24 h — object first,
+  then row, so a storage error leaves the row for the next run instead of an orphan file.
+- **Migration `V4__uploads.sql`** — `uploads` table, no CHECK on `purpose` (Java enum
+  validates; new purposes need no migration). Applied cleanly to the local DB (`[V]`).
+- `GlobalExceptionHandler` now honours `ResponseStatusException`'s status (it was a
+  `RuntimeException`, so it would have become 400).
+- Tests: `R2StorageTest` (4, real SDK presigner vs `http://localhost:9999`) and `UploadTest`
+  (9, HTTP + DB with storage mocked). Mutation check: dropping the signed size makes the
+  presign test fail. Full suite 80/80. Postman: folder `UPLOADS`.
+
+**Not verified:** a real PUT/GET against R2 — needs the bucket. Once the env vars are set,
+upload one file end to end before relying on it (`[?]` until then).
 
 ---
 

@@ -170,7 +170,7 @@ One `Role` enum only. No `roles`/`user_roles` table pair.
 ## Deliberately not built
 
 - **Barcode redemption path** — offline-generated codes → real `PartInstance` rows on sync. The endpoint reserves number space only. Blocked on an unmeasured question: how often outlets actually lose connectivity.
-- File-upload backing for Realisasi `attachments` (plain text/URL field, by design).
+- Realisasi `attachments` is still a plain text/URL field. File uploads now exist (BE-23: Cloudflare R2, private bucket, presigned PUT/GET, `UploadService.attach` for records that take files); wiring them into Realisasi is a later task (`UploadPurpose.PURCHASE_RECEIPT` is reserved for it).
 - A filter surfacing `retroPurchaseFlag=true` records for the Owner. Field exists; nothing queries it.
 
 ## Deployment
