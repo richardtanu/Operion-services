@@ -21,6 +21,11 @@ public class PurchaseRequestResponse {
 
     private String requestedByName;
 
+    /** BE-14: the store the PR is for ("Requested by Rina for Outlet Bandung"). */
+    private UUID tenantId;
+
+    private String tenantName;
+
     private UUID purchaseOrderId;
 
     private List<PurchaseRequestItemResponse> items;

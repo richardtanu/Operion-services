@@ -13,6 +13,13 @@ import lombok.Setter;
 @Setter
 public class CreatePurchaseRequestRequest {
 
+    /**
+     * BE-14: which store the PR is for. Omitted = the caller's own store.
+     * Another store: ADMIN, PROCUREMENT or OWNER+ only, and only inside the
+     * caller's tenant tree.
+     */
+    private UUID tenantId;
+
     @NotNull
     private UUID requestedBy;
 

@@ -1,12 +1,16 @@
 package com.example.operion.module.tenant.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.ScopeContext;
+import com.example.operion.common.security.TenantContext;
 import com.example.operion.config.MasterDataInitializer;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.tenant.dto.CreateTenantRequest;
@@ -82,6 +86,26 @@ public class TenantService {
 
         return repository.findByParentId(id)
                 .stream()
+                .map(this::map)
+                .toList();
+    }
+
+    /**
+     * BE-14: the store picker. The caller's own tenant first, then every
+     * descendant (in tree-walk order), so HQ staff can pick a store and a Store
+     * Manager sees just their own. Never ancestors or other roots.
+     */
+    public List<TenantResponse> getTree() {
+
+        List<UUID> ids = tenantHierarchyService.getEffectiveTenantIds(
+                UUID.fromString(TenantContext.getTenantId()));
+
+        Map<UUID, Tenant> byId = repository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Tenant::getId, t -> t));
+
+        return ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
                 .map(this::map)
                 .toList();
     }

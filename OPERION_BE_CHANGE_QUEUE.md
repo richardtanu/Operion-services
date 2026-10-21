@@ -930,8 +930,9 @@ works by design.
 
 ## BE-14 — PR creation gate, and HQ filing a PR for a store
 
-**Status: OPEN.** Product owner's decisions, 16 Oct 2026 (module 1 deferred-decision #1,
-"should PR creation be restricted?"). Mobile side waits on this; see "Client follow-up".
+**Status: DONE, 21 Oct 2026** (see end of entry). Product owner's decisions, 16 Oct 2026
+(module 1 deferred-decision #1, "should PR creation be restricted?"). Mobile side waits on
+this; see "Client follow-up".
 
 ### Why
 
@@ -1011,6 +1012,30 @@ caller's own tenant, and the PR always lands on the caller's tenant.
   rather than zero stock, with a "Create PR for this store" shortcut. Needs a stock-by-store
   read across the caller's tree — **[?] not known to exist**; belongs with modules 2–3.
 - Optional per-line note on PRs ("needed by Andi, visit 14 Oct") — parked, not decided.
+
+### What was done — DONE, 21 Oct 2026 (shipped together with BE-17)
+
+1. **Create gate** in `PurchaseRequestService.create()`: MANAGER+ scope, or role ADMIN or
+   PROCUREMENT; else 403 "Only Manager-level users or higher, Admin or Procurement can
+   create purchase requests". Reads unchanged.
+2. **Target store**: optional `tenantId` on `CreatePurchaseRequestRequest`, resolved by the
+   new shared `TenantHierarchyService.resolveTargetTenant(requested, mayActForAnother)`:
+   omitted/own → own; another store without ADMIN/PROCUREMENT/OWNER+ → 403; outside the
+   tree or nonexistent → 400 "Store not found" (identical). The PR, and its part lookups,
+   are on the target store.
+3. **Requester**: the caller, or a user of the target store (BE-13 rule widened); else 400
+   "Requesting user not found in your branch". History still records the real caller.
+4. **Notification routing**: unchanged code, now tested — an HQ-filed PR for Outlet A
+   notifies A's chain and nobody at Outlet B `[V]`.
+5. **Response**: `tenantId`, `tenantName` on `PurchaseRequestResponse`.
+6. **Store picker**: `GET /tenants/{id}/children` returns direct children only and not the
+   caller's own tenant, so a new **`GET /tenants/tree`** returns the caller's tenant first,
+   then every descendant (never ancestors or other roots). Any signed-in user.
+
+Tests: `PurchaseGatesTest` (6 for BE-14, with HQ → Outlet A + Outlet B + unrelated root).
+The BE-07 test's requester fixture became a real Store Manager (OPERATOR + MANAGER), since
+a scope-less OPERATOR can no longer file. Against the unfixed code every new BE-14 test
+fails. Postman: `tenant-tree`.
 
 ---
 
@@ -1192,8 +1217,9 @@ month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
 
 ## BE-17 — Who sets limits, logs, rejects and corrects purchases; HQ buying for a store
 
-**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decision #4,
-"PRA/Realisasi absence of scope gating", the part BE-13 didn't cover).
+**Status: DONE, 21 Oct 2026** (with BE-14; see "What was done" at the end of this entry).
+Product owner's decisions, 19 Oct 2026 (module 1 deferred-decision #4, "PRA/Realisasi
+absence of scope gating", the part BE-13 didn't cover).
 
 ### Why
 
@@ -1260,6 +1286,26 @@ Gaps in `RealisasiService` today `[C]`:
 - PROC-04: Reject becomes gated `OWNER+`; "Supersede" becomes gated `CREATOR·OWNER+`;
   create gated `MANAGER+·PROC`; store picker for HQ PROCUREMENT (as BE-14).
 - `auth/permissions.ts` mirrors; `API_CONTRACT.md` regenerated from source.
+
+### What was done — DONE, 21 Oct 2026 (shipped together with BE-14)
+
+1. **PRA create/cancel → OWNER+** (`requireOwnerScopeForLimits`), 403 below. PRAs stay on
+   the caller's own store.
+2. **Log a purchase** → MANAGER+ scope or the PROCUREMENT role, else 403. ADMIN without
+   MANAGER+ is refused. DL-08 (`requireSegregationFromPraApprover`) unchanged.
+3. **HQ buying for a store**: optional `tenantId` on `CreateRealisasiRequest` through the
+   same `resolveTargetTenant` as BE-14, here allowing PROCUREMENT or OWNER+. PRA lookup,
+   part lookups and the saved Realisasi all use the target store.
+4. **Reject → OWNER+** from PENDING_APPROVAL and APPROVED alike.
+5. **Supersede → creator or OWNER+**; the original must be PENDING_APPROVAL or APPROVED
+   (400 otherwise). The correction is forced onto the original's store and still goes
+   through `create()`, so items 2–3 and DL-08 apply to it.
+
+Tests: `PurchaseGatesTest` (5 for BE-17): every case listed above, factor 6 throughout —
+the PRA's remaining quantity stays 6 after a refused MANAGER reject and returns to 12 only
+after the OWNER's. The two BE-13 PRA tests were rewritten from MANAGER+ to OWNER+.
+Against the unfixed code every new test fails except the DL-08 guard, which is meant to
+pass on both (it pins unchanged behaviour). Full suite 91/91.
 
 ---
 

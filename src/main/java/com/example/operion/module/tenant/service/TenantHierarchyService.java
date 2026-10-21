@@ -81,6 +81,37 @@ public class TenantHierarchyService {
     }
 
     /**
+     * BE-14 / BE-17: which store a record is for, when HQ staff may act for a
+     * store in their tree (file a PR, log a purchase).
+     * <ul>
+     * <li>{@code requested} null or the caller's own tenant → the caller's tenant.</li>
+     * <li>Another tenant and {@code callerMayActForAnotherStore} false → 403.</li>
+     * <li>Another tenant outside the caller's tree (own + descendants), or one
+     *     that doesn't exist → 400 "Store not found", the same answer either way,
+     *     so other roots' ids can't be probed.</li>
+     * </ul>
+     * Who may act for another store differs per action, so the caller decides.
+     */
+    public UUID resolveTargetTenant(UUID requested, boolean callerMayActForAnotherStore) {
+
+        UUID callerTenantId = UUID.fromString(TenantContext.getTenantId());
+
+        if (requested == null || requested.equals(callerTenantId)) {
+            return callerTenantId;
+        }
+
+        if (!callerMayActForAnotherStore) {
+            throw new AccessDeniedException("You can only do this for your own store");
+        }
+
+        if (!getEffectiveTenantIds(callerTenantId).contains(requested)) {
+            throw new RuntimeException("Store not found");
+        }
+
+        return requested;
+    }
+
+    /**
      * The top-level (no-parent) tenant above (or equal to) the given tenant.
      */
     public UUID getRootTenantId(UUID tenantId) {

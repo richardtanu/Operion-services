@@ -82,7 +82,7 @@ class ProcurementNotificationAndLogTest {
     private Tenant outlet;
     private Tenant other;
 
-    private User requester;      // outlet, OPERATOR, no scope
+    private User requester;      // outlet, the Store Manager: OPERATOR + MANAGER (files PRs, BE-14)
     private User outletOwner;    // outlet, PROCUREMENT + OWNER: approves and authorizes
     private User outletBuyer;    // outlet, PROCUREMENT
     private User outletManager;  // outlet, OPERATOR + MANAGER
@@ -101,7 +101,7 @@ class ProcurementNotificationAndLogTest {
         outlet = tenant("BE07_OUT_" + s, hq);
         other = tenant("BE07_OTHER_" + s, null);
 
-        requester = user("be07-req-" + s, Role.OPERATOR, null, outlet);
+        requester = user("be07-req-" + s, Role.OPERATOR, Scope.MANAGER, outlet);
         outletOwner = user("be07-owner-" + s, Role.PROCUREMENT, Scope.OWNER, outlet);
         outletBuyer = user("be07-buyer-" + s, Role.PROCUREMENT, null, outlet);
         outletManager = user("be07-mgr-" + s, Role.OPERATOR, Scope.MANAGER, outlet);
@@ -232,10 +232,10 @@ class ProcurementNotificationAndLogTest {
                 + outletPart.getId() + "\",\"quantity\":6}]}";
     }
 
-    // ---- PRA create/cancel need MANAGER scope or above ----
+    // ---- PRA create/cancel need OWNER scope or above (BE-13 said MANAGER; BE-17 raised it) ----
 
     @Test
-    void praCreate_needsManagerOrAbove() throws Exception {
+    void praCreate_needsOwnerOrAbove() throws Exception {
 
         User supervisor = user("be07-sup-" + UUID.randomUUID().toString().substring(0, 8),
                 Role.PROCUREMENT, Scope.SUPERVISOR, outlet);
@@ -244,28 +244,30 @@ class ProcurementNotificationAndLogTest {
         mvc.perform(as(outletOwner, patch("/purchase-requests/" + prId + "/approve")))
                 .andExpect(status().isOk());
 
-        // no scope (even with the PROCUREMENT role), and SUPERVISOR: refused
-        mvc.perform(as(outletBuyer, post("/purchase-authorizations")).content(praBody(prId)))
-                .andExpect(status().isForbidden());
-        mvc.perform(as(supervisor, post("/purchase-authorizations")).content(praBody(prId)))
-                .andExpect(status().isForbidden());
+        // no scope (even with the PROCUREMENT role), SUPERVISOR, and now MANAGER: refused
+        for (User refused : List.of(outletBuyer, supervisor, outletManager)) {
+            mvc.perform(as(refused, post("/purchase-authorizations")).content(praBody(prId)))
+                    .andExpect(status().isForbidden());
+        }
 
-        // MANAGER: allowed
-        createPra(outletManager, prId);
+        // OWNER: allowed
+        createPra(outletOwner, prId);
     }
 
     @Test
-    void praCancel_needsManagerOrAbove() throws Exception {
+    void praCancel_needsOwnerOrAbove() throws Exception {
 
         String prId = createPr(requester);
         mvc.perform(as(outletOwner, patch("/purchase-requests/" + prId + "/approve")))
                 .andExpect(status().isOk());
         String praId = createPra(outletOwner, prId);
 
-        mvc.perform(as(outletBuyer, patch("/purchase-authorizations/" + praId + "/cancel")))
-                .andExpect(status().isForbidden());
+        for (User refused : List.of(outletBuyer, outletManager)) {
+            mvc.perform(as(refused, patch("/purchase-authorizations/" + praId + "/cancel")))
+                    .andExpect(status().isForbidden());
+        }
 
-        mvc.perform(as(outletManager, patch("/purchase-authorizations/" + praId + "/cancel")))
+        mvc.perform(as(outletOwner, patch("/purchase-authorizations/" + praId + "/cancel")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANCELLED"));
     }

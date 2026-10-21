@@ -3034,6 +3034,35 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "tenant-tree",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/tenants/tree",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "tenants",
+                                                                               "tree"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-14 store picker: your own tenant first, then every tenant below it. A Store Manager gets just their store; HQ gets HQ + every outlet. Use the ids as tenantId when HQ files a PR (POST /purchase-requests) or logs a purchase (POST /realisasi) for a store."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },

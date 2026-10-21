@@ -7,9 +7,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.CallerRoles;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
@@ -58,19 +60,32 @@ public class PurchaseRequestService {
     @Transactional
     public PurchaseRequestResponse create(CreatePurchaseRequestRequest request) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        // BE-14: the Store Manager (MANAGER+) files a store's PRs; HQ ADMIN and
+        // PROCUREMENT staff may too. TECHNICIAN, OPERATOR and ACCOUNTING may not
+        // (ACCOUNTING handles the money, so it doesn't also ask for purchases).
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER) && !CallerRoles.hasAny(Role.ADMIN, Role.PROCUREMENT)) {
+            throw new AccessDeniedException(
+                    "Only Manager-level users or higher, Admin or Procurement can create purchase requests");
+        }
+
+        // BE-14: HQ staff file for a store in their tree; the PR lives on that store
+        UUID tenantId = tenantHierarchyService.resolveTargetTenant(
+                request.getTenantId(),
+                CallerRoles.hasAny(Role.ADMIN, Role.PROCUREMENT) || ScopeContext.hasAtLeast(Scope.OWNER));
 
         Tenant tenant = tenantRepository
                 .findById(tenantId)
                 .orElseThrow();
 
-        // The requester must belong to the branch filing the PR (the caller's
-        // own tenant: not a parent, child or other tenant). A user from anywhere
-        // else answers exactly like a missing one, so ids can't be probed.
+        User caller = currentUser();
+
+        // The requester is the caller themself, or a user of the store the PR is
+        // for (BE-13 rule, widened by BE-14 so HQ can be the requester for a store:
+        // "Requested by Rina Wijaya for Outlet Bandung"). Anyone else answers
+        // exactly like a missing id, so ids can't be probed.
         User requestedBy = userRepository
                 .findById(request.getRequestedBy())
-                .filter(u -> u.getTenant().getId().equals(tenantId))
+                .filter(u -> u.getId().equals(caller.getId()) || u.getTenant().getId().equals(tenantId))
                 .orElseThrow(() -> new RuntimeException("Requesting user not found in your branch"));
 
         PurchaseRequest pr = PurchaseRequest.builder()
@@ -97,7 +112,7 @@ public class PurchaseRequestService {
 
         // BE-07: history records who actually made the call, which can differ
         // from requestedBy (a colleague in the same branch filing on their behalf).
-        writeHistory(pr, null, PurchaseRequestStatus.PENDING, currentUser(), null);
+        writeHistory(pr, null, PurchaseRequestStatus.PENDING, caller, null);
 
         notificationService.notifyNewPurchaseRequest(pr);
 
@@ -274,6 +289,8 @@ public class PurchaseRequestService {
                 .status(pr.getStatus().name())
                 .requestedById(pr.getRequestedBy() != null ? pr.getRequestedBy().getId() : null)
                 .requestedByName(pr.getRequestedBy() != null ? pr.getRequestedBy().getFullName() : null)
+                .tenantId(pr.getTenant().getId())
+                .tenantName(pr.getTenant().getName())
                 .purchaseOrderId(pr.getPurchaseOrder() != null ? pr.getPurchaseOrder().getId() : null)
                 .items(items)
                 .createdAt(pr.getCreatedAt())
