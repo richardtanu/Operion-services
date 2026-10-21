@@ -1647,15 +1647,21 @@ this list `[?]`:**
 2. **HQ's master data.** A new tenant normally gets its `part_categories` / `part_types`
    from `MasterDataInitializer`; make sure `HQ_BANDUNG` gets them, or catalog parts
    (item 2) can't be created.
-3. **HQ users.** Nobody is at HQ yet and no user holds PRINCIPAL. HQ's Admin, Procurement
-   and Principal accounts are created after the migration (ADMIN registers, then sets
-   scope). List who exists at `BLITZ_BDG` today and report anyone who belongs at HQ.
+3. **HQ users.** Nobody is at HQ yet and no user holds PRINCIPAL. **Decided 21 Oct: HQ's
+   first account is a "super admin" — role ADMIN with PRINCIPAL scope at `HQ_BANDUNG`**,
+   the top of the tree, so it can administer every branch and see every store's data.
+   Create it in the migration (or move the existing ADMIN to HQ — report which ADMIN
+   accounts exist at `BLITZ_BDG` today and ask the product owner for the person's name and
+   email; never put a password in the migration or this file). HQ Procurement and other HQ
+   accounts are then registered by that admin. Note for the product owner: one account with
+   ADMIN + PRINCIPAL can do everything, including Owner-only approvals in any store and the
+   DL-08 Owner/Principal exemption — keep it for administration, not daily buying.
 4. **Everything that walks the tree** (`getEffectiveTenantIds`, `getAncestorTenantIds`):
    HQ now sees `BLITZ_BDG`'s data, and notifications for `BLITZ_BDG` may now also reach
    approvers at HQ. Run the existing suites; report any behaviour that changed.
-5. **App theme** (mobile repo, not this task): `THEMES_BY_TENANT` is keyed by tenant code,
-   so HQ users get the Default theme. Ask the product owner whether HQ should also use
-   Tactical Green.
+5. **App theme** (mobile repo): decided 21 Oct — HQ uses Tactical Green too ("the main
+   theme"). Already mapped in the app: `HQ_BANDUNG` → Tactical Green in
+   `theme/ThemeContext.tsx`. No backend work.
 
 **Next:** items 2–7 as written above, after the migration.
 
