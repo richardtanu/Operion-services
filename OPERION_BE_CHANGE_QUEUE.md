@@ -1621,8 +1621,43 @@ above `BLITZ_BDG`: one Flyway migration inserting the HQ tenant and setting
 code, and confirmation that `FRANCHISE_HQ` / `OUTLET_2` are test data to drop at the
 clean-database go-live.
 
-**Status after item 1:** waiting on the product owner for (a) Link via root `Part` rows vs
-a separate `CatalogItem` table and (b) the HQ tenant. Items 2–7 not started.
+**Status after item 1:** ~~waiting on the product owner for (a) and (b)~~ — decided below.
+
+### Decisions — product owner, 21 Oct 2026
+
+**(a) Link, via the root tenant's own `Part` rows** — as recommended in the item 1 report.
+No separate `CatalogItem` table.
+
+**(b) The HQ tenant: "HQ BANDUNG".** Create it as a new root and make `BLITZ_BDG` its child.
+- Name **`HQ BANDUNG`**, code **`HQ_BANDUNG`** (codes follow the `BLITZ_BDG` pattern:
+  uppercase, underscores — confirm the code with the product owner if a shorter one is
+  wanted; the name is theirs verbatim).
+- One Flyway migration: insert the tenant, set `BLITZ_BDG.parent_id` to it. New roots are
+  seed-only since BE-12, so a migration is the right path.
+- `FRANCHISE_HQ` and `OUTLET_2` are test data (confirmed: the app isn't live; go-live is
+  on a clean database). Leave them alone in this migration.
+
+**Side effects to handle in the same change — check each in the code before relying on
+this list `[?]`:**
+1. **Suppliers move to HQ.** `SupplierService`, `PurchaseOrderService.create()` and
+   `RealisasiService.create()` look suppliers up under `getRootTenantId()` `[C]`. Once
+   `BLITZ_BDG` has a parent, its root becomes `HQ_BANDUNG` and the 6 suppliers owned by
+   `BLITZ_BDG` stop being found. The migration must move them to `HQ_BANDUNG` — which is
+   also decision #7: suppliers are HQ's.
+2. **HQ's master data.** A new tenant normally gets its `part_categories` / `part_types`
+   from `MasterDataInitializer`; make sure `HQ_BANDUNG` gets them, or catalog parts
+   (item 2) can't be created.
+3. **HQ users.** Nobody is at HQ yet and no user holds PRINCIPAL. HQ's Admin, Procurement
+   and Principal accounts are created after the migration (ADMIN registers, then sets
+   scope). List who exists at `BLITZ_BDG` today and report anyone who belongs at HQ.
+4. **Everything that walks the tree** (`getEffectiveTenantIds`, `getAncestorTenantIds`):
+   HQ now sees `BLITZ_BDG`'s data, and notifications for `BLITZ_BDG` may now also reach
+   approvers at HQ. Run the existing suites; report any behaviour that changed.
+5. **App theme** (mobile repo, not this task): `THEMES_BY_TENANT` is keyed by tenant code,
+   so HQ users get the Default theme. Ask the product owner whether HQ should also use
+   Tactical Green.
+
+**Next:** items 2–7 as written above, after the migration.
 
 ### Tests
 
