@@ -77,14 +77,17 @@ public class PurchaseRequestController {
                 .build();
     }
 
+    // BE-15: a reason is required (same body as reject), and who may cancel
+    // depends on the status -- see PurchaseRequestService.cancel
     @PatchMapping("/{id}/cancel")
     public ApiResponse<PurchaseRequestResponse> cancel(
-            @PathVariable UUID id) {
+            @PathVariable UUID id,
+            @Valid @RequestBody RejectRequest request) {
 
         return ApiResponse.<PurchaseRequestResponse>builder()
                 .success(true)
                 .message("Purchase request cancelled")
-                .data(service.cancel(id))
+                .data(service.cancel(id, request.getReason()))
                 .build();
     }
 

@@ -1041,9 +1041,9 @@ fails. Postman: `tenant-tree`.
 
 ## BE-15 — PR cancel: who can cancel, a required reason, and telling the requester
 
-**Status: OPEN.** Product owner's decision, 16 Oct 2026 (module 1 deferred-decision #2,
-"cancel/approve scope asymmetry"). Independent of BE-14, but its "requester" rule reads
-best after BE-14 lands.
+**Status: DONE, 21 Oct 2026** (see end of entry). Product owner's decision, 16 Oct 2026
+(module 1 deferred-decision #2, "cancel/approve scope asymmetry"). Independent of BE-14,
+but its "requester" rule reads best after BE-14 lands.
 
 ### Why
 
@@ -1097,6 +1097,31 @@ quantity, duplicate); there is no PR edit, so cancel-and-refile is how they fix 
   ask the Owner. Accepted: once approved, it's the Owner's decision to undo.
 - A PR filed from HQ for a store (BE-14) has the HQ person as requester, so that store's SM
   can't withdraw it while pending — the HQ requester or an Owner can.
+
+### What was done — DONE, 21 Oct 2026
+
+1. **Who**: PENDING → the PR's requester or OWNER+; APPROVED → OWNER+ only; else 403.
+   Status rule unchanged (only PENDING/APPROVED, else 400).
+2. **Reason required**: `PATCH /purchase-requests/{id}/cancel` takes `{reason}`
+   (`RejectRequest`, `@NotBlank`); written to the history row with the caller as actor.
+3. **`PURCHASE_REQUEST_CANCELLED`** to the requester when someone else cancels (BE-07's
+   self-skip). **Migration `V5__notification_pr_cancelled.sql`** recreates
+   `notifications_type_check` (rule 3); applied cleanly to the local DB `[V]`.
+
+**The "known edge" above was not true of the code `[C]`** (recorded per CLAUDE.md rule 1):
+`cancel()`, `getById()` and `getHistory()` all used `findOwned` — **the caller's own
+tenant only** — so an HQ person could neither cancel nor even open a PR they had filed for
+a store (it lives on the store since BE-14). Fixed here:
+- `getById`, `getHistory` and `cancel` look the PR up across the caller's tree (own +
+  descendants), like `getAll()` already did. Out-of-tree ids still answer "not found".
+- On cancel, **the requester** may withdraw their own PENDING PR anywhere in their tree;
+  **OWNER+ applies only to PRs of the Owner's own store** — HQ's Principal can't cancel a
+  store's own requests (stores are independent).
+- **Approve and reject stay own-store** (`findOwned`): they're the store Owner's decisions.
+
+Tests: `PrCancelTest` (5) — every case above plus the HQ-requester/HQ-Owner case. Against
+the old cancel logic (new enum kept so the test compiles) all 4 original tests fail.
+Full suite 96/96. Postman `purchase-request-cancel` now sends a reason.
 
 ---
 

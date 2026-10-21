@@ -2392,42 +2392,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "purchase-request-cancel",
-                                      "request":  {
-                                                      "method":  "PATCH",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/purchase-requests/:id/cancel",
-                                                                  "protocol":  "https",
-                                                                  "host":  [
-                                                                               "operion-services-production",
-                                                                               "up",
-                                                                               "railway",
-                                                                               "app"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-requests",
-                                                                               ":id",
-                                                                               "cancel"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "id"
-                                                                                   }
-                                                                               ]
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "purchase-request-history",
                                       "request":  {
                                                       "method":  "GET",
@@ -2458,6 +2422,58 @@
                                                                                    }
                                                                                ]
                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "purchase-request-cancel",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"reason\": \"Filed twice\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/purchase-requests/:id/cancel",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "purchase-requests",
+                                                                               ":id",
+                                                                               "cancel"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-15. Reason required. PENDING: the requester or OWNER+. APPROVED: OWNER+ only. The requester is notified unless they cancelled it themselves."
                                                   },
                                       "response":  [
 

@@ -102,6 +102,16 @@ public class NotificationService {
                         + (reason != null && !reason.isBlank() ? ": " + reason : ""));
     }
 
+    /** BE-15: skipped when the requester cancelled their own PR (notifyRequester's rule). */
+    public void notifyPurchaseRequestCancelled(PurchaseRequest pr, User actor, String reason) {
+
+        notifyRequester(pr, actor,
+                NotificationType.PURCHASE_REQUEST_CANCELLED,
+                "Purchase Request Cancelled",
+                "Your purchase request was cancelled by " + nameOf(actor)
+                        + (reason != null && !reason.isBlank() ? ": " + reason : ""));
+    }
+
     public void notifyPurchaseRequestAuthorized(PurchaseRequest pr, User actor) {
 
         notifyRequester(pr, actor,

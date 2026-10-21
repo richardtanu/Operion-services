@@ -113,6 +113,7 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 - **Specific-identification costing**: `PartInstance.landedCost` stamped per instance. Divisor is `allocatedLandedCost ÷ (purchasedQty × conversionFactor)` — see rule 2 for why that took two attempts.
 - **Money is redacted (null, not omitted) below OWNER scope** in the response mapper: Realisasi + PartInstance (BE-06), PurchaseOrder (BE-11), PRA `purchasedValue`/`remainingValue` and ServiceEvent `cost` (BE-13). Exception by design: PRA `maxValue` stays visible — it's the buyer's limit. Any new money field on a response needs the same `canSeeCost` check.
 - **Who files PRs** (BE-14): MANAGER+ scope, or the ADMIN or PROCUREMENT role. TECHNICIAN, OPERATOR and ACCOUNTING are refused.
+- **Cancelling a PR** (BE-15) needs a reason. PENDING: its requester (anywhere in their tree) or an OWNER+ of that store; APPROVED: that store's OWNER+. Approve/reject stay with the store's own Owner (`findOwned`, own tenant only); reads and cancel look PRs up across the caller's tree (`findInTree`).
 - **HQ acting for a store** (BE-14, BE-17): an optional `tenantId` on PR create (ADMIN, PROCUREMENT or OWNER+) and on purchase logging (PROCUREMENT or OWNER+) puts the record on that store. It must be inside the caller's tree; outside, or a made-up id, answers 400 "Store not found" either way. One helper: `TenantHierarchyService.resolveTargetTenant`. Store picker: `GET /tenants/tree`.
 - **A PR's `requestedBy`** must be the caller, or a user of the store the PR is for (BE-13, widened by BE-14 so HQ can be the requester: "Requested by Rina for Outlet Bandung").
 
@@ -158,7 +159,7 @@ One `Role` enum only. No `roles`/`user_roles` table pair.
 
 **Roles are settable but barely enforced** (BE-07). ADMIN-only `PATCH /users/{id}/role` (tree-contained, never your own). Role checks now in use: `PROCUREMENT` reads `GET /procurement/activity` (as may ADMIN and OWNER+), receives the PRA-created notification, files PRs and logs purchases, including for a store (BE-14/17); `ADMIN` files PRs, including for a store. TECHNICIAN and ACCOUNTING are still only checked by being refused. Role-**or**-scope checks live in the service (`CallerRoles.hasAny` + `ScopeContext.hasAtLeast`), because `@PreAuthorize` only sees roles.
 
-**Procurement notifications** go to the PR requester (approved / rejected / authorized) and to PROCUREMENT users in the PRA's own tenant (PRA created). Nobody is notified about their own action. Every PR and PO status-history row now records its actor; rows written before 14 Oct 2026 may have a null actor.
+**Procurement notifications** go to the PR requester (approved / rejected / authorized / cancelled by someone else) and to PROCUREMENT users in the PRA's own tenant (PRA created). Nobody is notified about their own action. Every PR and PO status-history row now records its actor; rows written before 14 Oct 2026 may have a null actor.
 
 ---
 

@@ -2271,40 +2271,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "purchase-request-cancel",
-                                      "request":  {
-                                                      "method":  "PATCH",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/purchase-requests/:id/cancel",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-requests",
-                                                                               ":id",
-                                                                               "cancel"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "id"
-                                                                                   }
-                                                                               ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "purchase-request-history",
                                       "request":  {
                                                       "method":  "GET",
@@ -2333,6 +2299,56 @@
                                                                                ],
                                                                   "port":  "8080"
                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "purchase-request-cancel",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"reason\": \"Filed twice\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/purchase-requests/:id/cancel",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "purchase-requests",
+                                                                               ":id",
+                                                                               "cancel"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-15. Reason required. PENDING: the requester or OWNER+. APPROVED: OWNER+ only. The requester is notified unless they cancelled it themselves."
                                                   },
                                       "response":  [
 
