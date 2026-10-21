@@ -1660,8 +1660,9 @@ this list `[?]`:**
    HQ now sees `BLITZ_BDG`'s data, and notifications for `BLITZ_BDG` may now also reach
    approvers at HQ. Run the existing suites; report any behaviour that changed.
 5. **App theme** (mobile repo): decided 21 Oct — HQ uses Tactical Green too ("the main
-   theme"). Already mapped in the app: `HQ_BANDUNG` → Tactical Green in
-   `theme/ThemeContext.tsx`. No backend work.
+   theme"). Done in the app: Tactical Green is now the default for every tenant
+   (`theme/ThemeContext.tsx`); the design file stays in the light theme for now. No
+   backend work.
 
 **Next:** items 2–7 as written above, after the migration.
 
