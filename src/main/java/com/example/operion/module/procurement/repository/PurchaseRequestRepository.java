@@ -14,6 +14,8 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
 
     Optional<PurchaseRequest> findByIdAndTenantId(UUID id, UUID tenantId);
 
+    Optional<PurchaseRequest> findByIdAndTenantIdIn(UUID id, List<UUID> tenantIds);
+
     List<PurchaseRequest> findByTenantId(UUID tenantId);
 
     @Query("select pr from PurchaseRequest pr where pr.tenant.id in :tenantIds")

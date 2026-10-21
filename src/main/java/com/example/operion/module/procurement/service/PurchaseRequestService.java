@@ -172,9 +172,37 @@ public class PurchaseRequestService {
     }
 
     @Transactional
-    public PurchaseRequestResponse cancel(UUID id) {
+    /**
+     * BE-15. Cancel stops spending, so the bar is lower than approve's, but a
+     * needed request mustn't vanish silently:
+     * <ul>
+     * <li>PENDING: the PR's requester (fixing their own mistake by cancel-and-refile),
+     *     or OWNER+.</li>
+     * <li>APPROVED: OWNER+ only: undoing an Owner's decision takes an Owner.</li>
+     * </ul>
+     * Order: tenant containment, then who, then status. A reason is required and
+     * goes on the history row (so it shows in the activity log); the requester is
+     * told unless they cancelled it themselves.
+     */
+    public PurchaseRequestResponse cancel(UUID id, String reason) {
 
-        PurchaseRequest pr = findOwned(id);
+        // Looked up across the caller's tree, so an HQ person can withdraw a PR
+        // they filed for a store (BE-14). An Owner's power stays within their
+        // own store: stores are independent, HQ doesn't cancel a store's requests.
+        PurchaseRequest pr = findInTree(id);
+
+        User caller = currentUser();
+        boolean isRequester = pr.getRequestedBy() != null && pr.getRequestedBy().getId().equals(caller.getId());
+        boolean isOwnOwner = ScopeContext.hasAtLeast(Scope.OWNER)
+                && pr.getTenant().getId().toString().equals(TenantContext.getTenantId());
+
+        boolean allowed = isOwnOwner || (isRequester && pr.getStatus() == PurchaseRequestStatus.PENDING);
+
+        if (!allowed) {
+            throw new AccessDeniedException(pr.getStatus() == PurchaseRequestStatus.APPROVED
+                    ? "Only Owner-level users or higher can cancel an approved purchase request"
+                    : "Only the requester, or Owner-level users or higher, can cancel this purchase request");
+        }
 
         if (pr.getStatus() != PurchaseRequestStatus.PENDING
                 && pr.getStatus() != PurchaseRequestStatus.APPROVED) {
@@ -187,7 +215,9 @@ public class PurchaseRequestService {
         pr.setStatus(PurchaseRequestStatus.CANCELLED);
         pr = repository.save(pr);
 
-        writeHistory(pr, previous, PurchaseRequestStatus.CANCELLED, currentUser(), null);
+        writeHistory(pr, previous, PurchaseRequestStatus.CANCELLED, caller, reason);
+
+        notificationService.notifyPurchaseRequestCancelled(pr, caller, reason);
 
         return map(pr);
     }
@@ -205,14 +235,15 @@ public class PurchaseRequestService {
                 .toList();
     }
 
+    // Reads follow the caller's tree, like getAll(): HQ can open a PR it filed for a store
     public PurchaseRequestResponse getById(UUID id) {
 
-        return map(findOwned(id));
+        return map(findInTree(id));
     }
 
     public List<StatusHistoryResponse> getHistory(UUID id) {
 
-        PurchaseRequest pr = findOwned(id);
+        PurchaseRequest pr = findInTree(id);
 
         return historyRepository
                 .findByPurchaseRequest_IdOrderByCreatedAtDesc(pr.getId())
@@ -235,6 +266,18 @@ public class PurchaseRequestService {
         }
     }
 
+    /** Own tenant + descendants; same "not found" answer as findOwned for anything else. */
+    private PurchaseRequest findInTree(UUID id) {
+
+        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(
+                UUID.fromString(TenantContext.getTenantId()));
+
+        return repository
+                .findByIdAndTenantIdIn(id, tenantIds)
+                .orElseThrow(() -> new RuntimeException("Purchase request not found"));
+    }
+
+    /** Own tenant only: approve and reject are the store Owner's decisions. */
     PurchaseRequest findOwned(UUID id) {
 
         UUID tenantId = UUID.fromString(
