@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.procurement.dto.CreateRealisasiRequest;
+import com.example.operion.module.procurement.dto.MarkReimbursedRequest;
+import com.example.operion.module.procurement.enums.PaymentMethod;
+import com.example.operion.module.procurement.enums.ReimbursementStatus;
 import com.example.operion.module.procurement.dto.RealisasiResponse;
 import com.example.operion.module.procurement.dto.RejectRealisasiRequest;
 import com.example.operion.module.procurement.dto.StatusHistoryResponse;
@@ -68,13 +71,41 @@ public class RealisasiController {
                 .build();
     }
 
+    /** BE-18: optional ?paymentMethod=PERSONAL_REIMBURSABLE&amp;reimbursementStatus=PENDING|REIMBURSED. */
     @GetMapping
-    public ApiResponse<List<RealisasiResponse>> getAll() {
+    public ApiResponse<List<RealisasiResponse>> getAll(
+            @RequestParam(required = false) PaymentMethod paymentMethod,
+            @RequestParam(required = false) ReimbursementStatus reimbursementStatus) {
 
         return ApiResponse.<List<RealisasiResponse>>builder()
                 .success(true)
                 .message("Realisasi records fetched")
-                .data(service.getAll())
+                .data(service.getAll(paymentMethod, reimbursementStatus))
+                .build();
+    }
+
+    /** BE-18: the store Owner pays the Store Manager back for one or several purchases. */
+    @PatchMapping("/reimbursements/mark-paid")
+    public ApiResponse<List<RealisasiResponse>> markReimbursed(
+            @Valid @RequestBody MarkReimbursedRequest request) {
+
+        return ApiResponse.<List<RealisasiResponse>>builder()
+                .success(true)
+                .message("Marked as paid back")
+                .data(service.markReimbursed(request))
+                .build();
+    }
+
+    /** BE-18: undo a mark-paid; reason required. */
+    @PatchMapping("/{id}/reimbursement/undo")
+    public ApiResponse<RealisasiResponse> undoReimbursement(
+            @PathVariable UUID id,
+            @Valid @RequestBody RejectRealisasiRequest request) {
+
+        return ApiResponse.<RealisasiResponse>builder()
+                .success(true)
+                .message("Paid back undone")
+                .data(service.undoReimbursement(id, request.getReason()))
                 .build();
     }
 

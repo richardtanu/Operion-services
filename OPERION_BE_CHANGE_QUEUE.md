@@ -1336,9 +1336,10 @@ pass on both (it pins unchanged behaviour). Full suite 91/91.
 
 ## BE-18 — Paying back the Store Manager (reimbursement completion)
 
-**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decisions #5
-"reimbursement completion + its SoD question" and #10 "`reimbursedTo`/`reimbursedAt`
-missing from the response"; supersedes BE-09's "don't build `markReimbursed`" hold).
+**Status: DONE, 22 Oct 2026** (see end of entry). Product owner's decisions, 19 Oct 2026
+(module 1 deferred-decisions #5 "reimbursement completion + its SoD question" and #10
+"`reimbursedTo`/`reimbursedAt` missing from the response"; supersedes BE-09's "don't build
+`markReimbursed`" hold).
 
 ### Why
 
@@ -1398,6 +1399,37 @@ missing from the response"; supersedes BE-09's "don't build `markReimbursed`" ho
   (date, cash/transfer, reference); undo with reason. The SM sees their own amounts.
 - The old "no mark-reimbursed endpoint" info card and callouts go.
 - Notifications label "Paid back".
+
+### What was done — DONE, 22 Oct 2026
+
+1. **`PATCH /realisasi/reimbursements/mark-paid {ids, paidAt, method, reference?}`** —
+   all-or-nothing; sets `REIMBURSED`, `reimbursedAt` (start of `paidAt`), `reimbursedTo` =
+   the creator, method (`CASH`/`TRANSFER`, new enum `ReimbursementMethod`), reference. One
+   history row per record: the purchase's own status doesn't change, so the row repeats it
+   (`APPROVED → APPROVED`, or `FAILED → FAILED`) with reason "Paid back by transfer (BCA …)"
+   — that's how it shows, with the actor, in the activity log.
+2. **Who**: the store's own OWNER+. An id **outside** the caller's tree, or missing → 400
+   "…nothing was changed" (no probing); a store's purchase seen **from HQ** → 403 "Only the
+   store's own Owner…"; money owed to the caller → 403 (SoD #5). MANAGERs → 403.
+3. **`PATCH /realisasi/{id}/reimbursement/undo {reason}`** — same rule, `REIMBURSED` →
+   `PENDING`, payment fields cleared, reason on the history row.
+4. **`REIMBURSEMENT_PAID`**: one notification per person owed per call, "Rp 1.051.150 paid
+   back by … for REF1, REF2" (Indonesian number format). **Migration
+   `V6__reimbursement_payment.sql`**: two columns (`reimbursement_method`,
+   `reimbursement_reference`, no CHECK — enum validates) and `notifications_type_check`
+   recreated (rule 3). Applied cleanly to the local DB `[V]`.
+5. **Response**: `reimbursedToName`, `reimbursedAt`, `reimbursementMethod`,
+   `reimbursementReference` (closes #10).
+6. **`GET /realisasi?paymentMethod=…&reimbursementStatus=…`** — both optional, filtered on
+   the server.
+7. **The person owed sees `totalCost`** of their own PERSONAL_REIMBURSABLE purchase; every
+   other cost field stays redacted for them, as do colleagues' and company-paid ones.
+8. FAILED purchases with a pending reimbursement can still be paid back (tested).
+
+The shared OWNER gate's message became "…approve, reject or settle a purchase" (it now
+guards approve-escalated, reject and mark-paid). Tests: `ReimbursementTest` (7), all fail
+against the old service/controller. Full suite 103/103. Postman: new `REALISASI` folder
+(list with filters, mark-paid, undo).
 
 ---
 

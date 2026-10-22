@@ -3235,6 +3235,148 @@
                                                    ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "REALISASI",
+                     "item":  [
+                                  {
+                                      "name":  "realisasi-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/realisasi",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "realisasi"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "paymentMethod",
+                                                                                    "value":  "PERSONAL_REIMBURSABLE",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "COMPANY_ACCOUNT | PERSONAL_REIMBURSABLE"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "reimbursementStatus",
+                                                                                    "value":  "PENDING",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "NOT_APPLICABLE | PENDING | REIMBURSED"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "Purchases across your tenant tree. BE-18: PROC-08 \u0027Owed\u0027 = paymentMethod=PERSONAL_REIMBURSABLE\u0026reimbursementStatus=PENDING; \u0027Paid back\u0027 = ...\u0026reimbursementStatus=REIMBURSED."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "realisasi-reimbursement-mark-paid",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"ids\": [\"\"],\r\n  \"paidAt\": \"2026-10-22\",\r\n  \"method\": \"TRANSFER\",\r\n  \"reference\": \"BCA 0981\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/realisasi/reimbursements/mark-paid",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "realisasi",
+                                                                               "reimbursements",
+                                                                               "mark-paid"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-18. The store\u0027s own OWNER+ only (HQ can read, not mark); never money owed to yourself. All-or-nothing: every id must be a pending personal reimbursement in your store. method: CASH | TRANSFER; reference optional. The person owed gets one \u0027Paid back\u0027 notification."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "realisasi-reimbursement-undo",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n  \"reason\": \"Marked the wrong one\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/realisasi/:id/reimbursement/undo",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "realisasi",
+                                                                               ":id",
+                                                                               "reimbursement",
+                                                                               "undo"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-18. Same Owner rule; reason required. Back to PENDING, payment fields cleared."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
                  }
              ],
     "auth":  {
