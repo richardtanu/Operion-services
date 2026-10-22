@@ -101,6 +101,10 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 
 `PurchaseOrder.supplier` is **legacy** — supplier-based purchasing is Realisasi's job now. Convention, not runtime-enforced.
 
+**Orders to HQ** (BE-20): drafting a PO needs MANAGER+ scope or the PROCUREMENT role; **sending** it needs OWNER+ (sending commits the store's money); cancelling a DRAFT needs its creator (`PurchaseOrder.createdBy`, null on rows before 22 Oct 2026) or OWNER+, cancelling a sent one (ORDERED / PARTIALLY_RECEIVED) needs OWNER+ and a reason, written to history. PO numbers carry a random suffix (two drafts in the same millisecond used to collide on the unique column).
+
+**Receiving goods** (BE-20): the receiver is always the signed-in user. `receivedBy` in the body is deprecated, still accepted for one release, 400 when it isn't the caller (it used to accept any user id from any tenant). Goods photos are `goodsPhotoUploadIds` (BE-23 uploads, purpose `GOODS_RECEIPT_PHOTO`), attached in the same transaction.
+
 ### PRA / Realisasi semantics
 
 - **PRA is an authorization ceiling**, not an order. `authorizedQty` and `maxValue` are both **per-line** on `PurchaseRequestAuthorizationItem`. There is no header-level ceiling field. (Whether to add a nullable header cap is an open decision — per-line ceilings cannot express "spend at most Rp 2.1M on this authorization", and ten lines each individually within ceiling can still overrun a total that was never stated.)
@@ -146,7 +150,9 @@ Do not collapse these into one helper.
 | Rule                                       | Exemption                                                        |
 | ------------------------------------------ | ---------------------------------------------------------------- |
 | PRA approver ≠ Realisasi creator           | **Yes** — Owner/Principal may do both. Manager does not qualify. |
-| Realisasi creator ≠ goods receipt receiver | **None**                                                         |
+| Realisasi creator ≠ goods receipt receiver | **Yes, with a goods photo** (BE-20, replaced DL-11's hard refusal): the buyer may receive their own purchase only with at least one photo; the receipt is flagged `selfReceived = true` (`GET /goods-receipts?selfReceived=true`) and the store's Owner+ chain gets `GOODS_SELF_RECEIVED`. Prevention became visibility, because at a store the SM usually buys and opens the package. |
+
+The PO path has **no** creator ≠ receiver rule, deliberately (BE-20): the Owner sends the order, the SM receives it, and HQ knows what it shipped.
 
 The scope check reads the approver's **stored** scope as a historical fact, not the current request's `ScopeContext`. Reading the live context would let a later promotion retroactively legalize a past pairing.
 

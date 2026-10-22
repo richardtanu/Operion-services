@@ -214,6 +214,34 @@ public class NotificationService {
         }
     }
 
+    /**
+     * BE-20: the buyer received their own purchase (allowed with a goods
+     * photo). Owner+ in the Realisasi's tenant and above are told, except the
+     * receiver.
+     */
+    public void notifyGoodsSelfReceived(Realisasi realisasi, User receiver) {
+
+        List<UUID> tenantIds = tenantHierarchyService.getAncestorTenantIds(realisasi.getTenant().getId());
+
+        for (User target : approversIn(tenantIds)) {
+
+            if (receiver != null && target.getId().equals(receiver.getId())) {
+                continue;
+            }
+
+            create(
+                    realisasi.getTenant(),
+                    target,
+                    NotificationType.GOODS_SELF_RECEIVED,
+                    "Buyer Received Their Own Purchase",
+                    nameOf(receiver) + " received their own purchase "
+                            + realisasi.getExternalOrderRef() + " at " + realisasi.getTenant().getName()
+                            + ": goods photo attached",
+                    NotificationReferenceType.REALISASI,
+                    realisasi.getId());
+        }
+    }
+
     public void notifyPartEndOfLife(AirsoftUnit unit, String message) {
 
         for (User target : approversIn(List.of(unit.getTenant().getId()))) {

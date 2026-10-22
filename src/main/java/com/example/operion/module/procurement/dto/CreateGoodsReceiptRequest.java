@@ -19,8 +19,17 @@ public class CreateGoodsReceiptRequest {
 
     private UUID realisasiId;
 
-    @NotNull
+    /**
+     * BE-20: deprecated. The receiver is always the signed-in user; this is
+     * still accepted for one release but must equal the caller (400 otherwise).
+     */
     private UUID receivedBy;
+
+    /**
+     * BE-20: photos of the goods (BE-23 upload ids, purpose GOODS_RECEIPT_PHOTO).
+     * Required when you receive a purchase you made yourself (Realisasi path).
+     */
+    private List<UUID> goodsPhotoUploadIds;
 
     private LocalDateTime receivedDate;
 

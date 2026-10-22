@@ -9,9 +9,13 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.notification.service.NotificationService;
+import com.example.operion.module.upload.enums.UploadPurpose;
+import com.example.operion.module.upload.service.UploadService;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.inventory.enums.StockMovementType;
@@ -78,6 +82,12 @@ public class GoodsReceiptService {
 
     private final TenantHierarchyService tenantHierarchyService;
 
+    private final UploadService uploadService;
+
+    private final NotificationService notificationService;
+
+    static final String ATTACHED_TYPE = "GOODS_RECEIPT";
+
     @Transactional
     public GoodsReceiptResponse receive(CreateGoodsReceiptRequest request) {
 
@@ -97,9 +107,16 @@ public class GoodsReceiptService {
                 .findById(tenantId)
                 .orElseThrow();
 
+        // BE-20: the receiver is whoever is signed in and opening the package.
+        // receivedBy used to be any user id from the body (any tenant, even);
+        // it's still accepted for one release but must be the caller.
         User receivedBy = userRepository
-                .findById(request.getReceivedBy())
-                .orElseThrow(() -> new RuntimeException("Receiving user not found"));
+                .findById(UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName()))
+                .orElseThrow(() -> new RuntimeException("Current user not found"));
+
+        if (request.getReceivedBy() != null && !request.getReceivedBy().equals(receivedBy.getId())) {
+            throw new RuntimeException("Goods are received by the signed-in user; receivedBy must be you");
+        }
 
         if (hasRealisasi) {
             return receiveAgainstRealisasi(request, tenant, tenantId, receivedBy);
@@ -157,6 +174,8 @@ public class GoodsReceiptService {
             }
         }
 
+        // BE-20, PO path: no "receiver ≠ buyer" rule, by decision. The Owner sent
+        // the order, the SM receives it, and HQ knows what it shipped.
         GoodsReceipt receipt = GoodsReceipt.builder()
                 .tenant(tenant)
                 .purchaseOrder(po)
@@ -166,6 +185,8 @@ public class GoodsReceiptService {
                 .build();
 
         receipt = repository.save(receipt);
+
+        attachGoodsPhotos(request, receipt);
 
         for (GoodsReceiptItemRequest itemRequest : request.getItems()) {
 
@@ -246,12 +267,15 @@ public class GoodsReceiptService {
             throw new RuntimeException("Realisasi must be APPROVED to receive goods.");
         }
 
-        if (realisasi.getCreatedBy() != null
-                && realisasi.getCreatedBy().getId().equals(receivedBy.getId())) {
+        // BE-20 replaces DL-11's hard "receiver ≠ buyer" refusal: at a store the
+        // Store Manager usually buys AND opens the package. Self-receiving is
+        // allowed only with a photo of the goods, and is flagged and reported to
+        // the store's approvers, so prevention becomes visibility.
+        boolean selfReceived = realisasi.getCreatedBy() != null
+                && realisasi.getCreatedBy().getId().equals(receivedBy.getId());
 
-            throw new RuntimeException(
-                    "Goods receipt must be performed by a different user than the one who "
-                            + "created the Realisasi (DL-11).");
+        if (selfReceived && (request.getGoodsPhotoUploadIds() == null || request.getGoodsPhotoUploadIds().isEmpty())) {
+            throw new RuntimeException("You bought this: add a photo of the goods to receive it");
         }
 
         // Attachment (the marketplace receipt) is optional when the Realisasi
@@ -271,9 +295,16 @@ public class GoodsReceiptService {
                 .receivedBy(receivedBy)
                 .receivedDate(request.getReceivedDate())
                 .notes(request.getNotes())
+                .selfReceived(selfReceived)
                 .build();
 
         receipt = repository.save(receipt);
+
+        attachGoodsPhotos(request, receipt);
+
+        if (selfReceived) {
+            notificationService.notifyGoodsSelfReceived(realisasi, receivedBy);
+        }
 
         for (GoodsReceiptItemRequest itemRequest : request.getItems()) {
 
@@ -396,12 +427,18 @@ public class GoodsReceiptService {
             LocalDate from,
             LocalDate to,
             UUID receivedBy,
-            GoodsReceiptPath path) {
+            GoodsReceiptPath path,
+            Boolean selfReceived) {
 
         List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(
                 UUID.fromString(TenantContext.getTenantId()));
 
         Specification<GoodsReceipt> spec = (root, query, cb) -> root.get("tenant").get("id").in(tenantIds);
+
+        // BE-20: ?selfReceived=true lists receipts where the buyer received their own purchase
+        if (selfReceived != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("selfReceived"), selfReceived));
+        }
 
         if (from != null) {
             spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(
@@ -444,6 +481,22 @@ public class GoodsReceiptService {
                 .orElseThrow(() -> new RuntimeException("Goods receipt not found")));
     }
 
+    /**
+     * BE-20: claim the goods photos (BE-23 uploads) for this receipt, in the
+     * same transaction. UploadService refuses anything that isn't the caller's
+     * own, unattached, GOODS_RECEIPT_PHOTO upload actually PUT to storage.
+     */
+    private void attachGoodsPhotos(CreateGoodsReceiptRequest request, GoodsReceipt receipt) {
+
+        if (request.getGoodsPhotoUploadIds() == null) {
+            return;
+        }
+
+        for (UUID uploadId : request.getGoodsPhotoUploadIds().stream().distinct().toList()) {
+            uploadService.attach(uploadId, UploadPurpose.GOODS_RECEIPT_PHOTO, ATTACHED_TYPE, receipt.getId());
+        }
+    }
+
     private GoodsReceiptResponse map(GoodsReceipt receipt) {
 
         List<GoodsReceiptItemResponse> items = itemRepository
@@ -469,6 +522,8 @@ public class GoodsReceiptService {
                 .receivedByName(receipt.getReceivedBy() != null ? receipt.getReceivedBy().getFullName() : null)
                 .receivedDate(receipt.getReceivedDate())
                 .notes(receipt.getNotes())
+                .selfReceived(receipt.isSelfReceived())
+                .goodsPhotoUploadIds(uploadService.attachedIds(ATTACHED_TYPE, receipt.getId()))
                 .items(items)
                 .build();
     }

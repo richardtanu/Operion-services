@@ -2526,40 +2526,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "purchase-order-cancel",
-                                      "request":  {
-                                                      "method":  "PATCH",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/purchase-orders/:id/cancel",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-orders",
-                                                                               ":id",
-                                                                               "cancel"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "id"
-                                                                                   }
-                                                                               ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "purchase-order-history",
                                       "request":  {
                                                       "method":  "GET",
@@ -2592,17 +2558,17 @@
                                       "response":  [
 
                                                    ]
-                                  }
-                              ]
-                 },
-                 {
-                     "name":  "GOODS RECEIPT",
-                     "item":  [
+                                  },
                                   {
-                                      "name":  "goods-receipt-create",
+                                      "name":  "purchase-order-cancel",
                                       "request":  {
-                                                      "method":  "POST",
+                                                      "method":  "PATCH",
                                                       "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
                                                                      {
                                                                          "key":  "Authorization",
                                                                          "value":  "Bearer {{bearerToken}}",
@@ -2611,7 +2577,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"purchaseOrderId\": \":purchaseOrderId\",\r\n  \"receivedBy\": \":userId\",\r\n  \"notes\": \"Delivered in good condition\",\r\n  \"items\": [\r\n    {\r\n      \"partId\": \":partId\",\r\n      \"quantity\": 5\r\n    }\r\n  ]\r\n}",
+                                                                   "raw":  "{\n  \"reason\": \"HQ is out of stock this month\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2619,21 +2585,35 @@
                                                                                }
                                                                },
                                                       "url":  {
-                                                                  "raw":  "http://localhost:8080/goods-receipts",
+                                                                  "raw":  "http://localhost:8080/purchase-orders/:id/cancel",
                                                                   "protocol":  "http",
                                                                   "host":  [
                                                                                "localhost"
                                                                            ],
+                                                                  "port":  "8080",
                                                                   "path":  [
-                                                                               "goods-receipts"
+                                                                               "purchase-orders",
+                                                                               ":id",
+                                                                               "cancel"
                                                                            ],
-                                                                  "port":  "8080"
-                                                              }
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-20. DRAFT: its creator or Owner+ (reason optional). ORDERED / PARTIALLY_RECEIVED: Owner+ only, reason required (400 without), written to history. Otherwise 403."
                                                   },
                                       "response":  [
 
                                                    ]
-                                  },
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "GOODS RECEIPT",
+                     "item":  [
                                   {
                                       "name":  "goods-receipt-get-by-purchase-order",
                                       "request":  {
@@ -2663,6 +2643,125 @@
                                                                                ],
                                                                   "port":  "8080"
                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "goods-receipt-get-by-id",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/goods-receipts/:id",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "goods-receipts",
+                                                                               ":id"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-08. A receipt outside your tenant tree answers like a missing one."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "goods-receipt-create",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"purchaseOrderId\": \":purchaseOrderId\",\n  \"notes\": \"Delivered in good condition\",\n  \"goodsPhotoUploadIds\": [],\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 5\n    }\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/goods-receipts",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "goods-receipts"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-20. The receiver is the signed-in user. receivedBy is deprecated: still accepted for one release, 400 if it isn\u0027t you. goodsPhotoUploadIds: optional photos (POST /uploads with purpose GOODS_RECEIPT_PHOTO first)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "goods-receipt-create-realisasi",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"realisasiId\": \":realisasiId\",\n  \"goodsPhotoUploadIds\": [\n    \":uploadId\"\n  ],\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"realisasiItemId\": \":realisasiItemId\",\n      \"quantity\": 12\n    }\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/goods-receipts",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "goods-receipts"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-20. Realisasi path; quantity is in STOCK units (purchasedQty x conversionFactor). If you logged this purchase yourself, at least one goods photo is required (400 otherwise); the receipt is saved selfReceived=true and Owner+ are notified."
                                                   },
                                       "response":  [
 
@@ -2713,45 +2812,16 @@
                                                                                     "value":  "REALISASI",
                                                                                     "disabled":  true,
                                                                                     "description":  "PO | REALISASI"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "selfReceived",
+                                                                                    "value":  "true",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-20: true = the buyer received their own purchase"
                                                                                 }
                                                                             ]
                                                               },
                                                       "description":  "BE-08. Your tenant + descendants, newest first. All filters optional (tick them on in Params)."
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "goods-receipt-get-by-id",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/goods-receipts/:id",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "port":  "8080",
-                                                                  "path":  [
-                                                                               "goods-receipts",
-                                                                               ":id"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "id",
-                                                                                       "value":  ""
-                                                                                   }
-                                                                               ]
-                                                              },
-                                                      "description":  "BE-08. A receipt outside your tenant tree answers like a missing one."
                                                   },
                                       "response":  [
 

@@ -52,6 +52,14 @@ public class GoodsReceipt {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * BE-20: the person who bought it also received it. Allowed only with a
+     * goods photo, and flagged so the store's Owner sees it.
+     */
+    @Column(name = "self_received", nullable = false)
+    @Builder.Default
+    private boolean selfReceived = false;
+
     @PrePersist
     public void prePersist() {
 
