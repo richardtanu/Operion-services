@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.example.operion.module.auth.entity.BaseEntity;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.procurement.enums.PaymentMethod;
+import com.example.operion.module.procurement.enums.ReimbursementMethod;
 import com.example.operion.module.procurement.enums.ReimbursementStatus;
 import com.example.operion.module.procurement.enums.RealisasiStatus;
 import com.example.operion.module.procurement.enums.VarianceStatus;
@@ -73,6 +74,15 @@ public class Realisasi extends BaseEntity {
 
     @Column(name = "reimbursed_at")
     private LocalDateTime reimbursedAt;
+
+    /** BE-18: how it was paid back (CASH / TRANSFER). Null until paid. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reimbursement_method", length = 20)
+    private ReimbursementMethod reimbursementMethod;
+
+    /** BE-18: optional transfer reference or note. */
+    @Column(name = "reimbursement_reference")
+    private String reimbursementReference;
 
     @Column(name = "purchased_at")
     private LocalDateTime purchasedAt;

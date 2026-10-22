@@ -21,6 +21,7 @@ import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.procurement.dto.CreateRealisasiRequest;
+import com.example.operion.module.procurement.dto.MarkReimbursedRequest;
 import com.example.operion.module.procurement.dto.RealisasiItemRequest;
 import com.example.operion.module.procurement.dto.RealisasiItemResponse;
 import com.example.operion.module.procurement.dto.RealisasiResponse;
@@ -322,7 +323,12 @@ public class RealisasiService {
         return map(correctedEntity);
     }
 
-    public List<RealisasiResponse> getAll() {
+    /**
+     * Tree-scoped list. BE-18: optional server-side filters so the
+     * reimbursement screen (PROC-08) asks for exactly "owed" or "paid back"
+     * instead of filtering on the device.
+     */
+    public List<RealisasiResponse> getAll(PaymentMethod paymentMethod, ReimbursementStatus reimbursementStatus) {
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -330,8 +336,112 @@ public class RealisasiService {
 
         return repository.findByTenantIdIn(tenantIds)
                 .stream()
+                .filter(r -> paymentMethod == null || r.getPaymentMethod() == paymentMethod)
+                .filter(r -> reimbursementStatus == null || r.getReimbursementStatus() == reimbursementStatus)
                 .map(this::map)
                 .toList();
+    }
+
+    /**
+     * BE-18: the store Owner pays the Store Manager back for purchases made with
+     * their own money — one or several at once. Rules:
+     * <ul>
+     * <li>Only an OWNER+ of the purchases' own store (HQ can read, not mark: the
+     *     store's money is the store's business), and never for money owed to
+     *     themself (segregation of duties).</li>
+     * <li>All-or-nothing: if any id isn't a pending personal reimbursement in the
+     *     caller's store, nothing changes (400).</li>
+     * <li>A FAILED (rejected) purchase is still owed: the money really was spent.</li>
+     * </ul>
+     * One "paid back" notification per person owed, per call.
+     */
+    @Transactional
+    public List<RealisasiResponse> markReimbursed(MarkReimbursedRequest request) {
+
+        requireOwnerScope();
+
+        UUID tenantId = UUID.fromString(TenantContext.getTenantId());
+        User caller = currentUser();
+
+        List<UUID> ids = request.getIds().stream().distinct().toList();
+        List<UUID> tree = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+
+        // outside the caller's tree counts as missing (no probing other roots)
+        List<Realisasi> records = repository.findAllById(ids).stream()
+                .filter(r -> tree.contains(r.getTenant().getId()))
+                .toList();
+
+        // a store's purchase seen from HQ: HQ can read it, but paying back is the store Owner's call
+        if (records.stream().anyMatch(r -> !r.getTenant().getId().equals(tenantId))) {
+            throw new AccessDeniedException("Only the store's own Owner can mark its purchases paid back");
+        }
+
+        boolean allPending = records.size() == ids.size() && records.stream().allMatch(r ->
+                r.getPaymentMethod() == PaymentMethod.PERSONAL_REIMBURSABLE
+                        && r.getReimbursementStatus() == ReimbursementStatus.PENDING);
+
+        if (!allPending) {
+            throw new RuntimeException(
+                    "Every purchase must be a pending reimbursement in your store; nothing was changed");
+        }
+
+        if (records.stream().anyMatch(r -> r.getCreatedBy() != null && r.getCreatedBy().getId().equals(caller.getId()))) {
+            throw new AccessDeniedException("You can't mark money owed to yourself as paid back");
+        }
+
+        LocalDateTime paidAt = request.getPaidAt().atStartOfDay();
+        String note = "Paid back by " + request.getMethod().name().toLowerCase()
+                + (request.getReference() != null && !request.getReference().isBlank()
+                        ? " (" + request.getReference() + ")" : "");
+
+        for (Realisasi r : records) {
+            r.setReimbursementStatus(ReimbursementStatus.REIMBURSED);
+            r.setReimbursedTo(r.getCreatedBy());
+            r.setReimbursedAt(paidAt);
+            r.setReimbursementMethod(request.getMethod());
+            r.setReimbursementReference(request.getReference());
+            repository.save(r);
+
+            // The purchase's own status doesn't change; the history row records who
+            // paid it back and how, so it shows in the activity log
+            writeHistory(r, r.getStatus(), r.getStatus(), caller, note);
+        }
+
+        records.stream()
+                .collect(java.util.stream.Collectors.groupingBy(Realisasi::getCreatedBy))
+                .forEach((owed, theirs) -> notificationService.notifyReimbursementPaid(owed, theirs, caller));
+
+        return records.stream().map(this::map).toList();
+    }
+
+    /** BE-18: undo a mark-paid (wrong record, wrong date). Same OWNER rule; reason required. */
+    @Transactional
+    public RealisasiResponse undoReimbursement(UUID id, String reason) {
+
+        requireOwnerScope();
+
+        Realisasi r = findOwned(id);
+
+        if (r.getReimbursementStatus() != ReimbursementStatus.REIMBURSED) {
+            throw new RuntimeException("Only a reimbursement marked paid back can be undone");
+        }
+
+        User caller = currentUser();
+
+        if (r.getCreatedBy() != null && r.getCreatedBy().getId().equals(caller.getId())) {
+            throw new AccessDeniedException("You can't change a reimbursement owed to yourself");
+        }
+
+        r.setReimbursementStatus(ReimbursementStatus.PENDING);
+        r.setReimbursedTo(null);
+        r.setReimbursedAt(null);
+        r.setReimbursementMethod(null);
+        r.setReimbursementReference(null);
+        repository.save(r);
+
+        writeHistory(r, r.getStatus(), r.getStatus(), caller, "Paid back undone: " + reason);
+
+        return map(r);
     }
 
     public RealisasiResponse getById(UUID id) {
@@ -436,7 +546,7 @@ public class RealisasiService {
     private void requireOwnerScope() {
 
         if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
-            throw new AccessDeniedException("Only Owner-level users or higher can approve an escalated realisasi");
+            throw new AccessDeniedException("Only Owner-level users or higher can approve, reject or settle a purchase");
         }
     }
 
@@ -478,6 +588,14 @@ public class RealisasiService {
         // sub-OWNER caller sees every other field on this response normally.
         boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
 
+        // BE-18: the one exception — the person owed always sees the total of a
+        // purchase they paid for with their own money. Only totalCost; every
+        // other cost field stays redacted for them.
+        boolean isOwedToCaller = realisasi.getPaymentMethod() == PaymentMethod.PERSONAL_REIMBURSABLE
+                && realisasi.getCreatedBy() != null
+                && realisasi.getCreatedBy().getId().toString().equals(
+                        SecurityContextHolder.getContext().getAuthentication().getName());
+
         List<RealisasiItemResponse> items = itemRepository
                 .findByRealisasiId(realisasi.getId())
                 .stream()
@@ -508,6 +626,11 @@ public class RealisasiService {
                 .paymentMethod(realisasi.getPaymentMethod() != null ? realisasi.getPaymentMethod().name() : null)
                 .reimbursementStatus(
                         realisasi.getReimbursementStatus() != null ? realisasi.getReimbursementStatus().name() : null)
+                .reimbursedToName(realisasi.getReimbursedTo() != null ? realisasi.getReimbursedTo().getFullName() : null)
+                .reimbursedAt(realisasi.getReimbursedAt())
+                .reimbursementMethod(
+                        realisasi.getReimbursementMethod() != null ? realisasi.getReimbursementMethod().name() : null)
+                .reimbursementReference(realisasi.getReimbursementReference())
                 .purchasedAt(realisasi.getPurchasedAt())
                 .subtotal(canSeeCost ? realisasi.getSubtotal() : null)
                 .sellerDiscount(canSeeCost ? realisasi.getSellerDiscount() : null)
@@ -515,7 +638,7 @@ public class RealisasiService {
                 .shipping(canSeeCost ? realisasi.getShipping() : null)
                 .insurance(canSeeCost ? realisasi.getInsurance() : null)
                 .serviceFee(canSeeCost ? realisasi.getServiceFee() : null)
-                .totalCost(canSeeCost ? realisasi.getTotalCost() : null)
+                .totalCost(canSeeCost || isOwedToCaller ? realisasi.getTotalCost() : null)
                 .attachments(realisasi.getAttachments())
                 .retroPurchaseFlag(realisasi.getRetroPurchaseFlag())
                 .createdById(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getId() : null)

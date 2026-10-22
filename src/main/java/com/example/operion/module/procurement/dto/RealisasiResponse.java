@@ -36,6 +36,15 @@ public class RealisasiResponse {
 
     private String reimbursementStatus;
 
+    /** BE-18: who was paid back, when, how. Null until paid back. */
+    private String reimbursedToName;
+
+    private java.time.LocalDateTime reimbursedAt;
+
+    private String reimbursementMethod;
+
+    private String reimbursementReference;
+
     private LocalDateTime purchasedAt;
 
     private BigDecimal subtotal;

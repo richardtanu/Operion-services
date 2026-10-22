@@ -102,6 +102,35 @@ public class NotificationService {
                         + (reason != null && !reason.isBlank() ? ": " + reason : ""));
     }
 
+    /**
+     * BE-18: one "paid back" notification per person owed per mark-paid call,
+     * listing the purchases ("Rp 1.234.000 paid back for SHP-1, SHP-2"). The
+     * amount is theirs to see (BE-18's exception to cost redaction).
+     */
+    public void notifyReimbursementPaid(User owed, List<Realisasi> records, User actor) {
+
+        if (owed == null || (actor != null && owed.getId().equals(actor.getId())) || records.isEmpty()) {
+            return;
+        }
+
+        java.math.BigDecimal total = records.stream()
+                .map(r -> r.getTotalCost() != null ? r.getTotalCost() : java.math.BigDecimal.ZERO)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        String amount = java.text.NumberFormat.getIntegerInstance(java.util.Locale.forLanguageTag("id-ID"))
+                .format(total);
+
+        String refs = records.stream().map(Realisasi::getExternalOrderRef)
+                .collect(java.util.stream.Collectors.joining(", "));
+
+        create(records.get(0).getTenant(), owed,
+                NotificationType.REIMBURSEMENT_PAID,
+                "Paid Back",
+                "Rp " + amount + " paid back by " + nameOf(actor) + " for " + refs,
+                NotificationReferenceType.REALISASI,
+                records.get(0).getId());
+    }
+
     /** BE-15: skipped when the requester cancelled their own PR (notifyRequester's rule). */
     public void notifyPurchaseRequestCancelled(PurchaseRequest pr, User actor, String reason) {
 
