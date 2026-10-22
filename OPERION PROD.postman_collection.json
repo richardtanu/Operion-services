@@ -3432,6 +3432,58 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "tenant-purchase-budget",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"amount\": 7500000\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/tenants/:id/purchase-budget",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "tenants",
+                                                                               ":id",
+                                                                               "purchase-budget"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-16. The store\u0027s own Owner only (OWNER+ signed in at that store); HQ and Managers get 403. {\"amount\": null} clears it; negative → 400. Warns in the spending summary, never blocks."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
@@ -3815,6 +3867,56 @@
                                                                            ]
                                                               },
                                                       "description":  "BE-21. What HQ sells, for anyone signed in: mandatoryFromHq, consumable, and your store\u0027s own part for each item (storePartId, storeCurrentStock; null until first ordered)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "SPENDING",
+                     "item":  [
+                                  {
+                                      "name":  "spending-summary",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/procurement/spending",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "procurement",
+                                                                               "spending"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "month",
+                                                                                    "value":  "2026-10",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "yyyy-MM; defaults to this month"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "HQ: one store only (outside your tree → 400 Store not found)"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-16. OWNER+ only (403 below). A store Owner gets their store; HQ gets one row per store in its tree. spentFromCentre / spentOutside / spent for the month, committed now, budget, overBudget (warning only), topParts (5)."
                                                   },
                                       "response":  [
 

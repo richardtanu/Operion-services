@@ -1,5 +1,6 @@
 package com.example.operion.module.tenant.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,6 +19,7 @@ import com.example.operion.module.tenant.dto.TenantResponse;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -110,6 +112,30 @@ public class TenantService {
                 .toList();
     }
 
+    /**
+     * BE-16: the store's monthly purchase budget, or null to clear it. Only
+     * that store's own Owner (OWNER+ signed in at that store): the store owns
+     * its budget, and HQ reads it in the spending summary but can't set it.
+     */
+    @Transactional
+    public TenantResponse setPurchaseBudget(UUID id, BigDecimal amount) {
+
+        tenantHierarchyService.requireWithinCallerTenantTree(id);
+
+        if (!id.equals(UUID.fromString(TenantContext.getTenantId())) || !ScopeContext.hasAtLeast(Scope.OWNER)) {
+            throw new AccessDeniedException("Only the store's own Owner can set its budget");
+        }
+
+        if (amount != null && amount.signum() < 0) {
+            throw new RuntimeException("A budget can't be negative");
+        }
+
+        Tenant tenant = repository.findById(id).orElseThrow(() -> new RuntimeException("Tenant not found"));
+        tenant.setMonthlyPurchaseBudget(amount);
+
+        return map(repository.save(tenant));
+    }
+
     private TenantResponse map(Tenant tenant) {
 
         return TenantResponse.builder()
@@ -119,6 +145,8 @@ public class TenantService {
                 .active(tenant.getActive())
                 .parentId(tenant.getParent() != null ? tenant.getParent().getId() : null)
                 .parentName(tenant.getParent() != null ? tenant.getParent().getName() : null)
+                // BE-16: money, so null below OWNER like every other money field
+                .monthlyPurchaseBudget(ScopeContext.hasAtLeast(Scope.OWNER) ? tenant.getMonthlyPurchaseBudget() : null)
                 .build();
     }
 }

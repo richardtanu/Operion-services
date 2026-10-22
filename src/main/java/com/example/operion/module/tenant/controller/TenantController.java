@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.tenant.dto.CreateTenantRequest;
+import com.example.operion.module.tenant.dto.PurchaseBudgetRequest;
 import com.example.operion.module.tenant.dto.TenantResponse;
 import com.example.operion.module.tenant.service.TenantService;
 
@@ -56,6 +57,19 @@ public class TenantController {
                 .success(true)
                 .message("Tenant fetched")
                 .data(service.getById(id))
+                .build();
+    }
+
+    /** BE-16: the store's own Owner sets or clears ({@code amount: null}) its monthly budget. */
+    @PatchMapping("/{id}/purchase-budget")
+    public ApiResponse<TenantResponse> setPurchaseBudget(
+            @PathVariable UUID id,
+            @RequestBody PurchaseBudgetRequest request) {
+
+        return ApiResponse.<TenantResponse>builder()
+                .success(true)
+                .message("Purchase budget updated")
+                .data(service.setPurchaseBudget(id, request.getAmount()))
                 .build();
     }
 
