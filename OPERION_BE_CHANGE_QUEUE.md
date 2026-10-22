@@ -22,7 +22,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
-**BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
+**BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 
 ---
 
@@ -1935,7 +1935,7 @@ Side effects, checked `[C]`/`[V]`:
    while approve/reject look records up in the caller's own store only (`findOwned`), so HQ
    can't act on them. Nobody is at HQ today, so nothing changes yet. **Open question for the
    product owner:** should HQ get store approval notifications at all (BI only) or not?
-   No code changed for this.
+   No code changed for this. **Decided 22 Oct 2026: no** → BE-24.
 
 Items 2–7:
 2. `PATCH /parts/{id}/hq-flags` (`soldByHq`, `mandatoryFromHq`, nulls unchanged). ADMIN role
@@ -2059,6 +2059,33 @@ approval stays USER; an in-limit purchase fulfilling on logging → triggered by
 received", while the Owner's ORDERED row stays USER; a legacy actor-less row →
 NOT_RECORDED. Against the unfixed services all 4 fail. Full suite 135/135. Postman: no new
 requests (response fields only).
+
+---
+
+## BE-24 — Store approval alerts stay in the store
+
+**Status: DONE, 22 Oct 2026.** Product owner's decision, 22 Oct 2026, answering BE-21 side
+effect 4: HQ should **not** get a store's approval alerts.
+
+### Why
+
+`NotificationService` sent NEW_PURCHASE_REQUEST, REALISASI_ESCALATED and (BE-20)
+GOODS_SELF_RECEIVED to `approversIn(getAncestorTenantIds(store))`: ADMIN and OWNER+ users
+of the store **and every tenant above it** `[C]`. Approve/reject only find records in the
+caller's own store (`findOwned`), so once HQ BANDUNG had accounts (the super admin, V11),
+HQ would be told about approvals it can't make. HQ follows stores through the activity
+log, the spending summary (BE-16) and `GET /goods-receipts?selfReceived=true` instead.
+
+### What was done
+
+The three notifications now go to the store's own tenant only (`storeOnly(...)`), still
+ADMIN + OWNER+ there, still never the person who acted. `TenantHierarchyService` is no longer
+a dependency of `NotificationService`. Unchanged: the requester/procurement notifications
+(BE-07/15/18) were already store- or person-scoped.
+
+Tests: `StoreAlertsStayInStoreTest` (2): a Store Manager's new request, an over-limit
+purchase and a self-received receipt reach the store's Owner, and neither an HQ ADMIN nor an
+HQ ADMIN + PRINCIPAL. Against the unfixed code both fail. Full suite 141/141.
 
 ---
 
