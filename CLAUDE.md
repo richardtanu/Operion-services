@@ -176,7 +176,7 @@ One `Role` enum only. No `roles`/`user_roles` table pair.
 
 **Roles are settable but barely enforced** (BE-07). ADMIN-only `PATCH /users/{id}/role` (tree-contained, never your own). Role checks now in use: `PROCUREMENT` reads `GET /procurement/activity` (as may ADMIN and OWNER+), receives the PRA-created notification, files PRs and logs purchases, including for a store (BE-14/17); `ADMIN` files PRs, including for a store. TECHNICIAN and ACCOUNTING are still only checked by being refused. Role-**or**-scope checks live in the service (`CallerRoles.hasAny` + `ScopeContext.hasAtLeast`), because `@PreAuthorize` only sees roles.
 
-**Procurement notifications** go to the PR requester (approved / rejected / authorized / cancelled by someone else) and to PROCUREMENT users in the PRA's own tenant (PRA created). Nobody is notified about their own action. Every PR and PO status-history row now records its actor; rows written before 14 Oct 2026 may have a null actor.
+**Procurement notifications** go to the PR requester (approved / rejected / authorized / cancelled by someone else) and to PROCUREMENT users in the PRA's own tenant (PRA created). Nobody is notified about their own action. Every PR and PO status-history row now records its actor; rows written before 14 Oct 2026 may have a null actor. **Automatic rows** (BE-22: the PRA status refresh, the PO auto-status on goods receipt) keep `changedBy` null and set `automatic`, `triggeredBy` (whose action caused it) and `triggerReference` ("SHP-123 approved", "PO-… goods received"); responses carry `actorKind` USER / AUTOMATIC / NOT_RECORDED so the app never guesses from an empty name. Any new server-derived status change must do the same.
 
 ---
 

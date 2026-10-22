@@ -39,4 +39,18 @@ public class PurchaseOrderStatusHistory extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String reason;
+
+    /** BE-22: the server derived this change; changedBy is null and triggeredBy is the cause. */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean automatic = false;
+
+    /** BE-22: whose action caused an automatic change. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "triggered_by")
+    private User triggeredBy;
+
+    /** BE-22: what caused it, in words ("SHP-123 approved", "PO-… goods received"). */
+    @Column(name = "trigger_reference")
+    private String triggerReference;
 }

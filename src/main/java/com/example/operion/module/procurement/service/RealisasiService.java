@@ -35,6 +35,7 @@ import com.example.operion.module.procurement.entity.Realisasi;
 import com.example.operion.module.procurement.entity.RealisasiItem;
 import com.example.operion.module.procurement.entity.RealisasiStatusHistory;
 import com.example.operion.module.procurement.entity.Supplier;
+import com.example.operion.module.procurement.enums.ActorKind;
 import com.example.operion.module.procurement.enums.PaymentMethod;
 import com.example.operion.module.procurement.enums.PurchaseRequestAuthorizationStatus;
 import com.example.operion.module.procurement.enums.ReimbursementStatus;
@@ -242,7 +243,7 @@ public class RealisasiService {
             notificationService.notifyRealisasiEscalated(realisasi);
         }
 
-        praService.refreshStatus(pra.getId());
+        praService.refreshStatus(pra.getId(), createdBy, realisasi.getExternalOrderRef() + " logged");
 
         return map(realisasi);
     }
@@ -266,7 +267,8 @@ public class RealisasiService {
 
         writeHistory(realisasi, previous, RealisasiStatus.APPROVED, currentUser(), null);
 
-        praService.refreshStatus(realisasi.getPurchaseRequestAuthorization().getId());
+        praService.refreshStatus(realisasi.getPurchaseRequestAuthorization().getId(), currentUser(),
+                realisasi.getExternalOrderRef() + " approved");
 
         return map(realisasi);
     }
@@ -295,7 +297,8 @@ public class RealisasiService {
         // Failed realization does not kill the PRA — its quantity simply stops
         // counting toward fulfillment (see PurchaseRequestAuthorizationService's
         // APPROVED-only aggregation), so remaining ceiling reopens automatically.
-        praService.refreshStatus(realisasi.getPurchaseRequestAuthorization().getId());
+        praService.refreshStatus(realisasi.getPurchaseRequestAuthorization().getId(), currentUser(),
+                realisasi.getExternalOrderRef() + " rejected");
 
         return map(realisasi);
     }
@@ -332,7 +335,8 @@ public class RealisasiService {
 
         writeHistory(original, previous, RealisasiStatus.SUPERSEDED, currentUser(), request.getReason());
 
-        praService.refreshStatus(original.getPurchaseRequestAuthorization().getId());
+        praService.refreshStatus(original.getPurchaseRequestAuthorization().getId(), currentUser(),
+                original.getExternalOrderRef() + " corrected");
 
         RealisasiResponse corrected = create(request.getCorrection());
 
@@ -481,6 +485,7 @@ public class RealisasiService {
                         .newStatus(h.getNewStatus().name())
                         .changedByName(h.getChangedBy() != null ? h.getChangedBy().getFullName() : null)
                         .reason(h.getReason())
+                        .actorKind(ActorKind.of(h.getChangedBy(), false))
                         .createdAt(h.getCreatedAt())
                         .build())
                 .toList();

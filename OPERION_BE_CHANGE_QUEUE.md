@@ -21,7 +21,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin account still to create).
-**BE-22 open, 20 Oct 2026** (automatic status changes name what triggered them).
+**BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
 
 ---
@@ -1964,7 +1964,7 @@ Postman: CATALOG folder, `parts-hq-flags`, `parts-catalog-link`, `realisasi-crea
 
 ## BE-22 — Automatic status changes name what triggered them
 
-**Status: OPEN.** Product owner's decision, 20 Oct 2026 (module 1 deferred-decision #12,
+**Status: DONE, 22 Oct 2026** (see end of entry). Product owner's decision, 20 Oct 2026 (module 1 deferred-decision #12,
 "the activity log's System actor covers two cases").
 
 ### Why
@@ -2016,6 +2016,39 @@ and that case disappears.
 - PROC-09 line 3: "Automatic · after Rina Wijaya — REA-2026-0114 approved" (lock icon,
   italic, the derived treatment); "Not recorded" greyed for `NOT_RECORDED`. The expanded
   card's "Changed by" row uses the same words.
+
+### What was done — DONE, 22 Oct 2026
+
+Writers checked `[C]`: only the two named above leave the actor empty. PR history (incl.
+the ORDERED/APPROVED rows a PO writes and the AUTHORIZED rows a PRA writes) and Realisasi
+history always record the person who acted, so only the PRA and PO history tables get the
+columns.
+
+1. **V10:** `automatic boolean not null default false`, `triggered_by` (FK users),
+   `trigger_reference` on `purchase_request_authorization_status_history` and
+   `purchase_order_status_history`. Existing actor-less rows stay `automatic = false`.
+   - PRA refresh: `refreshStatus(praId, triggeredBy, triggerReference)`; callers pass
+     the buyer and "{externalOrderRef} logged" (create), the Owner and "… approved" /
+     "… rejected", the corrector and "… corrected" (supersede). The Realisasi has no
+     "REA-…" number; its external order ref is what people know it by.
+   - PO auto-status on goods receipt: the receiver and "{poNumber} goods received" (the
+     raw receipt UUID reason is gone).
+   - `changedBy` stays null on automatic rows.
+2. **Activity:** `actorKind` (`USER` | `AUTOMATIC` | `NOT_RECORDED`, new enum `ActorKind`),
+   `triggeredByName`, `triggerReference` on every entry; PR and Realisasi entries are USER
+   or NOT_RECORDED. The `actorId` filter still matches `changedBy` only (automatic rows
+   aren't the person's own change).
+3. **History endpoints:** the same three fields on `StatusHistoryResponse` (PR, PRA,
+   Realisasi, PO).
+
+Tests: `AutomaticTriggerTest` (4): an Owner approving an escalated 2-paket × 6 purchase
+that fills a 12-can limit → the PRA's FULFILLED row is AUTOMATIC, no changedBy, triggered
+by the Owner, "… approved", in history and the activity log, while the Realisasi's own
+approval stays USER; an in-limit purchase fulfilling on logging → triggered by the buyer,
+"… logged"; a receipt completing a PO → AUTOMATIC by the receiver, "{poNumber} goods
+received", while the Owner's ORDERED row stays USER; a legacy actor-less row →
+NOT_RECORDED. Against the unfixed services all 4 fail. Full suite 135/135. Postman: no new
+requests (response fields only).
 
 ---
 
