@@ -20,7 +20,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-17 open, 19 Oct 2026** (Owner sets limits; who logs, rejects, corrects purchases; HQ buying for a store).
 **BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
-**BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin account still to create).
+**BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
 
@@ -1714,7 +1714,7 @@ example, the `selfReceived` filter.
 
 ## BE-21 — HQ catalog and mandatory items: two ways a store buys
 
-**Status: DONE, 22 Oct 2026, except the HQ super admin account** (needs the person's name
+**Status: DONE, 22 Oct 2026**, HQ super admin included (V11, see side effect 3; was waiting on the person's name
 and email; see the end of entry). Item 1 report 20 Oct, decisions 21 Oct. Product owner's decisions,
 19 Oct 2026 (module 1 deferred-decision #7, "non-root outlet silently sees the root's
 supplier list", and the supply model behind it).
@@ -1918,6 +1918,16 @@ Side effects, checked `[C]`/`[V]`:
    for a root yet: `register` needs an ADMIN in the same tree, and nobody is at HQ), or move
    an existing ADMIN with one UPDATE (`tenant_id` → HQ_BANDUNG, `scope` → PRINCIPAL). Either
    way, no password in a migration.
+   **Done 22 Oct 2026:** the product owner gave `tanugraha.richard@gmail.com`. **V11**
+   inserts "Richard Tanugraha" (name read from the email; change via DB if wrong), ADMIN +
+   PRINCIPAL at HQ_BANDUNG, **locked** (`password_hash = '!'`, matches nothing). There is no
+   password-change endpoint, so `InitialPasswordBootstrap` (startup runner) sets the first
+   password from `BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD` (≥ 12 characters), and
+   only on a locked account: it never overwrites a real password. Set them once, start,
+   log in, remove them. `HqSuperAdminTest` (4): the V11 row, locked login refused,
+   bootstrap then login works and a second run changes nothing, a real password and a
+   short one are never applied, and the super admin's `GET /tenants/tree` is HQ_BANDUNG
+   then BLITZ_BDG. V11 confirmed against the local PostgreSQL. Full suite 139/139.
 4. **Tree walks:** HQ now sees BLITZ_BDG's data through `getEffectiveTenantIds`. And
    `approversIn(getAncestorTenantIds(…))` (NotificationService) already includes ADMIN and
    OWNER+ users of every ancestor, so once HQ has accounts they will get BLITZ_BDG's
