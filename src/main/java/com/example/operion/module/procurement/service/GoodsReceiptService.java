@@ -238,7 +238,10 @@ public class GoodsReceiptService {
                             .purchaseOrder(po)
                             .previousStatus(previous)
                             .newStatus(next)
-                            .reason("Goods receipt " + receipt.getId())
+                            // BE-22: automatic, caused by the receiver; named by PO number, not a raw receipt id
+                            .automatic(true)
+                            .triggeredBy(receivedBy)
+                            .triggerReference(po.getPoNumber() + " goods received")
                             .build());
         }
 

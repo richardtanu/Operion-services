@@ -20,6 +20,7 @@ import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.procurement.dto.ProcurementActivityResponse;
+import com.example.operion.module.procurement.enums.ActorKind;
 import com.example.operion.module.procurement.enums.ProcurementEntityType;
 import com.example.operion.module.procurement.repository.PurchaseOrderStatusHistoryRepository;
 import com.example.operion.module.procurement.repository.PurchaseRequestAuthorizationStatusHistoryRepository;
@@ -108,6 +109,7 @@ public class ProcurementActivityService {
                             ProcurementEntityType.PURCHASE_REQUEST,
                             h.getPurchaseRequest().getId(), null, h.getPurchaseRequest().getTenant(),
                             h.getChangedBy(), h.getPreviousStatus(), h.getNewStatus(), h.getReason(),
+                            NO_TRIGGER,
                             h.getCreatedAt())));
         }
 
@@ -120,6 +122,7 @@ public class ProcurementActivityService {
                             h.getPurchaseRequestAuthorization().getId(), null,
                             h.getPurchaseRequestAuthorization().getTenant(),
                             h.getChangedBy(), h.getPreviousStatus(), h.getNewStatus(), h.getReason(),
+                            new Trigger(h.isAutomatic(), h.getTriggeredBy(), h.getTriggerReference()),
                             h.getCreatedAt())));
         }
 
@@ -132,6 +135,7 @@ public class ProcurementActivityService {
                             h.getRealisasi().getId(), h.getRealisasi().getExternalOrderRef(),
                             h.getRealisasi().getTenant(),
                             h.getChangedBy(), h.getPreviousStatus(), h.getNewStatus(), h.getReason(),
+                            NO_TRIGGER,
                             h.getCreatedAt())));
         }
 
@@ -144,6 +148,7 @@ public class ProcurementActivityService {
                             h.getPurchaseOrder().getId(), h.getPurchaseOrder().getPoNumber(),
                             h.getPurchaseOrder().getTenant(),
                             h.getChangedBy(), h.getPreviousStatus(), h.getNewStatus(), h.getReason(),
+                            new Trigger(h.isAutomatic(), h.getTriggeredBy(), h.getTriggerReference()),
                             h.getCreatedAt())));
         }
 
@@ -197,6 +202,12 @@ public class ProcurementActivityService {
         };
     }
 
+    /** BE-22: an automatic row's cause. PR and Realisasi history are never automatic. */
+    private record Trigger(boolean automatic, User by, String reference) {
+    }
+
+    private static final Trigger NO_TRIGGER = new Trigger(false, null, null);
+
     private static ProcurementActivityResponse entry(
             ProcurementEntityType type,
             UUID entityId,
@@ -206,6 +217,7 @@ public class ProcurementActivityService {
             Enum<?> previous,
             Enum<?> next,
             String reason,
+            Trigger trigger,
             LocalDateTime at) {
 
         return ProcurementActivityResponse.builder()
@@ -220,6 +232,9 @@ public class ProcurementActivityService {
                 .previousStatus(previous != null ? previous.name() : null)
                 .newStatus(next != null ? next.name() : null)
                 .reason(reason)
+                .actorKind(ActorKind.of(actor, trigger.automatic()))
+                .triggeredByName(trigger.by() != null ? trigger.by().getFullName() : null)
+                .triggerReference(trigger.reference())
                 .build();
     }
 }

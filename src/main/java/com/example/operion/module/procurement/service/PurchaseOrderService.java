@@ -30,6 +30,7 @@ import com.example.operion.module.procurement.entity.PurchaseOrderStatusHistory;
 import com.example.operion.module.procurement.entity.PurchaseRequest;
 import com.example.operion.module.procurement.entity.PurchaseRequestStatusHistory;
 import com.example.operion.module.procurement.entity.Supplier;
+import com.example.operion.module.procurement.enums.ActorKind;
 import com.example.operion.module.procurement.enums.PurchaseOrderStatus;
 import com.example.operion.module.procurement.enums.PurchaseRequestStatus;
 import com.example.operion.module.procurement.repository.PurchaseOrderItemRepository;
@@ -303,6 +304,9 @@ public class PurchaseOrderService {
                         .newStatus(h.getNewStatus().name())
                         .changedByName(h.getChangedBy() != null ? h.getChangedBy().getFullName() : null)
                         .reason(h.getReason())
+                        .actorKind(ActorKind.of(h.getChangedBy(), h.isAutomatic()))
+                        .triggeredByName(h.getTriggeredBy() != null ? h.getTriggeredBy().getFullName() : null)
+                        .triggerReference(h.getTriggerReference())
                         .createdAt(h.getCreatedAt())
                         .build())
                 .toList();

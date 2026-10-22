@@ -27,6 +27,7 @@ import com.example.operion.module.procurement.entity.PurchaseRequestAuthorizatio
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorizationStatusHistory;
 import com.example.operion.module.procurement.entity.PurchaseRequestStatusHistory;
 import com.example.operion.module.procurement.entity.RealisasiItem;
+import com.example.operion.module.procurement.enums.ActorKind;
 import com.example.operion.module.procurement.enums.PurchaseRequestAuthorizationStatus;
 import com.example.operion.module.procurement.enums.PurchaseRequestStatus;
 import com.example.operion.module.procurement.enums.RealisasiStatus;
@@ -196,6 +197,9 @@ public class PurchaseRequestAuthorizationService {
                         .newStatus(h.getNewStatus().name())
                         .changedByName(h.getChangedBy() != null ? h.getChangedBy().getFullName() : null)
                         .reason(h.getReason())
+                        .actorKind(ActorKind.of(h.getChangedBy(), h.isAutomatic()))
+                        .triggeredByName(h.getTriggeredBy() != null ? h.getTriggeredBy().getFullName() : null)
+                        .triggerReference(h.getTriggerReference())
                         .createdAt(h.getCreatedAt())
                         .build())
                 .toList();
@@ -215,9 +219,13 @@ public class PurchaseRequestAuthorizationService {
      * remaining qty across its items. Called by RealisasiService after every
      * Realisasi create/approve/reject so the header status stays accurate
      * without ever writing a mutable "remaining" column.
+     *
+     * BE-22: a change made here is automatic; its history row names whose
+     * action caused it ({@code triggeredBy}) and what that was
+     * ({@code triggerReference}, e.g. "SHP-123 approved").
      */
     @Transactional
-    public void refreshStatus(UUID praId) {
+    public void refreshStatus(UUID praId, User triggeredBy, String triggerReference) {
 
         PurchaseRequestAuthorization pra = repository.findById(praId).orElseThrow();
 
@@ -258,7 +266,16 @@ public class PurchaseRequestAuthorizationService {
             pra.setStatus(next);
             repository.save(pra);
 
-            writeHistory(pra, previous, next, null, "Recomputed from Realisasi fulfillment");
+            historyRepository.save(
+                    PurchaseRequestAuthorizationStatusHistory.builder()
+                            .purchaseRequestAuthorization(pra)
+                            .previousStatus(previous)
+                            .newStatus(next)
+                            .reason("Recomputed from Realisasi fulfillment")
+                            .automatic(true)
+                            .triggeredBy(triggeredBy)
+                            .triggerReference(triggerReference)
+                            .build());
         }
     }
 
