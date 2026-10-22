@@ -33,5 +33,10 @@ public class PurchaseOrderResponse {
 
     private List<UUID> purchaseRequestIds;
 
+    /** BE-20: who drafted the order (null for orders from before 22 Oct 2026). */
+    private UUID createdById;
+
+    private String createdByName;
+
     private LocalDateTime createdAt;
 }

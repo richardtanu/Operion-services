@@ -5,12 +5,15 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.CallerRoles;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
@@ -71,6 +74,12 @@ public class PurchaseOrderService {
     @Transactional
     public PurchaseOrderResponse create(CreatePurchaseOrderRequest request) {
 
+        // BE-20: the Store Manager (MANAGER+) or HQ PROCUREMENT drafts; the Owner sends
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER) && !CallerRoles.hasAny(Role.PROCUREMENT)) {
+            throw new AccessDeniedException(
+                    "Only Manager-level users or higher, or Procurement, can draft a purchase order");
+        }
+
         UUID tenantId = UUID.fromString(
                 TenantContext.getTenantId());
 
@@ -119,10 +128,14 @@ public class PurchaseOrderService {
         PurchaseOrder po = PurchaseOrder.builder()
                 .tenant(tenant)
                 .supplier(supplier)
-                .poNumber("PO-" + System.currentTimeMillis())
+                // millis alone collided when two orders landed in the same ms
+                // (baseline §5.2); the random suffix makes that practically impossible
+                .poNumber("PO-" + System.currentTimeMillis() + "-"
+                        + Integer.toHexString(java.util.concurrent.ThreadLocalRandom.current().nextInt(0x10000, 0xfffff)))
                 .orderDate(LocalDate.now())
                 .status(PurchaseOrderStatus.DRAFT)
                 .totalAmount(totalAmount)
+                .createdBy(currentUser())
                 .build();
 
         po = repository.save(po);
@@ -163,6 +176,11 @@ public class PurchaseOrderService {
     @Transactional
     public PurchaseOrderResponse sendToSupplier(UUID id) {
 
+        // BE-20: sending commits the store's money, so it's the Owner's act
+        if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
+            throw new AccessDeniedException("Only Owner-level users or higher can send a purchase order");
+        }
+
         PurchaseOrder po = findOwned(id);
 
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
@@ -192,10 +210,33 @@ public class PurchaseOrderService {
         return map(po);
     }
 
+    /**
+     * BE-20. A DRAFT costs nothing yet, so its creator may drop it (or OWNER+).
+     * Once sent (ORDERED / PARTIALLY_RECEIVED) the store has committed money:
+     * OWNER+ only, with a reason that goes on the history row.
+     */
     @Transactional
-    public PurchaseOrderResponse cancel(UUID id) {
+    public PurchaseOrderResponse cancel(UUID id, String reason) {
 
         PurchaseOrder po = findOwned(id);
+
+        User caller = currentUser();
+        boolean isCreator = po.getCreatedBy() != null && po.getCreatedBy().getId().equals(caller.getId());
+        boolean isOwnerPlus = ScopeContext.hasAtLeast(Scope.OWNER);
+
+        if (!isOwnerPlus && !(isCreator && po.getStatus() == PurchaseOrderStatus.DRAFT)) {
+            throw new AccessDeniedException(po.getStatus() == PurchaseOrderStatus.DRAFT
+                    ? "Only the person who drafted this order, or Owner-level users or higher, can cancel it"
+                    : "Only Owner-level users or higher can cancel a purchase order that has been sent");
+        }
+
+        if (po.getStatus() != PurchaseOrderStatus.DRAFT
+                && po.getStatus() != PurchaseOrderStatus.RECEIVED
+                && po.getStatus() != PurchaseOrderStatus.CANCELLED
+                && (reason == null || reason.isBlank())) {
+
+            throw new RuntimeException("A reason is required to cancel a purchase order that has been sent");
+        }
 
         if (po.getStatus() == PurchaseOrderStatus.RECEIVED) {
 
@@ -213,7 +254,7 @@ public class PurchaseOrderService {
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         po = repository.save(po);
 
-        writeHistory(po, previous, PurchaseOrderStatus.CANCELLED, currentUser());
+        writeHistory(po, previous, PurchaseOrderStatus.CANCELLED, caller, reason);
 
         for (PurchaseRequest pr : purchaseRequestRepository.findByPurchaseOrderId(po.getId())) {
 
@@ -283,12 +324,23 @@ public class PurchaseOrderService {
             PurchaseOrderStatus next,
             User changedBy) {
 
+        writeHistory(po, previous, next, changedBy, null);
+    }
+
+    private void writeHistory(
+            PurchaseOrder po,
+            PurchaseOrderStatus previous,
+            PurchaseOrderStatus next,
+            User changedBy,
+            String reason) {
+
         historyRepository.save(
                 PurchaseOrderStatusHistory.builder()
                         .purchaseOrder(po)
                         .previousStatus(previous)
                         .newStatus(next)
                         .changedBy(changedBy)
+                        .reason(reason)
                         .build());
     }
 
@@ -352,6 +404,8 @@ public class PurchaseOrderService {
                 .totalAmount(canSeeCost ? po.getTotalAmount() : null)
                 .items(items)
                 .purchaseRequestIds(purchaseRequestIds)
+                .createdById(po.getCreatedBy() != null ? po.getCreatedBy().getId() : null)
+                .createdByName(po.getCreatedBy() != null ? po.getCreatedBy().getFullName() : null)
                 .createdAt(po.getCreatedAt())
                 .build();
     }

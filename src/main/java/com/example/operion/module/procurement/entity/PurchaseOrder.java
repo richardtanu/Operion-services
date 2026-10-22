@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import com.example.operion.module.procurement.enums.PurchaseOrderStatus;
+import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.tenant.entity.Tenant;
 
 import jakarta.persistence.*;
@@ -51,6 +52,11 @@ public class PurchaseOrder {
     private PurchaseOrderStatus status = PurchaseOrderStatus.DRAFT;
 
     private BigDecimal totalAmount;
+
+    /** BE-20: who drafted it (null on orders created before 22 Oct 2026). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
 
     private LocalDateTime createdAt;
 

@@ -19,7 +19,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-16 open, 16 Oct 2026** (store spending summary + optional monthly budget; HQ can read).
 **BE-17 open, 19 Oct 2026** (Owner sets limits; who logs, rejects, corrects purchases; HQ buying for a store).
 **BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
-**BE-20 open, 19 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
+**BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 open, 19 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; starts with an investigation).
 **BE-22 open, 20 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
@@ -1557,7 +1557,7 @@ upload one file end to end before relying on it (`[?]` until then).
 
 ## BE-20 — Orders to HQ (who drafts, sends, cancels) and who receives goods
 
-**Status: OPEN.** Product owner's decisions, 19 Oct 2026 (module 1 deferred-decisions #9
+**Status: DONE, 22 Oct 2026** (see end of entry). Product owner's decisions, 19 Oct 2026 (module 1 deferred-decisions #9
 "no scope gating on the PO path" and #6 "PO path has no creator≠receiver check"; also
 reshapes the Realisasi receipt rule).
 
@@ -1636,6 +1636,39 @@ How the business runs:
   parts already get a `PartInstance` row per unit on receipt `[C]`, which is the natural
   thing a label points at; consumables (BBs) are tracked in aggregate, so they'd be
   labelled per box or lot, not per piece. Needs its own screen-inventory pass.
+
+### What was done — DONE, 22 Oct 2026
+
+1. **PO draft** → MANAGER+ or PROCUREMENT, else 403. `purchase_orders.created_by`
+   (migration V7, existing rows null); `createdById`/`createdByName` on the response.
+2. **PO send** → OWNER+, else 403 (checked before the lookup).
+3. **PO cancel**: DRAFT → creator or OWNER+; ORDERED / PARTIALLY_RECEIVED → OWNER+ only,
+   reason required (400 when blank), written to the history row with the actor. Body
+   `{ reason }` optional for a DRAFT (`CancelPurchaseOrderRequest`).
+4. **Receiver is the caller**, taken from the token. `receivedBy` is no longer required;
+   when sent it must equal the caller (400). The PO / Realisasi is looked up in the
+   caller's own tenant, so the receiver is always in the receipt's store.
+5. **PO path: no creator≠receiver rule**, recorded in `CLAUDE.md`.
+6. **Realisasi path**: the DL-11 refusal is gone. Buyer = receiver needs at least one goods
+   photo (400 "You bought this: add a photo of the goods to receive it"); the receipt is
+   saved `selfReceived = true` (`goods_receipts.self_received`, V7), on the response, and
+   filterable (`GET /goods-receipts?selfReceived=true`). `GOODS_SELF_RECEIVED` goes to
+   Owner+ in the store and above, never the receiver; V7 recreates
+   `notifications_type_check` (rule 3).
+7. **Goods photos**: `goodsPhotoUploadIds` on create and response, attached through
+   `UploadService.attach` in the same transaction (someone else's photo → 400 "Upload not
+   found", the whole receipt rolls back). New `UploadService.attachedIds`.
+
+Found while doing this: **PO numbers were `"PO-" + millis`** on a unique column, so two
+drafts in the same millisecond failed. Now `PO-<millis>-<random hex>`.
+
+Tests: `OrdersAndReceivingTest` (11), all through HTTP and the real DB, storage mocked.
+Realisasi lines use 2 pakets × factor 6 = 12 cans (rule 2; stock 5 → 17, 13 cans refused).
+Against the unfixed services 9 of 11 fail; the two that pass are the pre-existing
+over-receipt guard (kept as a rule-2 regression guard) and the PO-number check, which
+can't force two requests into one millisecond and is only a sanity check. Full suite
+114/114. Postman: PO cancel body, receipt `goodsPhotoUploadIds`, a Realisasi receipt
+example, the `selfReceived` filter.
 
 ---
 

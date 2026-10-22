@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.module.procurement.dto.CancelPurchaseOrderRequest;
 import com.example.operion.module.procurement.dto.CreatePurchaseOrderRequest;
 import com.example.operion.module.procurement.dto.PurchaseOrderResponse;
 import com.example.operion.module.procurement.dto.StatusHistoryResponse;
@@ -64,14 +65,16 @@ public class PurchaseOrderController {
                 .build();
     }
 
+    // BE-20: body optional for a DRAFT; a reason is required once the order was sent
     @PatchMapping("/{id}/cancel")
     public ApiResponse<PurchaseOrderResponse> cancel(
-            @PathVariable UUID id) {
+            @PathVariable UUID id,
+            @RequestBody(required = false) CancelPurchaseOrderRequest request) {
 
         return ApiResponse.<PurchaseOrderResponse>builder()
                 .success(true)
                 .message("Purchase order cancelled")
-                .data(service.cancel(id))
+                .data(service.cancel(id, request != null ? request.getReason() : null))
                 .build();
     }
 

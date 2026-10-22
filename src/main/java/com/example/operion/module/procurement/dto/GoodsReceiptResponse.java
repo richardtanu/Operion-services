@@ -31,5 +31,11 @@ public class GoodsReceiptResponse {
 
     private String notes;
 
+    /** BE-20: the buyer received it themself (allowed with a goods photo). */
+    private boolean selfReceived;
+
+    /** BE-20: goods photos (BE-23 uploads); view each with GET /uploads/{id}. */
+    private List<UUID> goodsPhotoUploadIds;
+
     private List<GoodsReceiptItemResponse> items;
 }

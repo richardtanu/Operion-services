@@ -178,6 +178,14 @@ public class UploadService {
         return repository.findById(uploadId).orElseThrow();
     }
 
+    /** Ids of the uploads attached to one record, e.g. a goods receipt's photos (BE-20). */
+    public List<UUID> attachedIds(String attachedType, UUID attachedId) {
+
+        return repository.findByAttachedTypeAndAttachedId(attachedType, attachedId).stream()
+                .map(Upload::getId)
+                .toList();
+    }
+
     /**
      * Hourly: delete uploads nobody attached within 24 h (the phone asked for a
      * URL, then the record was never saved). The object goes first, then the row,

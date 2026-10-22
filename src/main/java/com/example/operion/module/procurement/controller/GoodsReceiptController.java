@@ -37,19 +37,20 @@ public class GoodsReceiptController {
     /**
      * BE-08: receipts across the caller's tenant tree, newest first. Optional
      * filters: {@code from}/{@code to} (inclusive, yyyy-MM-dd), {@code receivedBy}
-     * (user id), {@code path} ({@code PO} | {@code REALISASI}).
+     * (user id), {@code path} ({@code PO} | {@code REALISASI}), {@code selfReceived} (BE-20).
      */
     @GetMapping
     public ApiResponse<List<GoodsReceiptResponse>> getAll(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) UUID receivedBy,
-            @RequestParam(required = false) GoodsReceiptPath path) {
+            @RequestParam(required = false) GoodsReceiptPath path,
+            @RequestParam(required = false) Boolean selfReceived) {
 
         return ApiResponse.<List<GoodsReceiptResponse>>builder()
                 .success(true)
                 .message("Goods receipts fetched")
-                .data(service.getAll(from, to, receivedBy, path))
+                .data(service.getAll(from, to, receivedBy, path, selfReceived))
                 .build();
     }
 
