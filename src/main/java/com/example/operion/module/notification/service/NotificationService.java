@@ -23,7 +23,6 @@ import com.example.operion.module.procurement.entity.PurchaseRequest;
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorization;
 import com.example.operion.module.procurement.entity.Realisasi;
 import com.example.operion.module.tenant.entity.Tenant;
-import com.example.operion.module.tenant.service.TenantHierarchyService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -40,11 +39,19 @@ public class NotificationService {
 
     private final UserRepository userRepository;
 
-    private final TenantHierarchyService tenantHierarchyService;
+    /**
+     * BE-24: store alerts stay in the store. Only that store's own Owner can
+     * act on them (approve/reject look records up in the caller's own store),
+     * so HQ isn't told; it reads the activity log and spending instead.
+     */
+    private static List<UUID> storeOnly(Tenant store) {
+
+        return List.of(store.getId());
+    }
 
     public void notifyNewPurchaseRequest(PurchaseRequest pr) {
 
-        List<UUID> tenantIds = tenantHierarchyService.getAncestorTenantIds(pr.getTenant().getId());
+        List<UUID> tenantIds = storeOnly(pr.getTenant());
 
         String requesterName = pr.getRequestedBy() != null ? pr.getRequestedBy().getFullName() : "Unknown";
 
@@ -198,7 +205,7 @@ public class NotificationService {
 
     public void notifyRealisasiEscalated(Realisasi realisasi) {
 
-        List<UUID> tenantIds = tenantHierarchyService.getAncestorTenantIds(realisasi.getTenant().getId());
+        List<UUID> tenantIds = storeOnly(realisasi.getTenant());
 
         for (User target : approversIn(tenantIds)) {
 
@@ -216,12 +223,12 @@ public class NotificationService {
 
     /**
      * BE-20: the buyer received their own purchase (allowed with a goods
-     * photo). Owner+ in the Realisasi's tenant and above are told, except the
-     * receiver.
+     * photo). Owner+ (and ADMINs) of that store are told, except the receiver;
+     * not HQ (BE-24). HQ can list them with GET /goods-receipts?selfReceived=true.
      */
     public void notifyGoodsSelfReceived(Realisasi realisasi, User receiver) {
 
-        List<UUID> tenantIds = tenantHierarchyService.getAncestorTenantIds(realisasi.getTenant().getId());
+        List<UUID> tenantIds = storeOnly(realisasi.getTenant());
 
         for (User target : approversIn(tenantIds)) {
 
