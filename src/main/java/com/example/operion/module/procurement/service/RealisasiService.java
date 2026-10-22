@@ -20,6 +20,7 @@ import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
+import com.example.operion.module.part.service.HqCatalogService;
 import com.example.operion.module.procurement.dto.CreateRealisasiRequest;
 import com.example.operion.module.procurement.dto.MarkReimbursedRequest;
 import com.example.operion.module.procurement.dto.RealisasiItemRequest;
@@ -71,6 +72,8 @@ public class RealisasiService {
     private final SupplierRepository supplierRepository;
 
     private final PartRepository partRepository;
+
+    private final HqCatalogService hqCatalogService;
 
     private final UserRepository userRepository;
 
@@ -127,6 +130,22 @@ public class RealisasiService {
             supplier = supplierRepository
                     .findByIdAndTenantId(request.getSupplierId(), rootTenantId)
                     .orElseThrow(() -> new RuntimeException("Supplier not found"));
+        }
+
+        // BE-21: items stores must buy from HQ can't be bought elsewhere. An
+        // urgent buy of one, paid at HQ, is still logged here, with HQ (the
+        // franchise-centre supplier) as the seller. Covers supersede too.
+        boolean boughtFromHq = supplier != null && supplier.isFranchiseCentre();
+
+        for (RealisasiItemRequest itemRequest : request.getItems()) {
+
+            Part part = partRepository
+                    .findByIdAndTenantId(itemRequest.getPartId(), tenantId)
+                    .orElseThrow(() -> new RuntimeException("Part not found"));
+
+            if (!boughtFromHq && hqCatalogService.isMandatoryFromHq(part)) {
+                throw new RuntimeException("This item must be bought from HQ: " + part.getName());
+            }
         }
 
         BigDecimal subtotal = nz(request.getSubtotal());
@@ -194,6 +213,7 @@ public class RealisasiService {
                 .externalOrderRef(request.getExternalOrderRef())
                 .channel(request.getChannel())
                 .supplier(supplier)
+                .sellerName(request.getSellerName())
                 .paymentRef(request.getPaymentRef())
                 .paymentMethod(request.getPaymentMethod())
                 .reimbursementStatus(reimbursementStatus)
@@ -622,6 +642,7 @@ public class RealisasiService {
                 .channel(realisasi.getChannel())
                 .supplierId(realisasi.getSupplier() != null ? realisasi.getSupplier().getId() : null)
                 .supplierName(realisasi.getSupplier() != null ? realisasi.getSupplier().getName() : null)
+                .sellerName(realisasi.getSellerName())
                 .paymentRef(realisasi.getPaymentRef())
                 .paymentMethod(realisasi.getPaymentMethod() != null ? realisasi.getPaymentMethod().name() : null)
                 .reimbursementStatus(

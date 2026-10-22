@@ -66,6 +66,7 @@ public class SupplierService {
                 .id(supplier.getId())
                 .name(supplier.getName())
                 .contact(supplier.getContact())
+                .franchiseCentre(supplier.isFranchiseCentre())
                 .createdAt(supplier.getCreatedAt())
                 .build();
     }

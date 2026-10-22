@@ -46,4 +46,13 @@ public class PartResponse {
   private Boolean retired;
 
   private LocalDateTime retiredAt;
+
+  /** BE-21: the HQ catalog item this store part is (null on HQ rows and unlinked items). */
+  private UUID catalogPartId;
+
+  /** BE-21: read from the HQ item (itself on HQ rows). */
+  private boolean soldByHq;
+
+  /** BE-21: read from the HQ item (itself on HQ rows). Hide these from "Buy elsewhere". */
+  private boolean mandatoryFromHq;
 }

@@ -17,4 +17,8 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
 
     @Query("select s from Supplier s where s.id = :id and s.tenant.id = :tenantId")
     Optional<Supplier> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
+
+    /** BE-21: the supplier that is HQ itself (at most one per tenant, V8). */
+    @Query("select s from Supplier s where s.tenant.id = :tenantId and s.franchiseCentre = true")
+    Optional<Supplier> findFranchiseCentre(@Param("tenantId") UUID tenantId);
 }

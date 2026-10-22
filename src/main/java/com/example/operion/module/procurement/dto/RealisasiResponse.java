@@ -30,6 +30,9 @@ public class RealisasiResponse {
 
     private String supplierName;
 
+    /** BE-21 */
+    private String sellerName;
+
     private String paymentRef;
 
     private String paymentMethod;

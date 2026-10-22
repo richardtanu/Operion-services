@@ -7,9 +7,11 @@ import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.part.dto.CreatePartRequest;
+import com.example.operion.module.part.dto.LinkCatalogPartRequest;
 import com.example.operion.module.part.dto.PartResponse;
 import com.example.operion.module.part.dto.PartsByCategoryResponse;
 import com.example.operion.module.part.dto.RetirePartRequest;
+import com.example.operion.module.part.dto.UpdateHqFlagsRequest;
 import com.example.operion.module.part.dto.UpdatePartRequest;
 import com.example.operion.module.part.service.PartService;
 
@@ -95,6 +97,34 @@ public class PartController {
                                 .success(true)
                                 .message("Part restored")
                                 .data(service.restore(partId))
+                                .build();
+        }
+
+        /** BE-21: HQ admins mark an HQ item sold to stores and/or mandatory. */
+        @PatchMapping("/{partId}/hq-flags")
+        public ApiResponse<PartResponse> updateHqFlags(
+                        @PathVariable UUID partId,
+                        @RequestBody UpdateHqFlagsRequest request) {
+
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("HQ flags updated")
+                                .data(service.updateHqFlags(partId, request))
+                                .build();
+        }
+
+        /** BE-21: HQ admins link a store's part to the HQ catalog item it is (null unlinks). */
+        @PatchMapping("/{partId}/catalog-link")
+        public ApiResponse<PartResponse> linkToCatalog(
+                        @PathVariable UUID partId,
+                        @RequestBody LinkCatalogPartRequest request) {
+
+                return ApiResponse
+                                .<PartResponse>builder()
+                                .success(true)
+                                .message("Catalog link updated")
+                                .data(service.linkToCatalog(partId, request))
                                 .build();
         }
 

@@ -12,9 +12,11 @@ import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.part.dto.CreatePartRequest;
+import com.example.operion.module.part.dto.LinkCatalogPartRequest;
 import com.example.operion.module.part.dto.PartResponse;
 import com.example.operion.module.part.dto.PartsByCategoryResponse;
 import com.example.operion.module.part.dto.RetirePartRequest;
+import com.example.operion.module.part.dto.UpdateHqFlagsRequest;
 import com.example.operion.module.part.dto.UpdatePartRequest;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.entity.PartCategory;
@@ -46,6 +48,8 @@ public class PartService {
         private final AirsoftUnitPartRepository unitPartRepository;
 
         private final TenantHierarchyService tenantHierarchyService;
+
+        private final HqCatalogService hqCatalogService;
 
         public PartResponse create(CreatePartRequest request) {
 
@@ -197,7 +201,81 @@ public class PartService {
                                 .notes(part.getNotes())
                                 .retired(part.getRetired())
                                 .retiredAt(part.getRetiredAt())
+                                .catalogPartId(part.getCatalogPart() != null ? part.getCatalogPart().getId() : null)
+                                .soldByHq(hqCatalogService.isSoldByHq(part))
+                                .mandatoryFromHq(hqCatalogService.isMandatoryFromHq(part))
                                 .build();
+        }
+
+        /**
+         * BE-21: HQ marks one of its own items as sold to stores and/or
+         * mandatory (stores must buy it from HQ). HQ admins only; a store's
+         * part isn't found here, because the flags live on HQ rows.
+         */
+        @Transactional
+        public PartResponse updateHqFlags(UUID partId, UpdateHqFlagsRequest request) {
+
+                hqCatalogService.requireHqCatalogAdmin();
+
+                UUID tenantId = UUID.fromString(TenantContext.getTenantId());
+
+                Part part = repository
+                                .findByIdAndTenantId(partId, tenantId)
+                                .orElseThrow(() -> new RuntimeException("Part not found"));
+
+                boolean sold = request.getSoldByHq() != null ? request.getSoldByHq() : part.isSoldByHq();
+                boolean mandatory = request.getMandatoryFromHq() != null
+                                ? request.getMandatoryFromHq()
+                                : part.isMandatoryFromHq();
+
+                if (mandatory && !sold) {
+                        throw new RuntimeException(
+                                        "An item stores must buy from HQ has to be sold by HQ too");
+                }
+
+                part.setSoldByHq(sold);
+                part.setMandatoryFromHq(mandatory);
+
+                return map(repository.save(part));
+        }
+
+        /**
+         * BE-21: say which HQ catalog item an existing store part is, so the
+         * store's first order of it doesn't create a second "6mm BBs".
+         * HQ admins only; the store part must be in their tree, the item one
+         * of HQ's own, and a store links each HQ item at most once.
+         */
+        @Transactional
+        public PartResponse linkToCatalog(UUID partId, LinkCatalogPartRequest request) {
+
+                hqCatalogService.requireHqCatalogAdmin();
+
+                UUID rootId = UUID.fromString(TenantContext.getTenantId());
+                List<UUID> tree = tenantHierarchyService.getEffectiveTenantIds(rootId);
+
+                Part part = repository.findById(partId)
+                                .filter(p -> tree.contains(p.getTenant().getId()))
+                                .filter(p -> !p.getTenant().getId().equals(rootId))
+                                .orElseThrow(() -> new RuntimeException("Part not found"));
+
+                if (request.getCatalogPartId() == null) {
+                        part.setCatalogPart(null);
+                        return map(repository.save(part));
+                }
+
+                Part item = repository.findByIdAndTenantId(request.getCatalogPartId(), rootId)
+                                .orElseThrow(() -> new RuntimeException("Catalog item not found"));
+
+                repository.findByTenantIdAndCatalogPartId(part.getTenant().getId(), item.getId())
+                                .filter(other -> !other.getId().equals(part.getId()))
+                                .ifPresent(other -> {
+                                        throw new RuntimeException("This store already has an item linked to "
+                                                        + item.getName() + ": " + other.getName());
+                                });
+
+                part.setCatalogPart(item);
+
+                return map(repository.save(part));
         }
 
         @Transactional

@@ -56,6 +56,14 @@ public class Realisasi extends BaseEntity {
     @JoinColumn(name = "supplier_id")
     private Supplier supplier;
 
+    /**
+     * BE-21: where an outside purchase was made, as free text, e.g.
+     * "Shopee · Toko Airsoft Jaya". The supplier list stays HQ-managed and
+     * isn't needed for outside buys.
+     */
+    @Column(name = "seller_name")
+    private String sellerName;
+
     @Column(name = "payment_ref")
     private String paymentRef;
 

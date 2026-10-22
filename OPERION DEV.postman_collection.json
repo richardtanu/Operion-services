@@ -727,6 +727,106 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "parts-hq-flags",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"soldByHq\": true,\n  \"mandatoryFromHq\": true\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/parts/:partId/hq-flags",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "parts",
+                                                                               ":partId",
+                                                                               "hq-flags"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "partId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-21. HQ admins only (ADMIN role or PRINCIPAL scope, signed in at HQ); 403 otherwise. On HQ\u0027s own items only. Null leaves a flag unchanged; mandatory requires sold (400)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "parts-catalog-link",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"catalogPartId\": \":catalogPartId\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/parts/:partId/catalog-link",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "parts",
+                                                                               ":partId",
+                                                                               "catalog-link"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "partId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-21. HQ admins only. Says which HQ catalog item an existing store part is, so the store\u0027s first order doesn\u0027t create a duplicate. One store part per HQ item; null unlinks."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
@@ -2360,78 +2460,6 @@
                      "name":  "PURCHASE ORDER",
                      "item":  [
                                   {
-                                      "name":  "purchase-order-create-standalone",
-                                      "request":  {
-                                                      "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"supplierId\": \":supplierId\",\r\n  \"items\": [\r\n    {\r\n      \"partId\": \":partId\",\r\n      \"quantity\": 10,\r\n      \"price\": 25000\r\n    }\r\n  ]\r\n}",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/purchase-orders",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-orders"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "purchase-order-create-from-request",
-                                      "request":  {
-                                                      "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"supplierId\": \":supplierId\",\r\n  \"items\": [\r\n    {\r\n      \"partId\": \":partId\",\r\n      \"quantity\": 5,\r\n      \"price\": 25000\r\n    }\r\n  ],\r\n  \"purchaseRequestIds\": [\r\n    \":purchaseRequestId\"\r\n  ]\r\n}",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/purchase-orders",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-orders"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "purchase-order-get-all",
                                       "request":  {
                                                       "method":  "GET",
@@ -2604,6 +2632,90 @@
                                                                                ]
                                                               },
                                                       "description":  "BE-20. DRAFT: its creator or Owner+ (reason optional). ORDERED / PARTIALLY_RECEIVED: Owner+ only, reason required (400 without), written to history. Otherwise 403."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "purchase-order-create-standalone",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 10,\n      \"price\": 25000\n    }\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/purchase-orders",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "purchase-orders"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-20/21. An order to HQ: MANAGER+ or PROCUREMENT. partId = an HQ catalog item id (GET /catalog) or your store\u0027s own part linked to one; the first order of an HQ item creates your store\u0027s part. Items HQ doesn\u0027t sell → 400. The supplier is set to HQ\u0027s franchise-centre supplier; supplierId is ignored."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "purchase-order-create-from-request",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 5,\n      \"price\": 25000\n    }\n  ],\n  \"purchaseRequestIds\": [\n    \":purchaseRequestId\"\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/purchase-orders",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "purchase-orders"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-20/21. Same rules as create-standalone; also moves the APPROVED requests to ORDERED."
                                                   },
                                       "response":  [
 
@@ -3441,6 +3553,81 @@
                                                                                ]
                                                               },
                                                       "description":  "BE-18. Same Owner rule; reason required. Back to PENDING, payment fields cleared."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "realisasi-create",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"purchaseRequestAuthorizationId\": \":praId\",\n  \"externalOrderRef\": \"SHP-2026-000123\",\n  \"sellerName\": \"Shopee · Toko Airsoft Jaya\",\n  \"paymentMethod\": \"COMPANY_ACCOUNT\",\n  \"subtotal\": 660000,\n  \"shipping\": 18000,\n  \"attachments\": \"https://example.com/receipt.pdf\",\n  \"items\": [\n    {\n      \"purchaseRequestAuthorizationItemId\": \":praItemId\",\n      \"partId\": \":partId\",\n      \"purchaseUom\": \"paket\",\n      \"conversionFactor\": 6,\n      \"purchasedQty\": 2,\n      \"actualUnitPrice\": 330000\n    }\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/realisasi",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "realisasi"
+                                                                           ]
+                                                              },
+                                                      "description":  "Buy elsewhere. MANAGER+ or PROCUREMENT (BE-17). BE-21: sellerName = where it was bought (free text). Items stores must buy from HQ are refused (400) unless supplierId is HQ\u0027s franchise-centre supplier (an urgent buy paid at HQ)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "CATALOG",
+                     "item":  [
+                                  {
+                                      "name":  "catalog-get",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/catalog",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "catalog"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-21. What HQ sells, for anyone signed in: mandatoryFromHq, consumable, and your store\u0027s own part for each item (storePartId, storeCurrentStock; null until first ordered)."
                                                   },
                                       "response":  [
 
