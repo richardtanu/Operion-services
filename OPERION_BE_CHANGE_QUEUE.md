@@ -16,7 +16,7 @@ items open. **BE-13 done 14 Oct
 2026** (requester branch check, PRA spend + service-event cost redaction). Next: the
 permission matrix. **BE-14 open, 16 Oct 2026** (PR creation gate + HQ filing a PR
 for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification).
-**BE-16 open, 16 Oct 2026** (store spending summary + optional monthly budget; HQ can read).
+**BE-16 done, 22 Oct 2026** (store spending summary + optional monthly budget; HQ can read).
 **BE-17 open, 19 Oct 2026** (Owner sets limits; who logs, rejects, corrects purchases; HQ buying for a store).
 **BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
@@ -1127,7 +1127,7 @@ Full suite 96/96. Postman `purchase-request-cancel` now sends a reason.
 
 ## BE-16 — Store spending summary and an optional monthly budget
 
-**Status: OPEN.** Product owner's decisions, 16 Oct 2026 (module 1 deferred-decision #3,
+**Status: DONE, 22 Oct 2026** (see end of entry). Product owner's decisions, 16 Oct 2026 (module 1 deferred-decision #3,
 "PRA header-level cap").
 
 ### Why
@@ -1239,6 +1239,44 @@ month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
 - An in-app channel for HQ to send suggestions to a store Owner — parked; they talk
   outside the app for now.
 - Hard budget enforcement — rejected: it fights "every store is independent".
+
+### What was done — DONE, 22 Oct 2026
+
+1. **Budget:** `tenants.monthly_purchase_budget` (V9, nullable, CHECK ≥ 0) and
+   `PATCH /tenants/{id}/purchase-budget { amount | null }`. Only OWNER+ signed in at that
+   very store (HQ PRINCIPAL, a Manager → 403; negative → 400; outside the tree → 403 as
+   every `/tenants` path). `TenantResponse.monthlyPurchaseBudget`, null below OWNER.
+2. **Summary:** `GET /procurement/spending?month=yyyy-MM[&tenantId=]` (`SpendingService`,
+   computed on read). OWNER+ only, else 403. Rows: the caller's tree (own store first,
+   then tree-walk order), or the one `tenantId` names (outside the tree → 400 "Store not
+   found", via `resolveTargetTenant`). Per row: `spentFromCentre`, `spentOutside`, `spent`,
+   `committed`, `budget`, `overBudget` (null without a budget), `topParts` (5). Exactly the
+   Definitions above, with three choices made where they were silent:
+   - **Committed basis:** remaining value and pending purchases are both on the ceiling's
+     basis (unit price × purchased qty), so the max compares like with like. Spent uses
+     landed `totalCost`, as defined.
+   - **Pending purchases on a non-live PRA** (FULFILLED/CANCELLED) still count as
+     committed (the pending Realisasi is its own source in the table); only the
+     remaining-value half needs a live PRA.
+   - **topParts amounts:** each purchase line's `allocatedLandedCost`, each order line's
+     price × qty, so they add up to spent.
+   - `overBudget` = spent + committed > budget. **BE-19's "other expenses" join this sum
+     when BE-19 ships.**
+3. **Month boundaries `[?]` → decided by default, revisable:** `purchasedAt` is a zone-less
+   `timestamp` (from the receipt, or `LocalDateTime.now()` when omitted) and `orderDate` is
+   a server `LocalDate.now()`. Months are the calendar months of those stored values. So the
+   server's zone decides server-stamped dates: **set `TZ=Asia/Jakarta` on Railway** (and
+   locally the machine is already +07:00). No code change for zones.
+4. `Supplier.franchiseCentre` came with BE-21.
+
+Tests: `SpendingTest` (8): spent split with FAILED/SUPERSEDED/DRAFT/CANCELLED excluded
+and landed cost (shipping) counted; last second of September vs midnight 1 October;
+the Rp 380,000 / Rp 600,000 example before, after rejection, and after approval (remaining
+clamps at 0); a 3-paket × factor 6 = 18-can purchase escalating a 12-can line though its
+value fits (rule 2: with factor 1 it would be spent, not committed); only live PRAs' remaining;
+scope (MANAGER 403, Owner one row, HQ its tree in order, other root → 400); budget gates
+and `overBudget`. Against the unfixed code all 8 fail. Full suite 131/131. Postman:
+SPENDING folder, `tenant-purchase-budget`.
 
 ---
 
