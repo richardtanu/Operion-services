@@ -27,6 +27,14 @@ public interface PartRepository
 
         long countByTenantId(UUID tenantId);
 
+        /** BE-21: the HQ catalog — what the root tenant sells, live items only. */
+        @Query("select p from Part p where p.tenant.id = :rootTenantId and p.soldByHq = true"
+                        + " and p.active = true and p.retired = false order by p.name asc")
+        List<Part> findHqCatalog(@Param("rootTenantId") UUID rootTenantId);
+
+        /** BE-21: a store's own part for an HQ catalog item (at most one, V8). */
+        Optional<Part> findByTenantIdAndCatalogPartId(UUID tenantId, UUID catalogPartId);
+
         List<Part> findByTenantId(UUID tenantId);
 
         List<Part> findByTenantIdOrderByCurrentStockAsc(UUID tenantId);

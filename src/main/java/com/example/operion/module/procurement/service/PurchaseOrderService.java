@@ -18,7 +18,7 @@ import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
-import com.example.operion.module.part.repository.PartRepository;
+import com.example.operion.module.part.service.HqCatalogService;
 import com.example.operion.module.procurement.dto.CreatePurchaseOrderRequest;
 import com.example.operion.module.procurement.dto.PurchaseOrderItemRequest;
 import com.example.operion.module.procurement.dto.PurchaseOrderItemResponse;
@@ -61,7 +61,7 @@ public class PurchaseOrderService {
 
     private final SupplierRepository supplierRepository;
 
-    private final PartRepository partRepository;
+    private final HqCatalogService hqCatalogService;
 
     private final TenantRepository tenantRepository;
 
@@ -87,16 +87,17 @@ public class PurchaseOrderService {
                 .findById(tenantId)
                 .orElseThrow();
 
-        Supplier supplier = null;
+        // BE-21: an order is an order to HQ, so its supplier is HQ itself (the
+        // franchise-centre supplier), set here. The legacy supplierId is ignored.
+        Supplier supplier = supplierRepository
+                .findFranchiseCentre(tenantHierarchyService.getRootTenantId(tenantId))
+                .orElseThrow(() -> new RuntimeException(
+                        "HQ has no franchise-centre supplier set up, so orders to HQ can't be placed yet"));
 
-        if (request.getSupplierId() != null) {
-
-            UUID rootTenantId = tenantHierarchyService.getRootTenantId(tenantId);
-
-            supplier = supplierRepository
-                    .findByIdAndTenantId(request.getSupplierId(), rootTenantId)
-                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
-        }
+        // BE-21: only items HQ sells; the store's own part is created on its first order
+        List<Part> lineParts = request.getItems().stream()
+                .map(i -> hqCatalogService.storePartForHqOrder(i.getPartId(), tenantId))
+                .toList();
 
         List<PurchaseRequest> linkedRequests = List.of();
 
@@ -140,11 +141,10 @@ public class PurchaseOrderService {
 
         po = repository.save(po);
 
-        for (PurchaseOrderItemRequest itemRequest : request.getItems()) {
+        for (int i = 0; i < request.getItems().size(); i++) {
 
-            Part part = partRepository
-                    .findByIdAndTenantId(itemRequest.getPartId(), tenantId)
-                    .orElseThrow(() -> new RuntimeException("Part not found"));
+            PurchaseOrderItemRequest itemRequest = request.getItems().get(i);
+            Part part = lineParts.get(i);
 
             itemRepository.save(
                     PurchaseOrderItem.builder()

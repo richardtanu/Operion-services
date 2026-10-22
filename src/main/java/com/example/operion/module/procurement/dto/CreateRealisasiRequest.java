@@ -35,6 +35,9 @@ public class CreateRealisasiRequest {
 
     private UUID supplierId;
 
+    /** BE-21: where an outside purchase was made, free text ("Shopee · Toko Airsoft Jaya"). */
+    private String sellerName;
+
     private String paymentRef;
 
     @NotNull

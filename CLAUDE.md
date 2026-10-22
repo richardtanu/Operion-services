@@ -99,7 +99,16 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 | Franchise leg   | `PurchaseOrder`, `GoodsReceipt.purchaseOrder`                         | outlet → center        |
 | Direct purchase | `PurchaseRequestAuthorization`, `Realisasi`, `GoodsReceipt.realisasi` | marketplace / supplier |
 
-`PurchaseOrder.supplier` is **legacy** — supplier-based purchasing is Realisasi's job now. Convention, not runtime-enforced.
+`PurchaseOrder.supplier` is **legacy** — supplier-based purchasing is Realisasi's job now. Since BE-21 it is always set to HQ's franchise-centre supplier on create; the request's `supplierId` is ignored.
+
+### HQ catalog — two ways a store buys (BE-21)
+
+- **Tenant tree:** `HQ_BANDUNG` ("HQ BANDUNG", V8) is the root; `BLITZ_BDG` is its first store. Suppliers are HQ's (V8 moved BLITZ_BDG's six). `FRANCHISE_HQ`/`OUTLET_2` are test data.
+- **The HQ catalog is the root tenant's own `Part` rows** — no `CatalogItem` table. A store part points at the HQ row it is via `parts.catalog_part_id` (one per store, unique index). Stock and history stay on the store's row; `soldByHq` / `mandatoryFromHq` live once, on the HQ row (mandatory implies sold, DB CHECK). `HqCatalogService.catalogEntryOf` is the one place that answers "which HQ item is this?"; `PartResponse` carries the flags *read from HQ's row*.
+- **Mandatory ≠ consumable.** Independent flags.
+- **Flags and links are HQ's:** `PATCH /parts/{id}/hq-flags` and `PATCH /parts/{id}/catalog-link` need the ADMIN role or PRINCIPAL scope *signed in at the root*; a store's ADMIN/Owner gets 403. `GET /catalog` is for anyone signed in.
+- **Buy from HQ** (PO): only items HQ sells (400 otherwise). `partId` may be the HQ item or the store's linked part; the store's first order of an HQ item creates its part (category/type mapped by name, created if missing, stock 0). The supplier is the root's **franchise-centre supplier** (`suppliers.franchise_centre`, one per tenant); without one, orders to HQ are refused.
+- **Buy elsewhere** (Realisasi): a mandatory item is refused ("This item must be bought from HQ") unless the supplier is the franchise centre (an urgent buy paid at HQ). Applies to `supersede()` too, since it goes through `create()`. `sellerName` is free text for outside sellers.
 
 **Orders to HQ** (BE-20): drafting a PO needs MANAGER+ scope or the PROCUREMENT role; **sending** it needs OWNER+ (sending commits the store's money); cancelling a DRAFT needs its creator (`PurchaseOrder.createdBy`, null on rows before 22 Oct 2026) or OWNER+, cancelling a sent one (ORDERED / PARTIALLY_RECEIVED) needs OWNER+ and a reason, written to history. PO numbers carry a random suffix (two drafts in the same millisecond used to collide on the unique column).
 
@@ -192,6 +201,7 @@ Live on Railway since 16 Aug 2026, project `imaginative-gratitude`, service `Ope
 
 - `V1__baseline.sql` — schema-only (`pg_dump --schema-only`) snapshot of the dev DB, needed because `baseline-on-migrate` only baselines a schema that already has tables; a genuinely fresh database (any new Railway Postgres) had nothing to baseline and `ddl-auto=validate` would fail at boot with zero tables. Note: pg_dump 18's `\restrict`/`\unrestrict` meta-commands and the `flyway_schema_history` table itself both had to be stripped out of the dump by hand before Flyway would accept it as a migration.
 - `V2__seed_default_tenant.sql` — inserts the `BLITZ_BDG` tenant. `AuthService.register()` requires an existing `Tenant` row matching `tenantCode` (default `"BLITZ_BDG"`), and every endpoint except `/auth/login`/`/auth/register` requires a JWT — so a database with zero tenants has no way to bootstrap its first user via the API at all. `MasterDataSyncRunner` only re-seeds *existing* tenants on boot, it never creates the first one.
+- `V8__hq_bandung_and_catalog.sql` (BE-21) — inserts the `HQ_BANDUNG` root and makes `BLITZ_BDG` its child, moves BLITZ_BDG's suppliers to HQ, adds HQ's franchise-centre supplier and the catalog columns. HQ's part categories/types arrive from `MasterDataSyncRunner` on the next boot. It creates **no user**: the HQ super admin (ADMIN + PRINCIPAL at `HQ_BANDUNG`) is still to be created, and never with a password in a migration.
 
 **Prod DB currently holds an exact 1:1 copy of the dev DB's data** (loaded 17 Aug 2026, `pg_dump --data-only` → `psql`, verified row-count-identical across all 38 tables). This means every caveat in the paragraph below about dev DB test junk is now equally true of prod, not just dev.
 

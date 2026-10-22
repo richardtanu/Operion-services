@@ -115,14 +115,21 @@ class OrdersAndReceivingTest {
         accounting = user("be20-acc-" + s, Role.ACCOUNTING, Scope.SUPERVISOR, store);
         otherTenantUser = user("be20-other-" + s, Role.OPERATOR, Scope.MANAGER, other);
 
+        // BE-21: orders to HQ need an item HQ sells and HQ's franchise-centre supplier
+        PartCategory hqCategory = categoryRepository.save(PartCategory.builder()
+                .tenant(hq).name("Gas").consumable(true).build());
+        Part hqGas = partRepository.save(Part.builder()
+                .tenant(hq).name("Green gas " + s).category(hqCategory)
+                .soldByHq(true).active(true).retired(false).build());
+
         PartCategory category = categoryRepository.save(PartCategory.builder()
                 .tenant(store).name("Gas").consumable(true).build());
         gas = partRepository.save(Part.builder()
-                .tenant(store).name("Green gas " + s).category(category)
+                .tenant(store).name("Green gas " + s).category(category).catalogPart(hqGas)
                 .currentStock(5).minimumStock(6).reorderQuantity(12)
                 .active(true).retired(false).build());
 
-        supplier = supplierRepository.save(Supplier.builder().tenant(hq).name("HQ centre").build());
+        supplier = supplierRepository.save(Supplier.builder().tenant(hq).name("HQ centre").franchiseCentre(true).build());
 
         when(storage.exists(anyString())).thenReturn(true);
     }

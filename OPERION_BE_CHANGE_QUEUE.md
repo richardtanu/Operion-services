@@ -20,7 +20,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-17 open, 19 Oct 2026** (Owner sets limits; who logs, rejects, corrects purchases; HQ buying for a store).
 **BE-18 open, 19 Oct 2026** (paying back the Store Manager). **BE-19 proposed** (expense claims for non-stock needs).
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
-**BE-21 open, 19 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; starts with an investigation).
+**BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin account still to create).
 **BE-22 open, 20 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2).
 
@@ -1206,6 +1206,8 @@ month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
    Keep the from-centre/outside split: for a franchisor, "bought from us" vs "bought
    outside" is itself a business signal. To tell a centre Realisasi apart, add a boolean
    `franchiseCentre` to `Supplier` (Flyway), set on the root tenant's own supplier record.
+   **Built in BE-21** (V8, `suppliers.franchise_centre`, one per tenant; HQ_BANDUNG's is
+   "HQ BANDUNG"). Every PO now has it as its supplier.
 3. **Money arithmetic.** `BigDecimal` throughout; month boundaries in the store's
    timezone **[?]** (check how `purchasedAt` is stored before choosing).
 
@@ -1674,8 +1676,8 @@ example, the `selfReceived` filter.
 
 ## BE-21 — HQ catalog and mandatory items: two ways a store buys
 
-**Status: OPEN — item 1 (investigation) DONE 20 Oct 2026, report below; waiting on two
-product-owner decisions before items 2–7.** Product owner's decisions,
+**Status: DONE, 22 Oct 2026, except the HQ super admin account** (needs the person's name
+and email; see the end of entry). Item 1 report 20 Oct, decisions 21 Oct. Product owner's decisions,
 19 Oct 2026 (module 1 deferred-decision #7, "non-root outlet silently sees the root's
 supplier list", and the supply model behind it).
 
@@ -1857,6 +1859,68 @@ this list `[?]`:**
   buys.
 - PROC-06 shows "Managed by HQ".
 - The menu and copy use the product owner's words: "Buy from HQ" / "Buy elsewhere".
+
+### What was done — DONE, 22 Oct 2026 (except the super admin)
+
+**Migration V8** (`V8__hq_bandung_and_catalog.sql`), confirmed against the local
+PostgreSQL 18 (copy of dev) `[V]`: `HQ_BANDUNG` inserted as a root, `BLITZ_BDG.parent_id`
+set to it, BLITZ_BDG's 6 suppliers moved to HQ, `suppliers.franchise_centre` (partial
+unique index: one per tenant) plus HQ's own "HQ BANDUNG" franchise-centre supplier,
+`parts.catalog_part_id` (FK, unique per store), `sold_by_hq`, `mandatory_from_hq` (CHECK:
+mandatory implies sold), `realisasis.seller_name`. After boot, `MasterDataSyncRunner` gave
+HQ_BANDUNG its 6 categories and 45 part types `[V]` (side effect 2: no code needed).
+
+Side effects, checked `[C]`/`[V]`:
+1. Suppliers: moved; `findByIdAndTenantId(…, root)` finds them again.
+2. Master data: as above.
+3. **HQ super admin: not created.** ADMIN accounts on the local DB today `[V]`:
+   `admin@test.com` ("Admin", ADMIN, no scope) at BLITZ_BDG, and `owner_test@test.com`
+   (ADMIN + OWNER) at FRANCHISE_HQ (test data). Waiting on the product owner for the
+   person's name and email. Two ways once known: register them at HQ_BANDUNG (no API path
+   for a root yet: `register` needs an ADMIN in the same tree, and nobody is at HQ), or move
+   an existing ADMIN with one UPDATE (`tenant_id` → HQ_BANDUNG, `scope` → PRINCIPAL). Either
+   way, no password in a migration.
+4. **Tree walks:** HQ now sees BLITZ_BDG's data through `getEffectiveTenantIds`. And
+   `approversIn(getAncestorTenantIds(…))` (NotificationService) already includes ADMIN and
+   OWNER+ users of every ancestor, so once HQ has accounts they will get BLITZ_BDG's
+   NEW_PURCHASE_REQUEST, REALISASI_ESCALATED and GOODS_SELF_RECEIVED notifications —
+   while approve/reject look records up in the caller's own store only (`findOwned`), so HQ
+   can't act on them. Nobody is at HQ today, so nothing changes yet. **Open question for the
+   product owner:** should HQ get store approval notifications at all (BI only) or not?
+   No code changed for this.
+
+Items 2–7:
+2. `PATCH /parts/{id}/hq-flags` (`soldByHq`, `mandatoryFromHq`, nulls unchanged). ADMIN role
+   or PRINCIPAL scope signed in at the root, else 403; HQ rows only (a store part → 400
+   "Part not found"); mandatory without sold → 400. Plus `PATCH /parts/{id}/catalog-link`
+   (`catalogPartId`, null unlinks), same gate, so a store's existing "6mm BBs" can be
+   linked instead of duplicated on its first order (not in the task list, needed for the
+   31 BLITZ_BDG parts; one link per HQ item per store).
+3. `GET /catalog`: the root's live `soldByHq` parts, name order, with `mandatoryFromHq`,
+   `consumable`, and the caller's own `storePartId`/`storeCurrentStock`. `PartResponse`
+   gains `catalogPartId`, `soldByHq`, `mandatoryFromHq` (read from HQ's row).
+4. PO create: every line through `HqCatalogService.storePartForHqOrder` (HQ item id or the
+   store's linked part; first order creates the store part — name/brand/lifespan/reorder qty
+   copied, category and type mapped by name or created, stock 0). Not sold → 400 "Only items
+   HQ sells can be ordered from HQ: …". Supplier = the root's franchise centre, set
+   automatically; `supplierId` ignored; none set up → 400.
+5. Realisasi create (and so supersede): a mandatory item without the franchise-centre
+   supplier → 400 "This item must be bought from HQ: …", checked before anything is saved.
+6. `sellerName` on request, entity and response.
+7. Unchanged by design; `SupplierResponse.franchiseCentre` added so the client can label HQ.
+
+Tests: `HqCatalogTest` (9): flags gate (store MANAGER/OWNER/ADMIN and an HQ MANAGER → 403;
+HQ ADMIN and HQ PRINCIPAL → 200), mandatory-needs-sold, catalog read and isolation between
+roots, first order creates one linked store part and later orders reuse it, non-catalog → 400,
+no franchise centre → 400, mandatory item from Tokopedia or a free-text seller → 400 with
+nothing consumed, same item with HQ as seller → APPROVED with the PRA line at 0 remaining
+(2 pakets × factor 6 = 12 of 12, rule 2), non-mandatory from an outside seller with
+`sellerName` → 6 of 12 remaining, linking gates. `OrdersAndReceivingTest`'s fixture now
+gives the store's gas an HQ item and HQ a franchise-centre supplier. Against the unfixed
+services/controllers all 9 new tests fail (the franchise-centre one after pinning its
+message: unfixed, it also answered 400, for "Part not found"). Full suite 123/123.
+Postman: CATALOG folder, `parts-hq-flags`, `parts-catalog-link`, `realisasi-create` with
+`sellerName`, PO create bodies without `supplierId`.
 
 ---
 

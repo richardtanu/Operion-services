@@ -18,5 +18,8 @@ public class SupplierResponse {
 
     private String contact;
 
+    /** BE-21: this supplier is HQ itself. */
+    private boolean franchiseCentre;
+
     private LocalDateTime createdAt;
 }

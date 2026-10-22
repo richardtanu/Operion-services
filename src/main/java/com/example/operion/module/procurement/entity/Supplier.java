@@ -30,6 +30,15 @@ public class Supplier {
 
     private String contact;
 
+    /**
+     * BE-21: this supplier is HQ itself (at most one per tenant, V8). Orders to
+     * HQ use it automatically; a mandatory item bought outside an order to HQ
+     * must name it as the seller. BE-16 splits spending "from HQ" on it.
+     */
+    @Column(name = "franchise_centre", nullable = false)
+    @Builder.Default
+    private boolean franchiseCentre = false;
+
     private LocalDateTime createdAt;
 
     @PrePersist

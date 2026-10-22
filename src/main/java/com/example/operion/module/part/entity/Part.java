@@ -99,6 +99,34 @@ public class Part {
 
     /*
      * =====================================================
+     * HQ catalog (BE-21)
+     * =====================================================
+     */
+
+    /**
+     * On a store's part: the HQ catalog item (a root-tenant Part) this is.
+     * Null on HQ rows and on store items HQ doesn't supply. Stock and history
+     * stay on the store's own row; the HQ flags below are read from here.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "catalog_part_id")
+    private Part catalogPart;
+
+    /** HQ rows only: HQ sells this to its stores. Set by HQ only. */
+    @Column(name = "sold_by_hq", nullable = false)
+    @Builder.Default
+    private boolean soldByHq = false;
+
+    /**
+     * HQ rows only: stores must buy this from HQ (implies {@link #soldByHq}).
+     * Independent of consumable: "mandatory" is about who you buy from.
+     */
+    @Column(name = "mandatory_from_hq", nullable = false)
+    @Builder.Default
+    private boolean mandatoryFromHq = false;
+
+    /*
+     * =====================================================
      * Misc
      * =====================================================
      */
