@@ -1,8 +1,8 @@
 # Module 2 — Inventory & Stock Screen Inventory
 
-**Date:** 21 Oct 2026
-**Status:** **DRAFT — first 4 records, stopped for review** (plan §10 step 4). The rest of
-the module, the gates and the gap list follow once the format and direction are confirmed.
+**Date:** 21 Oct 2026, completed 23 Oct 2026
+**Status:** **COMPLETE** — 9 screens (INV-01…09), gates 1–5 run, gap list produced. Three
+backend tasks came out of it (BE-25…BE-27).
 **Built against:** `OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.4, plus the module 1
 decisions of 16–21 Oct 2026 (`OPERION_BE_CHANGE_QUEUE.md` BE-14…BE-23).
 **Source read:** `module/inventory/` (controller, DTOs, enums, `PartStockService`),
@@ -11,6 +11,16 @@ decisions of 16–21 Oct 2026 (`OPERION_BE_CHANGE_QUEUE.md` BE-14…BE-23).
 service scoping), `NotificationService.notifyLowStock()` / `approversIn()`. All backend
 claims are `[C]`, cited by file:line. `module/partinstance/` and `module/barcodeblock/`
 (scan in / take / exhaust) belong to module 3 and are not inventoried here.
+
+**Product owner's decisions, 23 Oct 2026** (on the draft's three questions, "as suggested"):
+1. **Direction confirmed:** mobile-first; the Store Manager is the main user; HQ sees every
+   store and only advises.
+2. **One definition of "low":** "runs out in X days" (burn rate, `daysOfCover` below
+   `targetDays`) when the item has usage data (`COMPUTED` / `MANUAL_RATE`); otherwise
+   "below minimum stock". Screens say which one triggered.
+3. **The two stock shortcuts** (`POST /inventory/adjust`, `POST /inventory/receive`):
+   ADMIN only, for data repair, with a required reason and every use logged. Normal stock
+   changes go through an approved adjustment, a goods receipt, or a scan (module 3).
 
 **Context that changed since the plan was written:** the product is mobile-first (Store
 Manager on one store phone; HQ staff on their own phones), the tenant tree is real (HQ
@@ -100,13 +110,14 @@ rate's (`daysOfCover < targetDays`, or `belowLevel` against `manualReorderPoint`
 **Vocabulary flag:** Yes — "part(s)".
 **Cost visibility:** N/A on this screen. The PR it opens carries none either.
 **Deferred decisions:**
-  - **Which "low" wins?** Product decision. Recommendation: burn rate when it has data
-    (`COMPUTED` / `MANUAL_RATE`), `minimumStock` otherwise — the screen shows which one
-    triggered ("runs out in ~3 days" vs "below minimum 20").
+  - ~~Which "low" wins?~~ **Decided 23 Oct:** burn rate when it has data (`COMPUTED` /
+    `MANUAL_RATE`), `minimumStock` otherwise — the screen shows which one triggered ("runs
+    out in ~3 days" vs "below minimum 20"). The server applies the same rule: **BE-27**.
   - **The Store Manager isn't told.** `LOW_STOCK` goes to ADMIN or OWNER+ in the item's
     own store only (`NotificationService.java:193-206`, `approversIn` `:249-252`). The SM,
-    who files the PR under BE-14, never gets it; neither does HQ, which wants it for
-    restock recommendations. Candidate BE task.
+    who files the PR under BE-14, never gets it. **BE-27** adds the store's Manager+ and
+    keeps it in the store, as BE-24 did for approval alerts: HQ follows stock through
+    INV-03, not notifications.
 
 ---
 
@@ -139,11 +150,12 @@ item at two stores is two unrelated parts.
 **Cost visibility:** N/A — stock quantities only. (Stock *value* would be cost data;
 OWNER+ — HQ qualifies.)
 **Deferred decisions:**
-  - **BE task:** add `tenantId`/`tenantName` (and, after BE-21, `catalogPartId`) to the
-    stock and burn-rate responses, or a dedicated HQ endpoint grouped by catalog item.
+  - **BE-26:** `tenantId`/`tenantName` and `catalogPartId` on the stock and burn-rate
+    rows (BE-21 has shipped, so the catalog link exists), so HQ can group each store's copy
+    under one HQ item.
   - **Burn-rate policy is read from the caller's tenant** (`BurnRateService.java:80`):
-    HQ's `MaintenancePolicy` would be applied to every store's items in this view. Verify
-    before drawing numbers HQ will act on.
+    HQ's `MaintenancePolicy` would be applied to every store's items in this view. BE-26
+    reads each part's own store policy instead.
 
 ---
 
@@ -185,32 +197,218 @@ the screen:
 **Cost visibility:** N/A today (quantities only). If adjustments ever show stock value
 written off, that's cost data: OWNER+.
 **Deferred decisions:**
-  - **Who may request?** Recommendation, following module 1: the store's Manager+ (the
-    SM counts the stock), approve OWNER+, and **requester ≠ approver** unless the store
-    has nobody else (to decide).
-  - **What to do with `/inventory/adjust` and `/inventory/receive`.** Recommendation:
-    remove them, or restrict to ADMIN for data repair, logged. Stock should only change
-    through an approved adjustment, a goods receipt, or a scan (module 3).
+  - **Who may request, who approves — BE-25.** Request: the store's Manager+ (the SM counts
+    the stock). Approve/reject: the **store's own** OWNER+ — today `findInHierarchy`
+    (`:184-192`) also lets HQ's Principal approve a store's adjustment, against "every
+    store is independent". **Requester ≠ approver** — `[?]` for the product owner: an
+    Owner who requests an adjustment then has nobody in the store to approve it; the
+    recommendation is to allow it but flag it "self-approved", the same visibility-not-
+    blocking choice as self-received goods (BE-20).
+  - ~~What to do with `/inventory/adjust` and `/inventory/receive`~~ **Decided 23 Oct:**
+    ADMIN only, for data repair, reason required, every use logged — **BE-25**.
   - **Notify the Owner** when an adjustment is requested (new notification type, CHECK
-    constraint migration).
+    constraint migration) — **BE-25**.
 
 ---
 
-## Findings so far (before the remaining records and the gates)
+### INV-05 — Item Detail and Movement History (store)
 
-1. **Stock can be changed with no approval** (`/inventory/adjust`) and **added with no
-   purchase** (`/inventory/receive`) — by anyone signed in.
-2. **An Owner can approve their own stock adjustment.**
-3. **No store on any row**: HQ can't tell stores apart in stock, low-stock, burn-rate or
-   adjustment lists.
-4. **The Store Manager isn't told about low stock**, and neither is HQ.
-5. **Two definitions of "low"** (minimum stock vs burn rate) that can disagree.
-6. **A missed string check** in `receiveStock` (`"Consumable"` by name, `:170`).
-7. **Burn-rate policy comes from the caller's tenant**, so an HQ view would apply HQ's
-   policy to every store's items.
+**Purpose:** One item's whole story: how much there is, how fast it goes, and every stock
+change with who and why — the place an Owner checks before approving an adjustment.
+**Platform:** Mobile — Store Manager, Store Owner.
+**Scope tiers:** View — any user `[C]` (no check on any read in this module).
+**Functional roles:** None enforced `[C]`.
+**Actions:**
+  - View stock, minimum, reorder quantity, burn rate (source, days of cover, suggested
+    quantity), HQ link and "mandatory from HQ" (BE-21) — any user
+  - View movement history: type, quantity, before → after, notes, when — any user
+  - **Adjust count** → INV-04; **Request more** → PROC-01 (or PROC-07 for an HQ item);
+    **Edit item** → INV-06
+**Data read:** `GET /parts` (one row — no `GET /parts/{id}` exists `[C]`,
+`PartController.java:28-130`), `GET /burn-rate/{partId}`, and the item's stock movements.
+**Entry points:** INV-01, INV-02, INV-03 (HQ), the `LOW_STOCK` notification.
+**Failure behaviour:** Manual retry — read-only.
+**Backend status:** **History not servable.** `StockMovementRepository
+.findByPartIdOrderByCreatedAtDesc` exists `[C]` but **no endpoint calls it** — the only
+`StockMovementResponse` endpoint is `GET /part-history/unit-part/{unitPartId}`, which is
+per installed unit part, not per stock item. `StockMovementResponse` also carries no actor
+(`{id, partName, movementType, quantity, beforeStock, afterStock, notes, createdAt}`), so
+even when exposed it can't say who changed the stock. **BE-26.**
+**Vocabulary flag:** Yes — "part".
+**Cost visibility:** None shown. If unit or landed cost is ever added here: OWNER+, and the
+store's own purchases only.
+**Deferred decisions:** —
 
-## Still to draft (after review)
+---
 
-Item detail with movement history (no per-item movement endpoint found yet), item master
-(create / edit / retire, categories and types), the inventory dashboard tiles, HQ catalog
-management (BE-21), then gates 1–5 and the list of screens no endpoint can serve.
+### INV-06 — Items: list, add, edit, retire (store)
+
+**Purpose:** The store's own item list — what it stocks, its minimum and reorder quantity
+(which drive "low"), and retiring items it no longer carries.
+**Platform:** Mobile — Store Manager (day to day), Store Owner.
+**Scope tiers:** **None enforced** `[C]`: `POST /parts`, `PUT /parts/{id}`,
+`PATCH /parts/{id}/retire` and `/restore` have no scope or role check
+(`PartService.java` create `:54`, update `:282`, retire `:403-426`, restore). Only `hq-flags` and
+`catalog-link` are gated (`requireHqCatalogAdmin`, `:218`, `:251`).
+**Functional roles:** None enforced `[C]`.
+**Actions:**
+  - List items by category, with stock and status — any user
+  - Add an item: name, brand, category, type, expected lifespan, minimum stock, reorder
+    quantity, manual daily usage, manual reorder point, notes — **recommended Manager+**
+  - Edit the same fields — **recommended Manager+**. `minimumStock` decides "low" for
+    items without usage data, so whoever edits it controls the alarm.
+  - Retire (reason; refused while stock > 0 or the item is installed `[C]` `:413-421`) /
+    restore — **recommended Owner+**
+  - For an item HQ sells: **"Use HQ's item"** instead of adding a duplicate — links the
+    store's item to the HQ catalog (`PATCH /parts/{id}/catalog-link`, HQ admin only today)
+**Data read:** `GET /parts/grouped-by-category`, `GET /part-categories`,
+`GET /part-types/category/{categoryId}`.
+**Entry points:** Inventory menu (doesn't exist in the app yet — see Gate 1), INV-05.
+**Failure behaviour:** Manual retry; edits are blocking (not queued).
+**Backend status:** `[C]` all endpoints exist; no permission checks. A store can create
+its own "6mm BBs" while HQ sells one — the first order from HQ then creates or links a
+second copy (BE-21's linking exists for exactly this, but only HQ can link). **BE-25**
+adds the gates.
+**Vocabulary flag:** Yes — "part", "installed", "unit".
+**Cost visibility:** None on the item master.
+**Deferred decisions:**
+  - Should a store Manager be able to link their own item to HQ's (today HQ admin only)?
+    Recommendation: yes for their own store's items — they know which box is which.
+
+---
+
+### INV-07 — Categories and Types (admin)
+
+**Purpose:** The taxonomy items hang on. The category's **`consumable`** flag decides
+whether stock is tracked per unit (part instances) and whether burn rate applies (BE-04).
+**Platform:** Mobile — HQ Admin; rare.
+**Scope tiers:** **None enforced** `[C]` on `POST/PUT/DELETE /part-categories` and
+`/part-types`, nor on `POST …/seed`.
+**Functional roles:** None enforced `[C]`.
+**Actions:**
+  - List categories and types — any user
+  - Add / rename / delete a category or type, set `consumable` — **recommended ADMIN only**
+  - Seed defaults — ADMIN only
+**Data read:** `GET /part-categories`, `GET /part-types`.
+**Entry points:** Settings (doesn't exist yet — Gate 1).
+**Failure behaviour:** Blocking.
+**Backend status:** `[C]` CRUD exists, per store (master data is copied into each store,
+`MasterDataInitializer`, BE-21 report). Flipping `consumable` on a category silently
+changes how every item in it is counted from then on. **BE-25** gates it.
+**Vocabulary flag:** Yes — category and type names are domain vocabulary; tenant-
+configurable by nature.
+**Cost visibility:** N/A.
+**Deferred decisions:**
+  - Per-store copies of categories drift (the open duplicate-`part_categories` item,
+    `OPERION_BE_PLAN.md` §5.3). With HQ BANDUNG now the root, HQ's categories could be the
+    single list. Not decided here; flagged for the cleanup.
+
+---
+
+### INV-08 — Inventory Tiles on the Dashboard (store)
+
+**Purpose:** Five numbers at a glance on the store dashboard: items, total stock, low, out,
+received today, used today — each tapping through to INV-01 filtered.
+**Platform:** Mobile — Store Manager.
+**Scope tiers:** View — any user `[C]`.
+**Functional roles:** None enforced `[C]`.
+**Actions:** View; tap a tile → INV-01 with that filter — any user.
+**Data read:** `GET /inventory/dashboard`.
+**Entry points:** Dashboard.
+**Failure behaviour:** Silent — tiles hide on failure, the dashboard still loads.
+**Backend status:** `[C]` exists, two problems:
+  1. **"Used today" counts `MAINTENANCE_USAGE` only** (`PartStockService.java:226-232`),
+     not `CONSUMABLE_TAKE` — so BBs and gas taken from stock, the store's biggest daily
+     use, never show. **BE-26.**
+  2. **"Low" and "out" use minimum stock only**, not decision 2's rule. **BE-27.**
+  Also: for an HQ caller it sums every store together — HQ uses INV-03 instead.
+**Vocabulary flag:** Yes — "parts".
+**Cost visibility:** N/A.
+**Deferred decisions:** —
+
+---
+
+### INV-09 — HQ Catalog (HQ)
+
+**Purpose:** HQ manages what it sells: which of its items are sold to stores, which are
+mandatory, and which store item is the same thing as an HQ item.
+**Platform:** Mobile — HQ Admin, HQ Principal.
+**Scope tiers:** Flags and linking — ADMIN role or PRINCIPAL scope **signed in at the
+root** `[C]` (`requireHqCatalogAdmin`, BE-21). Reading the catalog — any user
+(`GET /catalog`).
+**Functional roles:** ADMIN, as above.
+**Actions:**
+  - List HQ's items with "sold" and "mandatory" — HQ
+  - Toggle **Sold by HQ** / **Mandatory from HQ** (mandatory implies sold) — HQ admin
+  - Add an HQ item — `POST /parts` signed in at HQ (ungated today; BE-25)
+  - **Link store items**: for one HQ item, pick each store's matching item — HQ admin
+**Data read:** `GET /catalog` (sold items only), `GET /parts` at HQ (all of HQ's items,
+sold or not, plus every store's), `PATCH /parts/{id}/hq-flags`, `/catalog-link`.
+**Entry points:** HQ dashboard / settings.
+**Failure behaviour:** Blocking.
+**Backend status:** `[C]` flags, linking and the catalog read exist (BE-21). **Linking
+can't be laid out:** `GET /parts` at HQ returns HQ's and every store's items with **no
+store on each row** (`PartResponse` has no tenant field), so the screen can't show "Outlet
+Bandung's items" to link from. **BE-26.**
+**Vocabulary flag:** Yes — "part".
+**Cost visibility:** None today. HQ's catalog has no selling price, so a store types the
+price on every order to HQ (PROC-07). Flagged in `API_CONTRACT.md`; a catalog price is a
+product decision, not drafted here.
+**Deferred decisions:**
+  - A catalog price set by HQ (stores pick, don't type). Recommendation: yes, owner-visible
+    only like other prices — **to decide**.
+
+---
+
+## Gates
+
+### Gate 1 — Orphan check
+Every screen has a role that can open it. **Entry points are the problem:** the app has no
+Inventory menu and no settings screen, so INV-01/02/05/06 are reachable today only from a
+`LOW_STOCK` notification, and INV-07/09 from nowhere. **Finding:** the app needs an
+Inventory menu (store) and an HQ menu (INV-03, INV-09, spending). INV-03 and INV-09 are HQ
+screens and also need the HQ dashboard the product owner asked for (status page, "New: HQ
+dashboard").
+
+### Gate 2 — Dead-end check
+No dead ends. INV-02 and INV-05 hand off to PROC-01/PROC-07; INV-04 returns to INV-05;
+INV-03 hands off to PROC-01 with the store preselected.
+
+### Gate 3 — Segregation of duties
+| Pairing | Today `[C]` | Decided / recommended |
+|---|---|---|
+| Stock adjustment: requester ≠ approver | **No rule** — an Owner approves their own (`StockAdjustmentService.java:84-112`) | Rule, with "self-approved" flag when the store has only one Owner (`[?]`, BE-25) |
+| Stock adjustment: approver is the store's own | **No** — HQ can approve via `findInHierarchy` | Store's own OWNER+ (BE-25) |
+| Direct stock change with no approval | **Anyone** (`/inventory/adjust`) | ADMIN only, reason, logged (decided, BE-25) |
+| Stock in with no purchase | **Anyone** (`/inventory/receive`) | ADMIN only, reason, logged (decided, BE-25) |
+| Who sets `minimumStock` (which raises "low") | Anyone | Manager+ (BE-25) |
+
+### Gate 4 — Cost visibility
+Module 2 screens show **no cost fields** today `[C]` (`PartResponse`,
+`LowStockResponse`, `StockAdjustmentResponse`, `BurnRateResponse`,
+`InventoryDashboardResponse` carry none). Passes. If stock value, unit cost or write-off
+value is ever added (INV-04, INV-05, INV-08): OWNER+, matching BE-06/BE-11.
+
+### Gate 5 — Deferred-decision log
+1. Requester ≠ approver for stock adjustments when the store has one Owner — allow and flag
+   "self-approved"? (INV-04)
+2. May a Store Manager link their own item to HQ's catalog item? (INV-06)
+3. Should HQ's catalog carry a selling price? (INV-09)
+4. One shared category list from HQ instead of per-store copies? (INV-07, cleanup)
+
+---
+
+## Screens no endpoint can serve — the module's real output
+
+| Screen | Missing | Task |
+|---|---|---|
+| INV-03 Stock across stores | Store (and catalog link) on stock and burn-rate rows; burn-rate policy per part's own store | BE-26 |
+| INV-05 Item detail | Per-item movement history endpoint, with the actor on each movement | BE-26 |
+| INV-09 HQ catalog linking | Store on `PartResponse` | BE-26 |
+| INV-08 Dashboard tiles | "Used today" includes consumable takes | BE-26 |
+| INV-02, INV-08 | One definition of "low" on the server; `LOW_STOCK` to the store's Manager+ | BE-27 |
+| INV-04, INV-06, INV-07 | Permission checks on adjustments, items, categories; the two shortcuts ADMIN-only | BE-25 |
+| INV-01 | Stock and burn rate in one call (nice to have) | BE-26 (optional) |
+
+The store-on-every-row fix in BE-26 also closes the two gaps the app works around in module
+1 (`API_CONTRACT.md`): HQ picking parts and PRAs for a chosen store.

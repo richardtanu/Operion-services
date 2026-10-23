@@ -23,6 +23,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
+**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
 
 ---
 
@@ -1475,8 +1476,8 @@ against the old service/controller. Full suite 103/103. Postman: new `REALISASI`
 
 ## BE-19 — Expense claims: branch spending that isn't stock
 
-**Status: CONFIRMED by the product owner, 20 Oct 2026 — needs a screen-inventory record
-before building.** Depends on BE-23 for receipt photos.
+**Status: CONFIRMED by the product owner, 20 Oct 2026. Screen record written 23 Oct 2026:
+PROC-10 in `screens/01-procurement.md` (addendum) — ready to build.** Depends on BE-23 for receipt photos.
 
 ### Why
 
@@ -2086,6 +2087,136 @@ a dependency of `NotificationService`. Unchanged: the requester/procurement noti
 Tests: `StoreAlertsStayInStoreTest` (2): a Store Manager's new request, an over-limit
 purchase and a self-received receipt reach the store's Owner, and neither an HQ ADMIN nor an
 HQ ADMIN + PRINCIPAL. Against the unfixed code both fail. Full suite 141/141.
+
+---
+
+## BE-25 — Who changes stock and item data
+
+**Status: OPEN.** From the module 2 screen inventory (`screens/02-inventory-stock.md`,
+INV-04, INV-06, INV-07, Gate 3) and the product owner's decision of 23 Oct 2026 on the two
+stock shortcuts.
+
+### Why
+
+`[C]` Nothing in the inventory or part modules checks who is acting:
+
+- `POST /inventory/adjust` sets any item's stock immediately, no approval, no check
+  (`PartStockService.java:127-147`) — the stock adjustment workflow can simply be skipped.
+- `POST /inventory/receive` adds stock as `PURCHASE` with no purchase behind it (`:149-178`),
+  and still decides "consumable" by category **name** (`:170`) — the check BE-04 replaced
+  everywhere else.
+- Stock adjustments: anyone may request; approve/reject is OWNER+ but **an Owner can
+  approve their own**, and `findInHierarchy` (`StockAdjustmentService.java:184-192`) lets
+  HQ approve a store's adjustment.
+- Items (`POST/PUT /parts`, retire, restore), categories and types (CRUD and seed) have
+  no checks; `minimumStock` (which raises "low") and a category's `consumable` flag
+  (which changes how stock is counted) can be changed by anyone.
+
+### Task
+
+1. **The two shortcuts → ADMIN only** (decided 23 Oct): `/inventory/adjust` and
+   `/inventory/receive` need the ADMIN role, a required `reason` (400 if blank), and write
+   the actor into the movement (see BE-26 item 2). Anyone else → 403. In `receiveStock`,
+   replace the name check with `part.isConsumable()`.
+2. **Stock adjustments:** request — the store's MANAGER+ (else 403); approve/reject — the
+   **store's own** OWNER+ (`findOwned`, not `findInHierarchy`). **Requester ≠ approver
+   `[?]`:** recommended — allowed when they're the same person, but the adjustment is saved
+   `selfApproved = true` and shown as such (same choice as BE-20's self-received). Confirm
+   with the product owner before building.
+3. **Notify the store's Owner+** when an adjustment is requested: new
+   `NotificationType.STOCK_ADJUSTMENT_REQUESTED`, store-only like BE-24, never the
+   requester. Flyway for the CHECK constraint.
+4. **Items:** create/edit → the store's MANAGER+, or ADMIN; retire/restore → OWNER+, or
+   ADMIN. Else 403.
+5. **Categories and types** (CRUD and seed) → ADMIN only.
+
+### Tests (rules 2 and 6)
+
+Every gate above both ways; an Owner's own adjustment → `selfApproved` (or 403, per the
+confirmed rule); HQ Principal approving a store's adjustment → not found; `receive` of a
+renamed consumable category creates no part instances; stock quantities with a
+conversion factor ≠ 1 where receipts are involved. Every new test fails against the
+unfixed code.
+
+### Client follow-up (mobile repo)
+
+Inventory screens INV-04/06/07 gated accordingly; no screen calls the two shortcuts
+except an ADMIN-only data-repair action.
+
+---
+
+## BE-26 — Inventory reads: store on every row, item history, consumables in "used today"
+
+**Status: OPEN.** From the module 2 screen inventory's gap list (INV-03, INV-05, INV-08,
+INV-09).
+
+### Why
+
+`[C]` The stock, low-stock, burn-rate and adjustment lists already walk the caller's tree,
+so HQ receives every store's rows — but **no row says which store it belongs to**
+(`LowStockResponse`, `BurnRateResponse`, `StockAdjustmentResponse`, `PartResponse`), so
+HQ can't tell stores apart and can't lay out "Outlet Bandung's items" to link to its
+catalog. Per-item stock history is stored (`StockMovementRepository
+.findByPartIdOrderByCreatedAtDesc`) but no endpoint returns it, and movements record no
+actor. The dashboard's "used today" counts `MAINTENANCE_USAGE` only
+(`PartStockService.java:226-232`), not `CONSUMABLE_TAKE`. Burn rate reads the
+`MaintenancePolicy` of the **caller's** tenant (`BurnRateService.java:80`).
+
+### Task
+
+1. **Store on every row:** `tenantId`, `tenantName` on `LowStockResponse`,
+   `BurnRateResponse`, `StockAdjustmentResponse`, `PartResponse`; plus `catalogPartId` on
+   the stock and burn-rate rows. Optional `?tenantId=` filter on `GET /parts`,
+   `/inventory/stock-summary`, `/inventory/low-stock`, `/burn-rate` (inside the caller's
+   tree, else 400 "Store not found"). This also closes the two module 1 workarounds in the
+   mobile `API_CONTRACT.md` (HQ picking parts and PRAs for a store — add `tenantId` to
+   `PurchaseRequestAuthorizationResponse` too).
+2. **Item history:** `GET /parts/{id}/movements` (newest first, `limit`), from
+   `findByPartIdOrderByCreatedAtDesc`, tree-scoped like the other reads. Add `actorId` /
+   `actorName` to `StockMovement` (Flyway, null on old rows) and fill it everywhere stock
+   moves.
+3. **"Used today"** counts `MAINTENANCE_USAGE` and `CONSUMABLE_TAKE`.
+4. **Burn-rate policy per item:** use the part's own store's `MaintenancePolicy`.
+5. Optional: `daysOfCover`, `suggestedQty`, `burnRateSource` on `stock-summary` rows, so
+   INV-01 is one call.
+
+### Tests
+
+HQ caller sees two stores' rows told apart by `tenantId`; `?tenantId=` outside the tree →
+400; a movement written by an approval carries the approver; "used today" counts a
+consumable take (conversion factor ≠ 1, rule 2); burn rate for a store item uses the
+store's policy, not HQ's (rule 6: a non-default policy value).
+
+---
+
+## BE-27 — One definition of "low", and tell the Store Manager
+
+**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-02).
+
+### Why
+
+`[C]` "Low" exists twice: `minimumStock` (inventory lists, dashboard, `LOW_STOCK`
+notification) and burn rate (`daysOfCover` vs `targetDays`, `belowLevel`). They can
+disagree. `LOW_STOCK` goes to ADMIN or OWNER+ in the store only
+(`NotificationService.notifyLowStock`), never the Store Manager, who files the request.
+
+### Task
+
+1. **One rule** (decided): an item is low when, with usage data (`COMPUTED` /
+   `MANUAL_RATE`), `daysOfCover < targetDays`; otherwise when `currentStock ≤
+   minimumStock`. Out of stock is `currentStock ≤ 0` either way. Return the trigger on
+   each row: `lowBecause: RUNS_OUT_SOON | BELOW_MINIMUM | null`.
+2. Use it in `low-stock`, `stock-summary` status, the dashboard counts, and `LOW_STOCK`.
+3. **`LOW_STOCK` recipients:** the store's MANAGER+ and ADMIN, in the store only (as
+   BE-24). Fire when an item **becomes** low by the rule (not on every movement while
+   low).
+
+### Tests
+
+An item with usage data and plenty above minimum but 2 days of cover → low,
+`RUNS_OUT_SOON`; an item with no usage data below minimum → low, `BELOW_MINIMUM`; the
+notification reaches the store's Manager and not HQ; fires once on the crossing, not
+again on the next take. Conversion factor ≠ 1 on the takes that move days of cover.
 
 ---
 
