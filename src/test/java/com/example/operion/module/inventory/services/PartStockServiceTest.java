@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.inventory.enums.InventoryStockStatus;
+import com.example.operion.module.burnrate.service.BurnRateService;
 import com.example.operion.module.inventory.repository.StockMovementRepository;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
@@ -32,6 +33,10 @@ class PartStockServiceTest {
 
   @Mock
   private TenantHierarchyService tenantHierarchyService;
+
+  // BE-27: no burn-rate rows (Mockito returns an empty map), so the minimum rule applies
+  @Mock
+  private BurnRateService burnRateService;
 
   @InjectMocks
   private PartStockService service;

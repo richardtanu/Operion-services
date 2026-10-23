@@ -14,6 +14,7 @@ import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.expense.entity.Expense;
+import com.example.operion.module.inventory.enums.LowBecause;
 import com.example.operion.module.notification.dto.NotificationResponse;
 import com.example.operion.module.notification.entity.Notification;
 import com.example.operion.module.notification.enums.NotificationReferenceType;
@@ -35,6 +36,10 @@ public class NotificationService {
 
     private static final List<Scope> OWNER_OR_ABOVE = Arrays.stream(Scope.values())
             .filter(s -> s.ordinal() >= Scope.OWNER.ordinal())
+            .toList();
+
+    private static final List<Scope> MANAGER_OR_ABOVE = Arrays.stream(Scope.values())
+            .filter(s -> s.ordinal() >= Scope.MANAGER.ordinal())
             .toList();
 
     private final NotificationRepository repository;
@@ -293,16 +298,27 @@ public class NotificationService {
         }
     }
 
-    public void notifyLowStock(Part part) {
+    /**
+     * BE-27: the item just became low by the one rule. To the store's MANAGER+
+     * (the Store Manager files the request) and ADMINs, in the store only (as BE-24).
+     */
+    public void notifyLowStock(Part part, LowBecause why) {
 
-        for (User target : approversIn(List.of(part.getTenant().getId()))) {
+        List<User> targets = userRepository.findByTenantIdInAndRoleOrScopeIn(
+                List.of(part.getTenant().getId()), Role.ADMIN, MANAGER_OR_ABOVE);
+
+        String message = why == LowBecause.RUNS_OUT_SOON
+                ? part.getName() + " will run out before its target days of cover"
+                : part.getName() + " has dropped to or below its minimum stock level";
+
+        for (User target : targets) {
 
             create(
                     part.getTenant(),
                     target,
                     NotificationType.LOW_STOCK,
                     "Low Stock",
-                    part.getName() + " has dropped to or below its minimum stock level",
+                    message,
                     NotificationReferenceType.PART,
                     part.getId());
         }

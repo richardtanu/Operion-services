@@ -23,7 +23,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
-**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
+**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
 **BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
 ---
@@ -2324,7 +2324,7 @@ stale report). Full suite 162/162. Postman: `parts-movements`, `?tenantId=` on t
 
 ## BE-27 — One definition of "low", and tell the Store Manager
 
-**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-02).
+**Status: DONE, 23 Oct 2026** (see end of entry). Product owner's decision, 23 Oct 2026 (module 2, INV-02).
 
 ### Why
 
@@ -2350,6 +2350,36 @@ An item with usage data and plenty above minimum but 2 days of cover → low,
 `RUNS_OUT_SOON`; an item with no usage data below minimum → low, `BELOW_MINIMUM`; the
 notification reaches the store's Manager and not HQ; fires once on the crossing, not
 again on the next take. Conversion factor ≠ 1 on the takes that move days of cover.
+
+### What was done — DONE, 23 Oct 2026
+
+1. **The rule** lives once, in `inventory/services/LowStockRule.evaluate(stock, minimum,
+   burnRateRow)`: with usage data (source COMPUTED or MANUAL_RATE, rate > 0) low when
+   `stock / rate < targetDays`; otherwise when `stock ≤ minimumStock`. New enum
+   `LowBecause` (`RUNS_OUT_SOON`, `BELOW_MINIMUM`). Out of stock stays a status on top.
+   With usage data the minimum is **not** also applied (an item with 40 days of cover sitting
+   at its minimum is not low) — that is what "one rule" means; say so if minimum should
+   still win.
+2. **Used everywhere:** `low-stock` (filtered by the rule, lowest stock first),
+   `stock-summary` (`status` by the rule), the dashboard's `lowStock` count. Rows gain
+   `lowBecause`, plus `daysOfCover` and `targetDays` when the item has usage data (which
+   also covers most of BE-26's optional item 5). Burn rate comes from `BurnRateService`
+   (new `byPartIn` for lists, `forPart` for one item), so it's the store's own policy (BE-26).
+3. **LOW_STOCK:** fired from `PartStockService.adjustStock` on a stock decrease when the item
+   goes from not-low to low by the rule (the same burn-rate row judges before and after),
+   never again while it stays low. Recipients: the store's MANAGER+ (MANAGER, OWNER,
+   PRINCIPAL scope) and ADMINs, store only; the message says which way it's low.
+   Cost note: each decrease computes that store's burn rate once (two grouped queries) —
+   fine at today's catalog sizes; cache per request if a big store makes takes slow.
+
+Tests: `LowStockRuleTest` (2): 10 cans at 5 a day vs a 20-day target is low
+(`RUNS_OUT_SOON`, daysOfCover 2, targetDays 20) though far above its minimum of 2; a spring
+below minimum without usage data is `BELOW_MINIMUM`; 4 cans at its minimum but with 40 days
+of cover is NORMAL; the dashboard counts 2. Then 2 pakets × 6 received (rule 2) at 0.5 a day:
+takes to 11 and 10 raise nothing, the take to 9 (18 days) alerts the Manager, the Owner and
+the ADMIN once — not the operator, not HQ — and the take to 8 adds nothing. `PartStockServiceTest`
+gains a burn-rate mock. Against the unfixed code both fail. Full suite 164/164. Postman:
+low-stock, stock-summary and dashboard descriptions.
 
 ---
 
