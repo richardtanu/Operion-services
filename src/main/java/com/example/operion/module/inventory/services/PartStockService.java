@@ -3,6 +3,7 @@ package com.example.operion.module.inventory.services;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -14,12 +15,15 @@ import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.repository.UserRepository;
+import com.example.operion.module.burnrate.dto.BurnRateResponse;
+import com.example.operion.module.burnrate.service.BurnRateService;
 import com.example.operion.module.inventory.dto.AdjustStockRequest;
 import com.example.operion.module.inventory.dto.InventoryDashboardResponse;
 import com.example.operion.module.inventory.dto.LowStockResponse;
 import com.example.operion.module.inventory.dto.StockMovementResponse;
 import com.example.operion.module.inventory.entity.StockMovement;
 import com.example.operion.module.inventory.enums.InventoryStockStatus;
+import com.example.operion.module.inventory.enums.LowBecause;
 import com.example.operion.module.inventory.enums.StockMovementType;
 import com.example.operion.module.inventory.enums.StockReferenceType;
 import com.example.operion.module.inventory.repository.ReceiveStockRequest;
@@ -49,6 +53,8 @@ public class PartStockService {
 
         private final UserRepository userRepository;
 
+        private final BurnRateService burnRateService;
+
         public void adjustStock(
                         Part part,
                         int quantity,
@@ -70,10 +76,18 @@ public class PartStockService {
 
                 partRepository.save(part);
 
-                Integer minimumStock = part.getMinimumStock();
+                // BE-27: alert once, when the item *becomes* low by the one rule (the
+                // same burn-rate row judges before and after, so only the stock differs)
+                if (quantity < 0) {
 
-                if (minimumStock != null && before > minimumStock && after <= minimumStock) {
-                        notificationService.notifyLowStock(part);
+                        BurnRateResponse burnRate = burnRateService.forPart(part);
+
+                        LowBecause wasLow = LowStockRule.evaluate(before, part.getMinimumStock(), burnRate);
+                        LowBecause isLow = LowStockRule.evaluate(after, part.getMinimumStock(), burnRate);
+
+                        if (wasLow == null && isLow != null) {
+                                notificationService.notifyLowStock(part, isLow);
+                        }
                 }
 
                 StockMovement movement = StockMovement.builder()
@@ -287,12 +301,13 @@ public class PartStockService {
                                 .mapToInt(Part::getCurrentStock)
                                 .sum();
 
-                List<Part> lowStockParts = getLowStockParts(tenantIds);
+                // BE-27: the one "low" rule, the same as the lists and the alert
+                List<LowStockResponse> rows = rows(parts, tenantIds);
 
-                int lowStock = lowStockParts.size();
+                int lowStock = (int) rows.stream().filter(r -> r.getLowBecause() != null).count();
 
-                int outOfStock = (int) lowStockParts.stream()
-                                .filter(part -> part.getCurrentStock() == 0)
+                int outOfStock = (int) rows.stream()
+                                .filter(r -> r.getStatus() == InventoryStockStatus.OUT_OF_STOCK)
                                 .count();
 
                 LocalDateTime today = LocalDate.now().atStartOfDay();
@@ -333,9 +348,10 @@ public class PartStockService {
 
                 List<UUID> tenantIds = tenantHierarchyService.readScope(tenantId);
 
-                return getLowStockParts(tenantIds)
+                // BE-27: low by the one rule, lowest stock first
+                return rows(partRepository.findByTenantIdInOrderByCurrentStockAsc(tenantIds), tenantIds)
                                 .stream()
-                                .map(this::mapLowStock)
+                                .filter(r -> r.getLowBecause() != null)
                                 .toList();
         }
 
@@ -344,31 +360,31 @@ public class PartStockService {
 
                 List<UUID> tenantIds = tenantHierarchyService.readScope(tenantId);
 
-                return partRepository.findByTenantIdIn(tenantIds)
-                                .stream()
-                                .map(this::mapLowStock)
-                                .toList();
+                return rows(partRepository.findByTenantIdIn(tenantIds), tenantIds);
         }
 
-        private List<Part> getLowStockParts(List<UUID> tenantIds) {
+        /** One burn-rate pass for the whole scope, then the rule per item. */
+        private List<LowStockResponse> rows(List<Part> parts, List<UUID> tenantIds) {
 
-                return partRepository
-                                .findByTenantIdInOrderByCurrentStockAsc(tenantIds)
-                                .stream()
-                                .filter(part -> getSafeStock(part.getCurrentStock()) <= getSafeStock(
-                                                part.getMinimumStock()))
+                Map<UUID, BurnRateResponse> burnRates = burnRateService.byPartIn(tenantIds);
+
+                return parts.stream()
+                                .map(part -> mapLowStock(part, burnRates.get(part.getId())))
                                 .toList();
         }
 
         private LowStockResponse mapLowStock(
-                        Part part) {
+                        Part part,
+                        BurnRateResponse burnRate) {
 
                 int currentStock = getSafeStock(part.getCurrentStock());
                 int minimumStock = getSafeStock(part.getMinimumStock());
 
+                LowBecause lowBecause = LowStockRule.evaluate(currentStock, minimumStock, burnRate);
+
                 InventoryStockStatus status = currentStock <= 0
                                 ? InventoryStockStatus.OUT_OF_STOCK
-                                : currentStock <= minimumStock
+                                : lowBecause != null
                                                 ? InventoryStockStatus.LOW_STOCK
                                                 : InventoryStockStatus.NORMAL;
 
@@ -378,6 +394,9 @@ public class PartStockService {
                                 .currentStock(currentStock)
                                 .minimumStock(minimumStock)
                                 .status(status)
+                                .lowBecause(lowBecause)
+                                .daysOfCover(LowStockRule.hasUsageData(burnRate) ? burnRate.getDaysOfCover() : null)
+                                .targetDays(LowStockRule.hasUsageData(burnRate) ? burnRate.getTargetDays() : null)
                                 .tenantId(part.getTenant().getId())
                                 .tenantName(part.getTenant().getName())
                                 .catalogPartId(part.getCatalogPart() != null ? part.getCatalogPart().getId() : null)

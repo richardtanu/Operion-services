@@ -1738,6 +1738,42 @@
                                                    ]
                                   },
                                   {
+                                      "name":  "burn-rate-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/burn-rate",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "burn-rate"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-26: one store inside your tree"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-26: each item uses its own store\u0027s policy (window, target days); rows carry tenantId, tenantName, catalogPartId."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
                                       "name":  "inventory-low-stock",
                                       "request":  {
                                                       "method":  "GET",
@@ -1768,7 +1804,7 @@
                                                                                 }
                                                                             ]
                                                               },
-                                                      "description":  "BE-26: rows carry tenantId, tenantName, catalogPartId."
+                                                      "description":  "BE-27: low by the one rule. With usage data: days of cover below the store\u0027s target (lowBecause RUNS_OUT_SOON, with daysOfCover and targetDays); without: stock at or below minimum (BELOW_MINIMUM). Lowest stock first."
                                                   },
                                       "response":  [
 
@@ -1805,7 +1841,7 @@
                                                                                 }
                                                                             ]
                                                               },
-                                                      "description":  "BE-26: rows carry tenantId, tenantName, catalogPartId."
+                                                      "description":  "BE-26/27: every item with status (OUT_OF_STOCK / LOW_STOCK / NORMAL by the one rule), lowBecause, daysOfCover, targetDays, tenantId, tenantName, catalogPartId."
                                                   },
                                       "response":  [
 
@@ -1834,43 +1870,7 @@
                                                                                "dashboard"
                                                                            ]
                                                               },
-                                                      "description":  "BE-26: stockUsedToday counts consumable takes as well as maintenance usage."
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "burn-rate-list",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/burn-rate",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "port":  "8080",
-                                                                  "path":  [
-                                                                               "burn-rate"
-                                                                           ],
-                                                                  "query":  [
-                                                                                {
-                                                                                    "key":  "tenantId",
-                                                                                    "value":  "",
-                                                                                    "disabled":  true,
-                                                                                    "description":  "BE-26: one store inside your tree"
-                                                                                }
-                                                                            ]
-                                                              },
-                                                      "description":  "BE-26: each item uses its own store\u0027s policy (window, target days); rows carry tenantId, tenantName, catalogPartId."
+                                                      "description":  "BE-26/27: lowStock counts by the one rule; stockUsedToday counts consumable takes and maintenance usage."
                                                   },
                                       "response":  [
 

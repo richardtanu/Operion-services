@@ -66,6 +66,23 @@ public class BurnRateService {
                 .orElseThrow(() -> new RuntimeException("Part not found"));
     }
 
+    /** BE-27: burn-rate rows by part id, for the one "low" rule in inventory reads. */
+    public Map<UUID, BurnRateResponse> byPartIn(List<UUID> tenantIds) {
+
+        Map<UUID, BurnRateResponse> byPart = new HashMap<>();
+        computeAll(tenantIds).forEach(r -> byPart.put(r.getPartId(), r));
+        return byPart;
+    }
+
+    /** BE-27: one item's burn-rate row (null if it has none, e.g. a retired item). */
+    public BurnRateResponse forPart(Part part) {
+
+        return computeStore(part.getTenant().getId()).stream()
+                .filter(r -> r.getPartId().equals(part.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
     /**
      * BE-26: each item is computed with its **own store's** MaintenancePolicy,
      * not the caller's: HQ reading a store's burn rate must see that store's
