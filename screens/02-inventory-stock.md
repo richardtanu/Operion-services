@@ -1,8 +1,8 @@
 # Module 2 — Inventory & Stock Screen Inventory
 
 **Date:** 21 Oct 2026, completed 23 Oct 2026
-**Status:** **COMPLETE** — 9 screens (INV-01…09), gates 1–5 run, gap list produced. Three
-backend tasks came out of it (BE-25…BE-27).
+**Status:** **COMPLETE** — 9 screens (INV-01…09), gates 1–5 run, gap list produced. Four
+backend tasks came out of it (BE-25…BE-28).
 **Built against:** `OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.4, plus the module 1
 decisions of 16–21 Oct 2026 (`OPERION_BE_CHANGE_QUEUE.md` BE-14…BE-23).
 **Source read:** `module/inventory/` (controller, DTOs, enums, `PartStockService`),
@@ -200,10 +200,10 @@ written off, that's cost data: OWNER+.
   - **Who may request, who approves — BE-25.** Request: the store's Manager+ (the SM counts
     the stock). Approve/reject: the **store's own** OWNER+ — today `findInHierarchy`
     (`:184-192`) also lets HQ's Principal approve a store's adjustment, against "every
-    store is independent". **Requester ≠ approver** — `[?]` for the product owner: an
-    Owner who requests an adjustment then has nobody in the store to approve it; the
-    recommendation is to allow it but flag it "self-approved", the same visibility-not-
-    blocking choice as self-received goods (BE-20).
+    store is independent". ~~Requester ≠ approver~~ **Decided 23 Oct:** another of the
+    store's Owners approves; a store's only Owner may approve their own, saved and shown
+    as "self-approved" — the same visibility-not-blocking choice as self-received goods
+    (BE-20). **BE-25.**
   - ~~What to do with `/inventory/adjust` and `/inventory/receive`~~ **Decided 23 Oct:**
     ADMIN only, for data repair, reason required, every use logged — **BE-25**.
   - **Notify the Owner** when an adjustment is requested (new notification type, CHECK
@@ -273,7 +273,14 @@ adds the gates.
 **Cost visibility:** None on the item master.
 **Deferred decisions:**
   - Should a store Manager be able to link their own item to HQ's (today HQ admin only)?
-    Recommendation: yes for their own store's items — they know which box is which.
+    **Recommended 23 Oct, waiting for the product owner:** yes, but one way only. The
+    store's Manager+ may link one of its own **unlinked** items to an item HQ sells — they
+    know which box is which, and the natural moment is the first order from HQ ("you
+    already stock this?"). Changing or removing a link stays HQ's: the link decides
+    whether the mandatory-from-HQ rule applies (`HqCatalogService.isMandatoryFromHq`), so
+    unlinking is the way around it. Refuse a link when the two items are counted
+    differently (consumable vs per unit), or when the store already has an item linked to
+    that HQ item.
 
 ---
 
@@ -300,8 +307,14 @@ configurable by nature.
 **Cost visibility:** N/A.
 **Deferred decisions:**
   - Per-store copies of categories drift (the open duplicate-`part_categories` item,
-    `OPERION_BE_PLAN.md` §5.3). With HQ BANDUNG now the root, HQ's categories could be the
-    single list. Not decided here; flagged for the cleanup.
+    `OPERION_BE_PLAN.md` §5.3). **Recommended 23 Oct, waiting for the product owner:** one
+    list, owned by HQ, read by every store, moved **before go-live** while the production
+    database is wiped anyway. Why: the first order of an HQ item matches the store's
+    category by name and creates a copy if it's missing (`HqCatalogService.newStorePart`),
+    copying HQ's `consumable` flag once — after that the two can differ, and the same gas
+    would be counted per unit in one store and by quantity in another. HQ's cross-store
+    numbers by category need one list too, and BE-25 makes categories ADMIN-only anyway,
+    so stores lose nothing they'd use.
 
 ---
 
@@ -352,11 +365,11 @@ store on each row** (`PartResponse` has no tenant field), so the screen can't sh
 Bandung's items" to link from. **BE-26.**
 **Vocabulary flag:** Yes — "part".
 **Cost visibility:** None today. HQ's catalog has no selling price, so a store types the
-price on every order to HQ (PROC-07). Flagged in `API_CONTRACT.md`; a catalog price is a
-product decision, not drafted here.
+price on every order to HQ (PROC-07). **Decided 23 Oct:** HQ sets a price per item;
+orders to HQ take it, and stores stop typing one. The price is cost data: OWNER+, like
+other prices. **BE-28.**
 **Deferred decisions:**
-  - A catalog price set by HQ (stores pick, don't type). Recommendation: yes, owner-visible
-    only like other prices — **to decide**.
+  - ~~A catalog price set by HQ~~ **Decided 23 Oct:** yes — **BE-28**.
 
 ---
 
@@ -377,7 +390,7 @@ INV-03 hands off to PROC-01 with the store preselected.
 ### Gate 3 — Segregation of duties
 | Pairing | Today `[C]` | Decided / recommended |
 |---|---|---|
-| Stock adjustment: requester ≠ approver | **No rule** — an Owner approves their own (`StockAdjustmentService.java:84-112`) | Rule, with "self-approved" flag when the store has only one Owner (`[?]`, BE-25) |
+| Stock adjustment: requester ≠ approver | **No rule** — an Owner approves their own (`StockAdjustmentService.java:84-112`) | Rule; the store's only Owner may approve their own, flagged "self-approved" (decided, BE-25) |
 | Stock adjustment: approver is the store's own | **No** — HQ can approve via `findInHierarchy` | Store's own OWNER+ (BE-25) |
 | Direct stock change with no approval | **Anyone** (`/inventory/adjust`) | ADMIN only, reason, logged (decided, BE-25) |
 | Stock in with no purchase | **Anyone** (`/inventory/receive`) | ADMIN only, reason, logged (decided, BE-25) |
@@ -390,11 +403,13 @@ Module 2 screens show **no cost fields** today `[C]` (`PartResponse`,
 value is ever added (INV-04, INV-05, INV-08): OWNER+, matching BE-06/BE-11.
 
 ### Gate 5 — Deferred-decision log
-1. Requester ≠ approver for stock adjustments when the store has one Owner — allow and flag
-   "self-approved"? (INV-04)
-2. May a Store Manager link their own item to HQ's catalog item? (INV-06)
-3. Should HQ's catalog carry a selling price? (INV-09)
-4. One shared category list from HQ instead of per-store copies? (INV-07, cleanup)
+1. ~~Requester ≠ approver for stock adjustments when the store has one Owner~~ **Decided
+   23 Oct:** allowed for the store's only Owner, flagged "self-approved" (INV-04, BE-25).
+2. May a Store Manager link their own item to HQ's catalog item? **Recommended:** link
+   yes, change or remove a link HQ only (INV-06). Waiting for the product owner.
+3. ~~Should HQ's catalog carry a selling price?~~ **Decided 23 Oct:** yes (INV-09, BE-28).
+4. One shared category list from HQ instead of per-store copies? **Recommended:** yes,
+   before go-live (INV-07). Waiting for the product owner.
 
 ---
 
@@ -409,6 +424,7 @@ value is ever added (INV-04, INV-05, INV-08): OWNER+, matching BE-06/BE-11.
 | INV-02, INV-08 | One definition of "low" on the server; `LOW_STOCK` to the store's Manager+ | BE-27 |
 | INV-04, INV-06, INV-07 | Permission checks on adjustments, items, categories; the two shortcuts ADMIN-only | BE-25 |
 | INV-01 | Stock and burn rate in one call (nice to have) | BE-26 (optional) |
+| INV-09, PROC-07 | HQ's price on catalog items; orders to HQ take it instead of a typed price | BE-28 |
 
 The store-on-every-row fix in BE-26 also closes the two gaps the app works around in module
 1 (`API_CONTRACT.md`): HQ picking parts and PRAs for a chosen store.

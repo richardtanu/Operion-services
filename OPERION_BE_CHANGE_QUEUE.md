@@ -24,6 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
+**BE-25 ready to build, 23 Oct 2026** (self-approval question answered). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it).
 
 ---
 
@@ -2092,9 +2093,9 @@ HQ ADMIN + PRINCIPAL. Against the unfixed code both fail. Full suite 141/141.
 
 ## BE-25 — Who changes stock and item data
 
-**Status: OPEN.** From the module 2 screen inventory (`screens/02-inventory-stock.md`,
-INV-04, INV-06, INV-07, Gate 3) and the product owner's decision of 23 Oct 2026 on the two
-stock shortcuts.
+**Status: OPEN — ready to build.** From the module 2 screen inventory
+(`screens/02-inventory-stock.md`, INV-04, INV-06, INV-07, Gate 3) and the product owner's
+decisions of 23 Oct 2026 on the two stock shortcuts and on self-approval.
 
 ### Why
 
@@ -2120,9 +2121,12 @@ stock shortcuts.
    replace the name check with `part.isConsumable()`.
 2. **Stock adjustments:** request — the store's MANAGER+ (else 403); approve/reject — the
    **store's own** OWNER+ (`findOwned`, not `findInHierarchy`). **Requester ≠ approver
-   `[?]`:** recommended — allowed when they're the same person, but the adjustment is saved
-   `selfApproved = true` and shown as such (same choice as BE-20's self-received). Confirm
-   with the product owner before building.
+   (decided 23 Oct):** another of the store's own OWNER+ must approve (403 "Another Owner
+   must approve your own adjustment"), unless the requester is the store's **only** active
+   OWNER+ user — then they may approve it themself, and it's saved `selfApproved = true`
+   (Flyway column), returned on `StockAdjustmentResponse`, filterable with
+   `?selfApproved=true`, and shown as "self-approved" (same choice as BE-20's
+   self-received). HQ users don't count as the store's Owners.
 3. **Notify the store's Owner+** when an adjustment is requested: new
    `NotificationType.STOCK_ADJUSTMENT_REQUESTED`, store-only like BE-24, never the
    requester. Flyway for the CHECK constraint.
@@ -2132,8 +2136,9 @@ stock shortcuts.
 
 ### Tests (rules 2 and 6)
 
-Every gate above both ways; an Owner's own adjustment → `selfApproved` (or 403, per the
-confirmed rule); HQ Principal approving a store's adjustment → not found; `receive` of a
+Every gate above both ways; an Owner's own adjustment → 403 when the store has a second
+Owner, approved with `selfApproved = true` when they're its only one; HQ Principal
+approving a store's adjustment → not found; `receive` of a
 renamed consumable category creates no part instances; stock quantities with a
 conversion factor ≠ 1 where receipts are involved. Every new test fails against the
 unfixed code.
@@ -2217,6 +2222,53 @@ An item with usage data and plenty above minimum but 2 days of cover → low,
 `RUNS_OUT_SOON`; an item with no usage data below minimum → low, `BELOW_MINIMUM`; the
 notification reaches the store's Manager and not HQ; fires once on the crossing, not
 again on the next take. Conversion factor ≠ 1 on the takes that move days of cover.
+
+---
+
+## BE-28 — HQ sets the price of what it sells
+
+**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-09).
+
+### Why
+
+`[C]` HQ's catalog has no price. Every order to HQ carries a `price` per line that
+whoever drafts it types in (`PurchaseOrderItemRequest.price`, `@NotNull @Positive`) —
+usually the Store Manager, who, below Owner, can't even see that price again afterwards
+(BE-11 redaction, `PurchaseOrderService.java:379-391`). So the store decides what it pays
+HQ, and BE-16's "Spent · from HQ" adds up whatever was typed. The mobile `API_CONTRACT.md`
+lists this as a known gap.
+
+### Task
+
+1. **The price:** `hqPrice` (Rupiah, per unit — the same unit an order's quantity counts)
+   on HQ's own `Part` rows. Flyway, nullable. Set by `requireHqCatalogAdmin` only, through
+   `PATCH /parts/{id}/hq-flags` (new `price` field in `UpdateHqFlagsRequest`, > 0; null
+   leaves it unchanged). An item can't be marked sold by HQ without a price (400 "Set
+   HQ's price before selling this item").
+2. **Reading it:** `GET /catalog` returns `price` — OWNER+ only, null below, the same rule
+   as BE-11. HQ admins also see it on their own items, next to the flags.
+3. **Orders to HQ take HQ's price:** `PurchaseOrderItemRequest` drops `price` (ignored if
+   sent, for old clients). The server copies the item's current HQ price into each line
+   when the order is created, and again when the Owner sends it — the moment the store
+   commits money — recomputing `totalAmount`. After sending, line prices are frozen: a
+   later price change never touches a sent order. An item with no HQ price can't be
+   ordered (400 "HQ hasn't set a price for {name} yet").
+4. Out of scope: buying a mandatory item on the spot at HQ (BE-21's urgent buy) keeps the
+   price actually paid, as entered.
+
+### Tests
+
+Order created without a price → each line has HQ's price, total right; HQ changes the
+price between create and send → the sent order has the new price and total; a change
+after sending → order unchanged; unpriced item → 400; marking sold without a price → 400;
+a store's ADMIN or Owner setting the price → 403; `GET /catalog` below Owner → `price`
+null, at Owner → set. Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+PROC-07 "Order from HQ" drops the per-line Price field; Owner+ sees each line's HQ price
+and the total before sending, below Owner the screen says prices are set by HQ. INV-09:
+HQ admins set the price per item. Remove the gap from `API_CONTRACT.md`.
 
 ---
 
