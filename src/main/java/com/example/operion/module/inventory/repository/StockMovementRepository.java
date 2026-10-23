@@ -32,4 +32,11 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
             @Param("tenantIds") List<UUID> tenantIds,
             @Param("movementType") StockMovementType movementType,
             @Param("date") LocalDateTime date);
+
+    /** BE-26: "used today" counts more than one movement type. */
+    @Query("select m from StockMovement m where m.tenant.id in :tenantIds and m.movementType in :types and m.createdAt > :date")
+    List<StockMovement> findByTenantIdInAndMovementTypeInAndCreatedAtAfter(
+            @Param("tenantIds") List<UUID> tenantIds,
+            @Param("types") List<StockMovementType> types,
+            @Param("date") LocalDateTime date);
 }

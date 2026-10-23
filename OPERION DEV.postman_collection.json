@@ -546,40 +546,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "parts-get-all",
-                                      "protocolProfileBehavior":  {
-                                                                      "disableBodyPruning":  true
-                                                                  },
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  ""
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/parts",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "parts"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "parts-get-all-grouped-by-category",
                                       "protocolProfileBehavior":  {
                                                                       "disableBodyPruning":  true
@@ -823,6 +789,86 @@
                                                                                ]
                                                               },
                                                       "description":  "BE-21/25. HQ admins: link, re-link, or unlink (null). The store\u0027s MANAGER+: only link their own unlinked item to an item HQ sells (re-link or unlink → 403). Both items must be counted the same way (consumable or per unit), else 400."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "parts-get-all",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/parts",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "parts"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-26: one store inside your tree (else 400 Store not found)"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "Your tenant tree. BE-26: every row carries tenantId / tenantName."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "parts-movements",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/parts/:partId/movements",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "parts",
+                                                                               ":partId",
+                                                                               "movements"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "limit",
+                                                                                    "value":  "50",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "default 50, max 500"
+                                                                                }
+                                                                            ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "partId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-26: one item\u0027s stock history, newest first: type, quantity, before/after, what it came from (referenceType/referenceId) and who moved it (actorId/actorName; null on rows before 23 Oct 2026)."
                                                   },
                                       "response":  [
 
@@ -1606,120 +1652,6 @@
                      "name":  "INVENTORY",
                      "item":  [
                                   {
-                                      "name":  "inventory-dashboard",
-                                      "protocolProfileBehavior":  {
-                                                                      "disableBodyPruning":  true
-                                                                  },
-                                      "request":  {
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n    \"partId\": \"567330fb-5b64-4d3c-b818-a4819e541204\",\r\n    \"quantity\": \"5\",\r\n    \"notes\": \"restock\"\r\n}"
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/inventory/dashboard",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "inventory",
-                                                                               "dashboard"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "inventory-low-stock",
-                                      "protocolProfileBehavior":  {
-                                                                      "disableBodyPruning":  true
-                                                                  },
-                                      "request":  {
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  ""
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/inventory/low-stock",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "inventory",
-                                                                               "low-stock"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "inventory-summary",
-                                      "protocolProfileBehavior":  {
-                                                                      "disableBodyPruning":  true
-                                                                  },
-                                      "request":  {
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n    \"partId\": \"567330fb-5b64-4d3c-b818-a4819e541204\",\r\n    \"quantity\": \"5\",\r\n    \"notes\": \"restock\"\r\n}"
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/inventory/stock-summary",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "inventory",
-                                                                               "stock-summary"
-                                                                           ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "inventory-adjust",
                                       "request":  {
                                                       "method":  "POST",
@@ -1800,6 +1732,145 @@
                                                                            ]
                                                               },
                                                       "description":  "BE-25. Data-repair shortcut: ADMIN only, reason required. Part instances are created only for items that aren\u0027t consumable (the category\u0027s flag, not its name)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "inventory-low-stock",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/inventory/low-stock",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "inventory",
+                                                                               "low-stock"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-26: one store inside your tree"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-26: rows carry tenantId, tenantName, catalogPartId."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "inventory-summary",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/inventory/stock-summary",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "inventory",
+                                                                               "stock-summary"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-26: one store inside your tree"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-26: rows carry tenantId, tenantName, catalogPartId."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "inventory-dashboard",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/inventory/dashboard",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "inventory",
+                                                                               "dashboard"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-26: stockUsedToday counts consumable takes as well as maintenance usage."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "burn-rate-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/burn-rate",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "burn-rate"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-26: one store inside your tree"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-26: each item uses its own store\u0027s policy (window, target days); rows carry tenantId, tenantName, catalogPartId."
                                                   },
                                       "response":  [
 

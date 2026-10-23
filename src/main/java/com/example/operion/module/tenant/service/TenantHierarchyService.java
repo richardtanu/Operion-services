@@ -112,6 +112,16 @@ public class TenantHierarchyService {
     }
 
     /**
+     * BE-26: the tenants a list read covers. No {@code tenantId}: the caller's
+     * tree, as before. With one: that store's subtree, which must be inside the
+     * caller's tree (else 400 "Store not found", as {@link #resolveTargetTenant}).
+     */
+    public List<UUID> readScope(UUID tenantId) {
+
+        return getEffectiveTenantIds(resolveTargetTenant(tenantId, true));
+    }
+
+    /**
      * The top-level (no-parent) tenant above (or equal to) the given tenant.
      */
     public UUID getRootTenantId(UUID tenantId) {

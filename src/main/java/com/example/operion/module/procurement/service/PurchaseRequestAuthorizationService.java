@@ -393,6 +393,8 @@ public class PurchaseRequestAuthorizationService {
 
         return PurchaseRequestAuthorizationResponse.builder()
                 .id(pra.getId())
+                .tenantId(pra.getTenant().getId())
+                .tenantName(pra.getTenant().getName())
                 .status(pra.getStatus().name())
                 .approvedById(pra.getApprovedBy() != null ? pra.getApprovedBy().getId() : null)
                 .approvedByName(pra.getApprovedBy() != null ? pra.getApprovedBy().getFullName() : null)

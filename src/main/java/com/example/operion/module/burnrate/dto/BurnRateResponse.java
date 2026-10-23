@@ -48,4 +48,12 @@ public class BurnRateResponse {
 
     /** Only meaningful for MANUAL_LEVEL: currentStock <= manualReorderPoint. */
     private Boolean belowLevel;
+
+    /** BE-26: which store the item belongs to, so HQ can tell stores apart. */
+    private UUID tenantId;
+
+    private String tenantName;
+
+    /** BE-26: the HQ catalog item this store item is, if linked. */
+    private UUID catalogPartId;
 }
