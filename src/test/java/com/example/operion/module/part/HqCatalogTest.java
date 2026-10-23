@@ -296,15 +296,17 @@ class HqCatalogTest {
     @Test
     void link_hqAdminsOnly_onceperStore_andOrdersThenReuseIt() throws Exception {
 
-        mvc.perform(as(storeOwner, patch("/parts/" + storeSpare.getId() + "/catalog-link"))
-                .content("{\"catalogPartId\":\"" + hqSpring.getId() + "\"}"))
-                .andExpect(status().isForbidden());
-
         mvc.perform(as(hqAdmin, patch("/parts/" + storeSpare.getId() + "/catalog-link"))
                 .content("{\"catalogPartId\":\"" + hqSpring.getId() + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.catalogPartId").value(hqSpring.getId().toString()))
                 .andExpect(jsonPath("$.data.soldByHq").value(true));
+
+        // BE-25: a store may create a link, but once linked only HQ changes it
+        // (was: any store link → 403, before the product owner's 23 Oct decision)
+        mvc.perform(as(storeOwner, patch("/parts/" + storeSpare.getId() + "/catalog-link"))
+                .content("{\"catalogPartId\":\"" + hqSpring.getId() + "\"}"))
+                .andExpect(status().isForbidden());
 
         Part second = partRepository.save(Part.builder().tenant(store).name("Another spring")
                 .category(storeSpare.getCategory()).build());

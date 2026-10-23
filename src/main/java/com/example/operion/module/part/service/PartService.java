@@ -8,9 +8,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.CallerRoles;
+import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.auth.enums.Role;
+import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.part.dto.CreatePartRequest;
 import com.example.operion.module.part.dto.LinkCatalogPartRequest;
 import com.example.operion.module.part.dto.PartResponse;
@@ -52,6 +57,8 @@ public class PartService {
         private final HqCatalogService hqCatalogService;
 
         public PartResponse create(CreatePartRequest request) {
+
+                requireItemEditor();
 
                 if (request.getCategoryId() == null) {
                         throw new RuntimeException("Category is required");
@@ -242,13 +249,18 @@ public class PartService {
         /**
          * BE-21: say which HQ catalog item an existing store part is, so the
          * store's first order of it doesn't create a second "6mm BBs".
-         * HQ admins only; the store part must be in their tree, the item one
-         * of HQ's own, and a store links each HQ item at most once.
+         * HQ admins: any store item in their tree, link, re-link or unlink.
+         * BE-25: the store's own MANAGER+ may also link their own unlinked item
+         * to an item HQ sells, but never change or remove a link (unlinking
+         * takes an item out of the mandatory-from-HQ rule). For everyone: one
+         * store item per HQ item, and both counted the same way.
          */
         @Transactional
         public PartResponse linkToCatalog(UUID partId, LinkCatalogPartRequest request) {
 
-                hqCatalogService.requireHqCatalogAdmin();
+                if (!hqCatalogService.isHqCatalogAdmin()) {
+                        return linkOwnItem(partId, request);
+                }
 
                 UUID rootId = UUID.fromString(TenantContext.getTenantId());
                 List<UUID> tree = tenantHierarchyService.getEffectiveTenantIds(rootId);
@@ -266,6 +278,44 @@ public class PartService {
                 Part item = repository.findByIdAndTenantId(request.getCatalogPartId(), rootId)
                                 .orElseThrow(() -> new RuntimeException("Catalog item not found"));
 
+                return link(part, item);
+        }
+
+        /** BE-25: the Store Manager's path — create a link only, own store, to an item HQ sells. */
+        private PartResponse linkOwnItem(UUID partId, LinkCatalogPartRequest request) {
+
+                UUID tenantId = UUID.fromString(TenantContext.getTenantId());
+
+                if (!ScopeContext.hasAtLeast(Scope.MANAGER)) {
+                        throw new AccessDeniedException("Only Manager-level users or higher can link an item to HQ's catalog");
+                }
+
+                Part part = repository.findByIdAndTenantId(partId, tenantId)
+                                .orElseThrow(() -> new RuntimeException("Part not found"));
+
+                if (part.getCatalogPart() != null || request.getCatalogPartId() == null) {
+                        throw new AccessDeniedException("Only HQ can change or remove an item's link to HQ's catalog");
+                }
+
+                UUID rootId = tenantHierarchyService.getRootTenantId(tenantId);
+
+                Part item = repository.findByIdAndTenantId(request.getCatalogPartId(), rootId)
+                                .orElseThrow(() -> new RuntimeException("Catalog item not found"));
+
+                if (!item.isSoldByHq()) {
+                        throw new RuntimeException("Only items HQ sells can be linked: " + item.getName());
+                }
+
+                return link(part, item);
+        }
+
+        private PartResponse link(Part part, Part item) {
+
+                // BE-25: a consumable counted in bulk can't be the same thing as a per-unit item
+                if (part.isConsumable() != item.isConsumable()) {
+                        throw new RuntimeException("These two items are counted differently");
+                }
+
                 repository.findByTenantIdAndCatalogPartId(part.getTenant().getId(), item.getId())
                                 .filter(other -> !other.getId().equals(part.getId()))
                                 .ifPresent(other -> {
@@ -278,10 +328,28 @@ public class PartService {
                 return map(repository.save(part));
         }
 
+        /** BE-25: items are the store's MANAGER+'s, or an ADMIN's. */
+        private static void requireItemEditor() {
+
+                if (!ScopeContext.hasAtLeast(Scope.MANAGER) && !CallerRoles.hasAny(Role.ADMIN)) {
+                        throw new AccessDeniedException("Only Manager-level users or higher, or admins, can add or edit items");
+                }
+        }
+
+        /** BE-25: retiring takes an item out of use, so the store's OWNER+, or an ADMIN. */
+        private static void requireItemRetirer() {
+
+                if (!ScopeContext.hasAtLeast(Scope.OWNER) && !CallerRoles.hasAny(Role.ADMIN)) {
+                        throw new AccessDeniedException("Only Owner-level users or higher, or admins, can retire or restore items");
+                }
+        }
+
         @Transactional
         public PartResponse update(
                         UUID partId,
                         UpdatePartRequest request) {
+
+                requireItemEditor();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -404,6 +472,8 @@ public class PartService {
                         UUID partId,
                         RetirePartRequest request) {
 
+                requireItemRetirer();
+
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
@@ -436,6 +506,8 @@ public class PartService {
 
         @Transactional
         public PartResponse restore(UUID partId) {
+
+                requireItemRetirer();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());

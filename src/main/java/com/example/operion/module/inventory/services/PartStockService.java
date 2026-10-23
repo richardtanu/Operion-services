@@ -5,9 +5,15 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.CallerRoles;
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.auth.entity.User;
+import com.example.operion.module.auth.enums.Role;
+import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.inventory.dto.AdjustStockRequest;
 import com.example.operion.module.inventory.dto.InventoryDashboardResponse;
 import com.example.operion.module.inventory.dto.LowStockResponse;
@@ -40,6 +46,8 @@ public class PartStockService {
         private final TenantHierarchyService tenantHierarchyService;
 
         private final NotificationService notificationService;
+
+        private final UserRepository userRepository;
 
         public void adjustStock(
                         Part part,
@@ -124,8 +132,16 @@ public class PartStockService {
                                 "Initial stock");
         }
 
+        /**
+         * BE-25: a data-repair shortcut that skips the adjustment workflow, so
+         * ADMIN only, with a reason. Normal changes go through an approved
+         * stock adjustment, a goods receipt or a scan.
+         */
+        @Transactional
         public void manualAdjustment(
                         AdjustStockRequest request) {
+
+                String note = dataRepairNote(request.getReason(), request.getNotes());
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -134,7 +150,7 @@ public class PartStockService {
                                 .findByIdAndTenantId(
                                                 request.getPartId(),
                                                 tenantId)
-                                .orElseThrow();
+                                .orElseThrow(() -> new RuntimeException("Part not found"));
 
                 adjustStock(
                                 part,
@@ -142,12 +158,15 @@ public class PartStockService {
                                 StockMovementType.ADJUSTMENT,
                                 StockReferenceType.MANUAL,
                                 null,
-                                request.getNotes());
+                                note);
         }
 
+        /** BE-25: the other data-repair shortcut (stock in with no purchase behind it). ADMIN only, with a reason. */
         @Transactional
         public void receiveStock(
                         ReceiveStockRequest request) {
+
+                String note = dataRepairNote(request.getReason(), request.getNotes());
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -164,16 +183,39 @@ public class PartStockService {
                                 StockMovementType.PURCHASE,
                                 StockReferenceType.MANUAL,
                                 null,
-                                request.getNotes());
+                                note);
 
-                if (part.getCategory() == null
-                                || !"Consumable".equals(part.getCategory().getName())) {
+                // BE-25: the category's consumable flag, not its name (BE-04)
+                if (!part.isConsumable()) {
 
                         partInstanceService.generateInstances(
                                         part,
                                         request.getQuantity(),
-                                        request.getNotes());
+                                        note);
                 }
+        }
+
+        /**
+         * ADMIN check and the movement's note: who repaired it and why. The
+         * movement has no actor column yet (BE-26 adds it), so the name goes in
+         * the note.
+         */
+        private String dataRepairNote(String reason, String notes) {
+
+                if (!CallerRoles.hasAny(Role.ADMIN)) {
+                        throw new AccessDeniedException(
+                                        "Only admins can set stock directly; request a stock adjustment instead");
+                }
+
+                if (reason == null || reason.isBlank()) {
+                        throw new RuntimeException("A reason is required to set stock directly");
+                }
+
+                UUID userId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+                String name = userRepository.findById(userId).map(User::getFullName).orElse("Unknown");
+
+                return "Data repair by " + name + ": " + reason.trim()
+                                + (notes != null && !notes.isBlank() ? " (" + notes.trim() + ")" : "");
         }
 
         private StockMovementResponse map(StockMovement movement) {

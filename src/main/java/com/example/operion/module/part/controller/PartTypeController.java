@@ -3,6 +3,7 @@ package com.example.operion.module.part.controller;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +33,8 @@ public class PartTypeController {
    * CREATE
    */
 
+  // BE-25: categories and types change how stock is counted, so ADMIN only
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping
   public ApiResponse<PartTypeResponse> create(
       @RequestBody CreatePartTypeRequest request) {
@@ -48,6 +51,8 @@ public class PartTypeController {
    * SEED DEFAULTS
    */
 
+  // BE-25: categories and types change how stock is counted, so ADMIN only
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping("/seed")
   public ApiResponse<Void> seed() {
 
@@ -97,6 +102,8 @@ public class PartTypeController {
    * UPDATE
    */
 
+  // BE-25: categories and types change how stock is counted, so ADMIN only
+  @PreAuthorize("hasRole('ADMIN')")
   @PutMapping("/{id}")
   public ApiResponse<PartTypeResponse> update(
 
@@ -116,6 +123,8 @@ public class PartTypeController {
    * DELETE
    */
 
+  // BE-25: categories and types change how stock is counted, so ADMIN only
+  @PreAuthorize("hasRole('ADMIN')")
   @DeleteMapping("/{id}")
   public ApiResponse<Void> delete(
       @PathVariable UUID id) {

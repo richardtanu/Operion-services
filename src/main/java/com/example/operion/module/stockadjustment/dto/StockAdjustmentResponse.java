@@ -28,5 +28,8 @@ public class StockAdjustmentResponse {
 
     private String requestedByName;
 
+    /** BE-25: approved by its own requester, the store's only Owner+. */
+    private boolean selfApproved;
+
     private LocalDateTime createdAt;
 }

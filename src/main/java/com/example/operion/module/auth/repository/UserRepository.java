@@ -1,5 +1,6 @@
 package com.example.operion.module.auth.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,6 +18,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
     List<User> findByTenantIdAndRole(UUID tenantId, Role role);
+
+    /** BE-25: a store's users with one of these scopes (its own Owner+, not HQ's). */
+    List<User> findByTenantIdAndScopeIn(UUID tenantId, Collection<Scope> scopes);
 
     @Query("select u from User u where u.tenant.id in :tenantIds and (u.role = :role or u.scope in :scopes)")
     List<User> findByTenantIdInAndRoleOrScopeIn(

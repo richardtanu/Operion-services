@@ -106,7 +106,13 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 - **Tenant tree:** `HQ_BANDUNG` ("HQ BANDUNG", V8) is the root; `BLITZ_BDG` is its first store. Suppliers are HQ's (V8 moved BLITZ_BDG's six). `FRANCHISE_HQ`/`OUTLET_2` are test data.
 - **The HQ catalog is the root tenant's own `Part` rows** — no `CatalogItem` table. A store part points at the HQ row it is via `parts.catalog_part_id` (one per store, unique index). Stock and history stay on the store's row; `soldByHq` / `mandatoryFromHq` live once, on the HQ row (mandatory implies sold, DB CHECK). `HqCatalogService.catalogEntryOf` is the one place that answers "which HQ item is this?"; `PartResponse` carries the flags *read from HQ's row*.
 - **Mandatory ≠ consumable.** Independent flags.
-- **Flags and links are HQ's:** `PATCH /parts/{id}/hq-flags` and `PATCH /parts/{id}/catalog-link` need the ADMIN role or PRINCIPAL scope *signed in at the root*; a store's ADMIN/Owner gets 403. `GET /catalog` is for anyone signed in.
+- **Flags and links are HQ's:** `PATCH /parts/{id}/hq-flags` and `PATCH /parts/{id}/catalog-link` need the ADMIN role or PRINCIPAL scope *signed in at the root*; a store's ADMIN/Owner gets 403. Exception (BE-25): the store's own MANAGER+ may *create* a link on their own unlinked item to an item HQ sells; only HQ re-links or unlinks (unlinking escapes the mandatory rule). Items counted differently (`isConsumable()`) can never be linked. `GET /catalog` is for anyone signed in.
+
+### Who changes stock (BE-25)
+
+- `POST /inventory/adjust` and `/inventory/receive` are **data-repair shortcuts**: ADMIN only, reason required, the admin's name in the movement note. Everything else changes stock through an approved stock adjustment, a goods receipt or a scan.
+- **Stock adjustments:** requested by the store's MANAGER+, decided by the store's own OWNER+ (`findOwned`; HQ reads, can't decide). Your own request needs another of the store's Owner+ — unless you're its only one, then it's allowed and saved `selfApproved` (flagged, like BE-20's self-received). The store's Owner+ get STOCK_ADJUSTMENT_REQUESTED.
+- **Items:** create/edit MANAGER+ or ADMIN; retire/restore OWNER+ or ADMIN. **Categories and types:** writes and seeds ADMIN only (`@PreAuthorize`).
 - **Buy from HQ** (PO): only items HQ sells (400 otherwise). `partId` may be the HQ item or the store's linked part; the store's first order of an HQ item creates its part (category/type mapped by name, created if missing, stock 0). The supplier is the root's **franchise-centre supplier** (`suppliers.franchise_centre`, one per tenant); without one, orders to HQ are refused.
 - **Buy elsewhere** (Realisasi): a mandatory item is refused ("This item must be bought from HQ") unless the supplier is the franchise centre (an urgent buy paid at HQ). Applies to `supersede()` too, since it goes through `create()`. `sellerName` is free text for outside sellers.
 

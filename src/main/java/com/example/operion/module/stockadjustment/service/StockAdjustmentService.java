@@ -15,6 +15,7 @@ import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.inventory.enums.StockMovementType;
 import com.example.operion.module.inventory.enums.StockReferenceType;
 import com.example.operion.module.inventory.services.PartStockService;
+import com.example.operion.module.notification.service.NotificationService;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.stockadjustment.dto.CreateStockAdjustmentRequest;
@@ -51,8 +52,15 @@ public class StockAdjustmentService {
 
     private final PartStockService partStockService;
 
+    private final NotificationService notificationService;
+
+    /** BE-25: the store's MANAGER+ ask; the store's Owner+ are told. */
     @Transactional
     public StockAdjustmentResponse create(CreateStockAdjustmentRequest request) {
+
+        if (!ScopeContext.hasAtLeast(Scope.MANAGER)) {
+            throw new AccessDeniedException("Only Manager-level users or higher can request a stock adjustment");
+        }
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -77,21 +85,43 @@ public class StockAdjustmentService {
 
         writeHistory(adjustment, null, StockAdjustmentStatus.PENDING, requestedBy, null);
 
+        notificationService.notifyStockAdjustmentRequested(adjustment, ownersOf(tenantId));
+
         return map(adjustment);
     }
 
+    /**
+     * BE-25: the store's own OWNER+ (HQ can't decide a store's stock). Not
+     * your own request while the store has another Owner+; its only Owner+
+     * may, and that approval is saved {@code selfApproved}.
+     */
     @Transactional
     public StockAdjustmentResponse approve(UUID id) {
 
         requireOwnerScope();
 
-        StockAdjustment adjustment = findInHierarchy(id);
+        StockAdjustment adjustment = findOwned(id);
 
         if (adjustment.getStatus() != StockAdjustmentStatus.PENDING) {
             throw new RuntimeException("Only PENDING stock adjustments can be approved.");
         }
 
         User approver = currentUser();
+
+        boolean ownRequest = adjustment.getRequestedBy() != null
+                && adjustment.getRequestedBy().getId().equals(approver.getId());
+
+        if (ownRequest) {
+
+            boolean anotherOwner = ownersOf(adjustment.getTenant().getId()).stream()
+                    .anyMatch(u -> !u.getId().equals(approver.getId()));
+
+            if (anotherOwner) {
+                throw new AccessDeniedException("Another Owner must approve your own adjustment");
+            }
+
+            adjustment.setSelfApproved(true);
+        }
 
         partStockService.adjustStock(
                 adjustment.getPart(),
@@ -115,7 +145,7 @@ public class StockAdjustmentService {
 
         requireOwnerScope();
 
-        StockAdjustment adjustment = findInHierarchy(id);
+        StockAdjustment adjustment = findOwned(id);
 
         if (adjustment.getStatus() != StockAdjustmentStatus.PENDING) {
             throw new RuntimeException("Only PENDING stock adjustments can be rejected.");
@@ -132,7 +162,8 @@ public class StockAdjustmentService {
         return map(adjustment);
     }
 
-    public List<StockAdjustmentResponse> getAll() {
+    /** {@code selfApproved}: BE-25 filter, e.g. {@code ?selfApproved=true}. */
+    public List<StockAdjustmentResponse> getAll(Boolean selfApproved) {
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
@@ -140,6 +171,7 @@ public class StockAdjustmentService {
 
         return repository.findByTenantIdIn(tenantIds)
                 .stream()
+                .filter(a -> selfApproved == null || a.isSelfApproved() == selfApproved)
                 .map(this::map)
                 .toList();
     }
@@ -179,6 +211,20 @@ public class StockAdjustmentService {
             throw new AccessDeniedException(
                     "Only Owner-level users or higher can approve or reject stock adjustments");
         }
+    }
+
+    /** BE-25: decisions are the store's own; HQ can read (findInHierarchy) but not decide. */
+    private StockAdjustment findOwned(UUID id) {
+
+        return repository
+                .findByIdAndTenantId(id, UUID.fromString(TenantContext.getTenantId()))
+                .orElseThrow(() -> new RuntimeException("Stock adjustment not found"));
+    }
+
+    /** The store's own Owner+ users (HQ's don't count). Users have no "active" flag yet. */
+    private List<User> ownersOf(UUID storeId) {
+
+        return userRepository.findByTenantIdAndScopeIn(storeId, List.of(Scope.OWNER, Scope.PRINCIPAL));
     }
 
     private StockAdjustment findInHierarchy(UUID id) {
@@ -230,6 +276,7 @@ public class StockAdjustmentService {
                 .requestedById(adjustment.getRequestedBy() != null ? adjustment.getRequestedBy().getId() : null)
                 .requestedByName(
                         adjustment.getRequestedBy() != null ? adjustment.getRequestedBy().getFullName() : null)
+                .selfApproved(adjustment.isSelfApproved())
                 .createdAt(adjustment.getCreatedAt())
                 .build();
     }

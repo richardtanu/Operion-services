@@ -863,7 +863,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "BE-21. HQ admins only. Says which HQ catalog item an existing store part is, so the store\u0027s first order doesn\u0027t create a duplicate. One store part per HQ item; null unlinks."
+                                                      "description":  "BE-21/25. HQ admins: link, re-link, or unlink (null). The store\u0027s MANAGER+: only link their own unlinked item to an item HQ sells (re-link or unlink → 403). Both items must be counted the same way (consumable or per unit), else 400."
                                                   },
                                       "response":  [
 
@@ -1689,90 +1689,6 @@
                      "name":  "INVENTORY",
                      "item":  [
                                   {
-                                      "name":  "inventory-adjust",
-                                      "request":  {
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n    \"partId\": \"567330fb-5b64-4d3c-b818-a4819e541204\",\r\n    \"quantity\": \"5\",\r\n    \"notes\": \"restock\"\r\n}",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/inventory/adjust",
-                                                                  "protocol":  "https",
-                                                                  "host":  [
-                                                                               "operion-services-production",
-                                                                               "up",
-                                                                               "railway",
-                                                                               "app"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "inventory",
-                                                                               "adjust"
-                                                                           ]
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
-                                      "name":  "inventory-recieved",
-                                      "request":  {
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\r\n    \"partId\":\"8a0f9d15-2674-4470-9384-e1f8694af039\",\r\n\r\n    \"quantity\":2,\r\n\r\n    \"notes\":\"Purchase from online shope\"\r\n}",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "https://operion-services-production.up.railway.app/inventory/receive",
-                                                                  "protocol":  "https",
-                                                                  "host":  [
-                                                                               "operion-services-production",
-                                                                               "up",
-                                                                               "railway",
-                                                                               "app"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "inventory",
-                                                                               "receive"
-                                                                           ]
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "inventory-dashboard",
                                       "protocolProfileBehavior":  {
                                                                       "disableBodyPruning":  true
@@ -1887,6 +1803,96 @@
                                                                                "stock-summary"
                                                                            ]
                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "inventory-adjust",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"partId\": \":partId\",\n  \"quantity\": -7,\n  \"reason\": \"Miscount at closing, corrected after recount\",\n  \"notes\": \"\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/inventory/adjust",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "inventory",
+                                                                               "adjust"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-25. Data-repair shortcut: ADMIN only (403), reason required (400). Normal stock changes go through stock-adjustments, goods receipts or scans."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "inventory-recieved",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"partId\": \":partId\",\n  \"quantity\": 13,\n  \"reason\": \"Box found in storage, not on any receipt\",\n  \"notes\": \"\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/inventory/receive",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "inventory",
+                                                                               "receive"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-25. Data-repair shortcut: ADMIN only, reason required. Part instances are created only for items that aren\u0027t consumable (the category\u0027s flag, not its name)."
                                                   },
                                       "response":  [
 
@@ -4222,6 +4228,252 @@
                                                                                ]
                                                               },
                                                       "description":  "BE-19. The store\u0027s own OWNER+, reason required (kept as reimbursementUndoReason)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "STOCK ADJUSTMENT",
+                     "item":  [
+                                  {
+                                      "name":  "stock-adjustment-create",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"partId\": \":partId\",\n  \"quantity\": -7,\n  \"reason\": \"Counted at closing\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-25. The store\u0027s MANAGER+ (403 below). The store\u0027s Owner+ get STOCK_ADJUSTMENT_REQUESTED."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "stock-adjustment-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "selfApproved",
+                                                                                    "value":  "true",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "BE-25: approved by its own requester, the store\u0027s only Owner+"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "Your tenant tree."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "stock-adjustment-pending",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments/pending",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments",
+                                                                               "pending"
+                                                                           ]
+                                                              },
+                                                      "description":  "Your tenant tree, PENDING only."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "stock-adjustment-approve",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments/:id/approve",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments",
+                                                                               ":id",
+                                                                               "approve"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-25. The store\u0027s own OWNER+ (HQ → 400 not found). Your own request: 403 while the store has another Owner+; as its only Owner+ it\u0027s allowed and saved selfApproved=true."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "stock-adjustment-reject",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"reason\": \"Recount shows the stock was right\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments/:id/reject",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments",
+                                                                               ":id",
+                                                                               "reject"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-25. The store\u0027s own OWNER+."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "stock-adjustment-history",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/stock-adjustments/:id/history",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "stock-adjustments",
+                                                                               ":id",
+                                                                               "history"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "Status history."
                                                   },
                                       "response":  [
 

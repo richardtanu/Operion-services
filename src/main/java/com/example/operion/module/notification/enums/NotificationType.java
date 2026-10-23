@@ -1,7 +1,7 @@
 package com.example.operion.module.notification.enums;
 
 // Adding a value here needs a Flyway migration for notifications_type_check in
-// the same change (CLAUDE.md rule 3) — see the latest migration that recreates it (V7) for the current list.
+// the same change (CLAUDE.md rule 3) — see the latest migration that recreates it (V13) for the current list.
 public enum NotificationType {
     NEW_PURCHASE_REQUEST,
     PURCHASE_REQUEST_ORDERED,
@@ -14,5 +14,6 @@ public enum NotificationType {
     PURCHASE_AUTHORIZATION_CREATED,
     PURCHASE_REQUEST_CANCELLED,
     REIMBURSEMENT_PAID,
-    GOODS_SELF_RECEIVED
+    GOODS_SELF_RECEIVED,
+    STOCK_ADJUSTMENT_REQUESTED
 }

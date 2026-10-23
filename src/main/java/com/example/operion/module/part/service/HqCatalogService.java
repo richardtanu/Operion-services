@@ -82,12 +82,17 @@ public class HqCatalogService {
      */
     public void requireHqCatalogAdmin() {
 
+        if (!isHqCatalogAdmin()) {
+            throw new AccessDeniedException("Only HQ admins can manage the HQ catalog");
+        }
+    }
+
+    public boolean isHqCatalogAdmin() {
+
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
         boolean atRoot = tenantHierarchyService.getRootTenantId(tenantId).equals(tenantId);
 
-        if (!atRoot || !(CallerRoles.hasAny(Role.ADMIN) || ScopeContext.hasAtLeast(Scope.PRINCIPAL))) {
-            throw new AccessDeniedException("Only HQ admins can manage the HQ catalog");
-        }
+        return atRoot && (CallerRoles.hasAny(Role.ADMIN) || ScopeContext.hasAtLeast(Scope.PRINCIPAL));
     }
 
     /** {@code GET /catalog}: what HQ sells, for anyone in the tree. */

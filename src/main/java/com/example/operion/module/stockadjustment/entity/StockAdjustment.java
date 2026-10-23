@@ -47,6 +47,14 @@ public class StockAdjustment extends BaseEntity {
     @Builder.Default
     private StockAdjustmentStatus status = StockAdjustmentStatus.PENDING;
 
+    /**
+     * BE-25: the requester approved it themself, allowed only as the store's
+     * only Owner+ (V13). Flagged and shown, like BE-20's self-received goods.
+     */
+    @Column(name = "self_approved", nullable = false)
+    @Builder.Default
+    private boolean selfApproved = false;
+
     @PrePersist
     public void prePersist() {
 
