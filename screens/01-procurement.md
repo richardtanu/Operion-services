@@ -546,3 +546,58 @@ drafted and format-checked (step 3), the remaining module completed (step 4), ga
 run with findings recorded including failures (step 5), and the no-serving-endpoint list
 produced (step 6) — which turned out to be empty, with the module's real findings
 documented above instead.
+
+---
+
+## Addendum — 23 Oct 2026: PROC-10, written for BE-19
+
+BE-19 (expense claims, confirmed 20 Oct 2026) needed a screen record before building. It
+lives here because it is the store's spending outside parts, settled with BE-18's
+pay-back rules; nothing in it touches stock.
+
+### PROC-10 — Expenses (branch spending that isn't stock)
+
+**Purpose:** Record what the branch spends that isn't a part — stationery, cleaning
+supplies, small items bought online — so the store Owner, the Store Manager and HQ see the
+same picture, and money the SM paid personally gets paid back.
+**Platform:** Mobile — Store Manager (records), Store Owner (records company-paid, pays
+back), HQ (reads).
+**Scope tiers (as decided, BE-19):**
+  - Record "paid by me" — the store's Manager+ (SM, Owner)
+  - Record "paid by store" — the store's OWNER+
+  - Mark paid back, undo — the store's own OWNER+, never for money owed to yourself (BE-18
+    rules exactly)
+  - Read — the store (amounts: OWNER+, plus the claimant for their own); HQ reads every
+    store's
+**Functional roles:** None beyond the above.
+**Actions:**
+  - List expenses in two tabs, **"HQ"** and **"Branch specific"** (the category — a label
+    for visibility; the branch pays both, and both count in the monthly budget), filtered
+    Owed / Paid back / Paid by store
+  - **Add expense:** what (free text), amount, date, category (HQ / Branch specific), paid
+    by (store / me), receipt photo (`EXPENSE_RECEIPT` upload, BE-23)
+  - **Void** a wrong entry with a reason (no edit — void and re-enter, like supersede)
+  - **Mark paid back** (one or several) / **undo** — as PROC-08
+**Data read:** an expense list with `{id, description, amount, date, category, paidBy,
+receiptUploadIds, createdBy, reimbursementStatus, reimbursedAt, method, reference, status}`;
+the receipt via `GET /uploads/{id}`.
+**Entry points:** Procurement menu ("Expenses"), the Dashboard, PROC-02's spending card
+("other expenses" line, BE-16).
+**Failure behaviour:** Add — manual retry (an expense is money; not queued). Mark paid
+back — blocking.
+**Backend status:** **Nothing exists** — this record is BE-19's spec. Uploads exist
+(BE-23, purpose `EXPENSE_RECEIPT`); the BE-18 pay-back rules and notification
+(`REIMBURSEMENT_PAID`) can be reused; BE-16's `overBudget` sum already says "BE-19's other
+expenses join this sum when BE-19 ships".
+**Vocabulary flag:** No.
+**Cost visibility:** Every amount is money: OWNER+, plus the claimant for their own
+"paid by me" entries (BE-18's exception). HQ reads all.
+**Deferred decisions:**
+  - Is a receipt photo required? Recommendation: required for "paid by me" (it's the proof
+    the Owner pays back against), optional for "paid by store".
+  - Spending summary: show "other expenses" as one line, or split HQ / Branch specific?
+    Recommendation: one line with the split on tap.
+
+**Gates for PROC-10:** orphan — reachable from the Procurement menu and the spending card;
+dead end — none; SoD — claimant ≠ the one who marks it paid back (BE-18 rule); cost — as
+above; deferred — the two items above.

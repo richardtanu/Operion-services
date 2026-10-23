@@ -23,6 +23,8 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
+**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
+**BE-25 ready to build, 23 Oct 2026** (self-approval question answered). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
 ---
 
@@ -1475,8 +1477,8 @@ against the old service/controller. Full suite 103/103. Postman: new `REALISASI`
 
 ## BE-19 — Expense claims: branch spending that isn't stock
 
-**Status: CONFIRMED by the product owner, 20 Oct 2026 — needs a screen-inventory record
-before building.** Depends on BE-23 for receipt photos.
+**Status: CONFIRMED by the product owner, 20 Oct 2026. Screen record written 23 Oct 2026:
+PROC-10 in `screens/01-procurement.md` (addendum) — ready to build.** Depends on BE-23 for receipt photos.
 
 ### Why
 
@@ -2086,6 +2088,260 @@ a dependency of `NotificationService`. Unchanged: the requester/procurement noti
 Tests: `StoreAlertsStayInStoreTest` (2): a Store Manager's new request, an over-limit
 purchase and a self-received receipt reach the store's Owner, and neither an HQ ADMIN nor an
 HQ ADMIN + PRINCIPAL. Against the unfixed code both fail. Full suite 141/141.
+
+---
+
+## BE-25 — Who changes stock and item data
+
+**Status: OPEN — ready to build.** From the module 2 screen inventory
+(`screens/02-inventory-stock.md`, INV-04, INV-06, INV-07, Gate 3) and the product owner's
+decisions of 23 Oct 2026 on the two stock shortcuts, self-approval and catalog linking.
+
+### Why
+
+`[C]` Nothing in the inventory or part modules checks who is acting:
+
+- `POST /inventory/adjust` sets any item's stock immediately, no approval, no check
+  (`PartStockService.java:127-147`) — the stock adjustment workflow can simply be skipped.
+- `POST /inventory/receive` adds stock as `PURCHASE` with no purchase behind it (`:149-178`),
+  and still decides "consumable" by category **name** (`:170`) — the check BE-04 replaced
+  everywhere else.
+- Stock adjustments: anyone may request; approve/reject is OWNER+ but **an Owner can
+  approve their own**, and `findInHierarchy` (`StockAdjustmentService.java:184-192`) lets
+  HQ approve a store's adjustment.
+- Items (`POST/PUT /parts`, retire, restore), categories and types (CRUD and seed) have
+  no checks; `minimumStock` (which raises "low") and a category's `consumable` flag
+  (which changes how stock is counted) can be changed by anyone.
+- Linking a store's item to HQ's catalog is HQ-only (`PartService.linkToCatalog`), but HQ
+  doesn't know which box on a store's shelf is which — so the store's first order of an
+  HQ item creates a second "6mm BBs". It also doesn't check that the two items are
+  counted the same way (consumable or per unit).
+
+### Task
+
+1. **The two shortcuts → ADMIN only** (decided 23 Oct): `/inventory/adjust` and
+   `/inventory/receive` need the ADMIN role, a required `reason` (400 if blank), and write
+   the actor into the movement (see BE-26 item 2). Anyone else → 403. In `receiveStock`,
+   replace the name check with `part.isConsumable()`.
+2. **Stock adjustments:** request — the store's MANAGER+ (else 403); approve/reject — the
+   **store's own** OWNER+ (`findOwned`, not `findInHierarchy`). **Requester ≠ approver
+   (decided 23 Oct):** another of the store's own OWNER+ must approve (403 "Another Owner
+   must approve your own adjustment"), unless the requester is the store's **only** active
+   OWNER+ user — then they may approve it themself, and it's saved `selfApproved = true`
+   (Flyway column), returned on `StockAdjustmentResponse`, filterable with
+   `?selfApproved=true`, and shown as "self-approved" (same choice as BE-20's
+   self-received). HQ users don't count as the store's Owners.
+3. **Notify the store's Owner+** when an adjustment is requested: new
+   `NotificationType.STOCK_ADJUSTMENT_REQUESTED`, store-only like BE-24, never the
+   requester. Flyway for the CHECK constraint.
+4. **Items:** create/edit → the store's MANAGER+, or ADMIN; retire/restore → OWNER+, or
+   ADMIN. Else 403.
+5. **Categories and types** (CRUD and seed) → ADMIN only. BE-29 narrows this to HQ admins
+   once there's one list; if BE-29 is built first, skip this item.
+6. **Linking a store item to HQ's catalog** (decided 23 Oct): `PATCH /parts/{id}/catalog-link`
+   also accepts the store's own MANAGER+ (signed in at the store), for their own store's
+   item only, and only to **create** a link: the item isn't linked yet, the HQ item is sold
+   by HQ (`soldByHq`), and the existing "one store item per HQ item" check passes.
+   Changing or removing a link (a different `catalogPartId`, or null) stays
+   `requireHqCatalogAdmin` — 403 for the store — because unlinking takes an item out of
+   the mandatory-from-HQ rule (`HqCatalogService.isMandatoryFromHq`). For everyone,
+   refuse a link between items counted differently (`isConsumable()` differs → 400
+   "These two items are counted differently").
+
+### Tests (rules 2 and 6)
+
+Every gate above both ways; an Owner's own adjustment → 403 when the store has a second
+Owner, approved with `selfApproved = true` when they're its only one; HQ Principal
+approving a store's adjustment → not found; a Store Manager links their unlinked item →
+200, re-links or unlinks it → 403, links to an item HQ doesn't sell → 400, links a
+consumable to a per-unit item → 400 (HQ admin too); `receive` of a
+renamed consumable category creates no part instances; stock quantities with a
+conversion factor ≠ 1 where receipts are involved. Every new test fails against the
+unfixed code.
+
+### Client follow-up (mobile repo)
+
+Inventory screens INV-04/06/07 gated accordingly; no screen calls the two shortcuts
+except an ADMIN-only data-repair action. INV-06 "Use HQ's item" for the Store Manager;
+PROC-07 asks "Already stock this?" on the first order of an HQ item and links the
+picked item before ordering.
+
+---
+
+## BE-26 — Inventory reads: store on every row, item history, consumables in "used today"
+
+**Status: OPEN.** From the module 2 screen inventory's gap list (INV-03, INV-05, INV-08,
+INV-09).
+
+### Why
+
+`[C]` The stock, low-stock, burn-rate and adjustment lists already walk the caller's tree,
+so HQ receives every store's rows — but **no row says which store it belongs to**
+(`LowStockResponse`, `BurnRateResponse`, `StockAdjustmentResponse`, `PartResponse`), so
+HQ can't tell stores apart and can't lay out "Outlet Bandung's items" to link to its
+catalog. Per-item stock history is stored (`StockMovementRepository
+.findByPartIdOrderByCreatedAtDesc`) but no endpoint returns it, and movements record no
+actor. The dashboard's "used today" counts `MAINTENANCE_USAGE` only
+(`PartStockService.java:226-232`), not `CONSUMABLE_TAKE`. Burn rate reads the
+`MaintenancePolicy` of the **caller's** tenant (`BurnRateService.java:80`).
+
+### Task
+
+1. **Store on every row:** `tenantId`, `tenantName` on `LowStockResponse`,
+   `BurnRateResponse`, `StockAdjustmentResponse`, `PartResponse`; plus `catalogPartId` on
+   the stock and burn-rate rows. Optional `?tenantId=` filter on `GET /parts`,
+   `/inventory/stock-summary`, `/inventory/low-stock`, `/burn-rate` (inside the caller's
+   tree, else 400 "Store not found"). This also closes the two module 1 workarounds in the
+   mobile `API_CONTRACT.md` (HQ picking parts and PRAs for a store — add `tenantId` to
+   `PurchaseRequestAuthorizationResponse` too).
+2. **Item history:** `GET /parts/{id}/movements` (newest first, `limit`), from
+   `findByPartIdOrderByCreatedAtDesc`, tree-scoped like the other reads. Add `actorId` /
+   `actorName` to `StockMovement` (Flyway, null on old rows) and fill it everywhere stock
+   moves.
+3. **"Used today"** counts `MAINTENANCE_USAGE` and `CONSUMABLE_TAKE`.
+4. **Burn-rate policy per item:** use the part's own store's `MaintenancePolicy`.
+5. Optional: `daysOfCover`, `suggestedQty`, `burnRateSource` on `stock-summary` rows, so
+   INV-01 is one call.
+
+### Tests
+
+HQ caller sees two stores' rows told apart by `tenantId`; `?tenantId=` outside the tree →
+400; a movement written by an approval carries the approver; "used today" counts a
+consumable take (conversion factor ≠ 1, rule 2); burn rate for a store item uses the
+store's policy, not HQ's (rule 6: a non-default policy value).
+
+---
+
+## BE-27 — One definition of "low", and tell the Store Manager
+
+**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-02).
+
+### Why
+
+`[C]` "Low" exists twice: `minimumStock` (inventory lists, dashboard, `LOW_STOCK`
+notification) and burn rate (`daysOfCover` vs `targetDays`, `belowLevel`). They can
+disagree. `LOW_STOCK` goes to ADMIN or OWNER+ in the store only
+(`NotificationService.notifyLowStock`), never the Store Manager, who files the request.
+
+### Task
+
+1. **One rule** (decided): an item is low when, with usage data (`COMPUTED` /
+   `MANUAL_RATE`), `daysOfCover < targetDays`; otherwise when `currentStock ≤
+   minimumStock`. Out of stock is `currentStock ≤ 0` either way. Return the trigger on
+   each row: `lowBecause: RUNS_OUT_SOON | BELOW_MINIMUM | null`.
+2. Use it in `low-stock`, `stock-summary` status, the dashboard counts, and `LOW_STOCK`.
+3. **`LOW_STOCK` recipients:** the store's MANAGER+ and ADMIN, in the store only (as
+   BE-24). Fire when an item **becomes** low by the rule (not on every movement while
+   low).
+
+### Tests
+
+An item with usage data and plenty above minimum but 2 days of cover → low,
+`RUNS_OUT_SOON`; an item with no usage data below minimum → low, `BELOW_MINIMUM`; the
+notification reaches the store's Manager and not HQ; fires once on the crossing, not
+again on the next take. Conversion factor ≠ 1 on the takes that move days of cover.
+
+---
+
+## BE-28 — HQ sets the price of what it sells
+
+**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-09).
+
+### Why
+
+`[C]` HQ's catalog has no price. Every order to HQ carries a `price` per line that
+whoever drafts it types in (`PurchaseOrderItemRequest.price`, `@NotNull @Positive`) —
+usually the Store Manager, who, below Owner, can't even see that price again afterwards
+(BE-11 redaction, `PurchaseOrderService.java:379-391`). So the store decides what it pays
+HQ, and BE-16's "Spent · from HQ" adds up whatever was typed. The mobile `API_CONTRACT.md`
+lists this as a known gap.
+
+### Task
+
+1. **The price:** `hqPrice` (Rupiah, per unit — the same unit an order's quantity counts)
+   on HQ's own `Part` rows. Flyway, nullable. Set by `requireHqCatalogAdmin` only, through
+   `PATCH /parts/{id}/hq-flags` (new `price` field in `UpdateHqFlagsRequest`, > 0; null
+   leaves it unchanged). An item can't be marked sold by HQ without a price (400 "Set
+   HQ's price before selling this item").
+2. **Reading it:** `GET /catalog` returns `price` — OWNER+ only, null below, the same rule
+   as BE-11. HQ admins also see it on their own items, next to the flags.
+3. **Orders to HQ take HQ's price:** `PurchaseOrderItemRequest` drops `price` (ignored if
+   sent, for old clients). The server copies the item's current HQ price into each line
+   when the order is created, and again when the Owner sends it — the moment the store
+   commits money — recomputing `totalAmount`. After sending, line prices are frozen: a
+   later price change never touches a sent order. An item with no HQ price can't be
+   ordered (400 "HQ hasn't set a price for {name} yet").
+4. Out of scope: buying a mandatory item on the spot at HQ (BE-21's urgent buy) keeps the
+   price actually paid, as entered.
+
+### Tests
+
+Order created without a price → each line has HQ's price, total right; HQ changes the
+price between create and send → the sent order has the new price and total; a change
+after sending → order unchanged; unpriced item → 400; marking sold without a price → 400;
+a store's ADMIN or Owner setting the price → 403; `GET /catalog` below Owner → `price`
+null, at Owner → set. Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+PROC-07 "Order from HQ" drops the per-line Price field; Owner+ sees each line's HQ price
+and the total before sending, below Owner the screen says prices are set by HQ. INV-09:
+HQ admins set the price per item. Remove the gap from `API_CONTRACT.md`.
+
+---
+
+## BE-29 — One category list, owned by HQ
+
+**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-07). **Build before
+go-live:** the production database is wiped then, so no store's data has to be moved.
+
+### Why
+
+`[C]` Categories and part types are per tenant:
+
+- Every tenant gets its own copy of the default list when it's created
+  (`TenantService.java:69` → `MasterDataInitializer`) and again at every startup
+  (`MasterDataSyncRunner`), matched by name.
+- Reads walk down the caller's tree (`PartCategoryService`, `findByTenantIdIn
+  (getEffectiveTenantIds)`), so HQ sees each store's "Consumable" separately, and a store
+  never sees HQ's.
+- The first order of an HQ item matches the store's category **by name** and creates a
+  copy if it's missing (`HqCatalogService.newStorePart`), copying HQ's `consumable` flag
+  once. After that the store's copy can be renamed or flipped, and the same gas is counted
+  per unit in one store and by quantity in another (`consumable` decides part instances
+  and burn rate, BE-04). Also the open duplicate-`part_categories` item,
+  `OPERION_BE_PLAN.md` §5.3.
+
+### Task
+
+1. **One list at the root.** Categories and types exist only on the root tenant (HQ).
+   Every read resolves the caller's root (`getRootTenantId`) and returns its list.
+2. **Writes → HQ admins:** create, rename, delete, set `consumable`, seed →
+   `requireHqCatalogAdmin` (403 otherwise). Replaces BE-25 item 5. Delete stays refused
+   while a type uses the category, and is also refused while any part in the tree uses it
+   (400).
+3. **Parts point at HQ's rows:** part create/update validates the category and type
+   against the root (`findByIdAndTenantId(id, rootId)`), not the caller's tenant.
+   `newStorePart` uses the HQ item's own category and type — no name matching, no copies.
+4. **Seeding:** `MasterDataInitializer` / `MasterDataSyncRunner` seed the root only;
+   creating a store seeds no categories or types.
+5. **Flyway:** repoint every store part's `category_id` / `part_type_id` to the root's
+   same-named row (create it at the root if missing; on a clash of `consumable`, the
+   root's wins), then delete the store-level category and type rows. Only dev and test
+   data are affected. `Part.legacyCategory` is write-only today — keep writing HQ's name.
+
+### Tests
+
+A store reads categories → HQ's list; HQ admin adds a category → a store sees it; a
+store's ADMIN or Owner creating, renaming or flipping `consumable` → 403; first order of
+an HQ item → the store part uses HQ's category and type, and no category rows are created;
+creating a store → no category rows for it; part create with another tenant's category id
+→ 400; deleting a category a store part uses → 400. Every new test fails against the
+unfixed code.
+
+### Client follow-up (mobile repo)
+
+None for reads (same endpoints, one list). INV-07 is an HQ-only screen.
 
 ---
 
