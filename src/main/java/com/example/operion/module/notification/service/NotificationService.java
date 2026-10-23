@@ -23,6 +23,7 @@ import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.procurement.entity.PurchaseRequest;
 import com.example.operion.module.procurement.entity.PurchaseRequestAuthorization;
 import com.example.operion.module.procurement.entity.Realisasi;
+import com.example.operion.module.stockadjustment.entity.StockAdjustment;
 import com.example.operion.module.tenant.entity.Tenant;
 
 import jakarta.transaction.Transactional;
@@ -313,6 +314,32 @@ public class NotificationService {
                 .stream()
                 .map(this::map)
                 .toList();
+    }
+
+    /**
+     * BE-25: a stock adjustment is waiting for the store's Owner+. Store-only
+     * like BE-24, and never the person who asked for it.
+     */
+    public void notifyStockAdjustmentRequested(StockAdjustment adjustment, List<User> owners) {
+
+        for (User target : owners) {
+
+            if (adjustment.getRequestedBy() != null && target.getId().equals(adjustment.getRequestedBy().getId())) {
+                continue;
+            }
+
+            int qty = adjustment.getQuantity();
+
+            create(
+                    adjustment.getTenant(),
+                    target,
+                    NotificationType.STOCK_ADJUSTMENT_REQUESTED,
+                    "Stock Adjustment Waiting",
+                    nameOf(adjustment.getRequestedBy()) + " asks to " + (qty < 0 ? "remove " + (-qty) : "add " + qty)
+                            + " × " + adjustment.getPart().getName() + ": " + adjustment.getReason(),
+                    NotificationReferenceType.STOCK_ADJUSTMENT,
+                    adjustment.getId());
+        }
     }
 
     public long getUnreadCount() {

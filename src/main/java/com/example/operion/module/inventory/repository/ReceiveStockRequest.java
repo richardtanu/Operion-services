@@ -18,4 +18,7 @@ public class ReceiveStockRequest {
   private Integer quantity;
 
   private String notes;
+
+  /** BE-25: required — this shortcut is for repairing data (ADMIN only). */
+  private String reason;
 }

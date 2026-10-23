@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,6 +46,8 @@ public class PartCategoryController {
 
         private final PartRepository partRepository;
 
+        // BE-25: categories and types change how stock is counted, so ADMIN only
+        @PreAuthorize("hasRole('ADMIN')")
         @PostMapping
         public ApiResponse<PartCategoryResponse> create(@RequestBody CreatePartCategoryRequest request) {
                 return ApiResponse.<PartCategoryResponse>builder()
@@ -65,6 +68,8 @@ public class PartCategoryController {
                                 .build();
         }
 
+        // BE-25: categories and types change how stock is counted, so ADMIN only
+        @PreAuthorize("hasRole('ADMIN')")
         @PutMapping("/{id}")
         public PartCategoryResponse update(
                         @PathVariable UUID id,
@@ -73,6 +78,8 @@ public class PartCategoryController {
                 return service.update(id, request);
         }
 
+        // BE-25: categories and types change how stock is counted, so ADMIN only
+        @PreAuthorize("hasRole('ADMIN')")
         @DeleteMapping("/{id}")
         public ResponseEntity<Void> delete(
                         @PathVariable UUID id) {
@@ -82,6 +89,8 @@ public class PartCategoryController {
                 return ResponseEntity.noContent().build();
         }
 
+        // BE-25: categories and types change how stock is counted, so ADMIN only
+        @PreAuthorize("hasRole('ADMIN')")
         @PostMapping("/seed")
         public ApiResponse<Void> seed() {
 

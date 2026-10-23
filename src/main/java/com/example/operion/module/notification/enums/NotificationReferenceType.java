@@ -8,5 +8,6 @@ public enum NotificationReferenceType {
     AIRSOFT_UNIT,
     REALISASI,
     PURCHASE_REQUEST_AUTHORIZATION,
-    EXPENSE
+    EXPENSE,
+    STOCK_ADJUSTMENT
 }

@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
-**BE-25 ready to build, 23 Oct 2026** (self-approval question answered). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
 ---
 
@@ -2133,7 +2133,7 @@ HQ ADMIN + PRINCIPAL. Against the unfixed code both fail. Full suite 141/141.
 
 ## BE-25 — Who changes stock and item data
 
-**Status: OPEN — ready to build.** From the module 2 screen inventory
+**Status: DONE, 23 Oct 2026** (see end of entry). From the module 2 screen inventory
 (`screens/02-inventory-stock.md`, INV-04, INV-06, INV-07, Gate 3) and the product owner's
 decisions of 23 Oct 2026 on the two stock shortcuts, self-approval and catalog linking.
 
@@ -2205,6 +2205,45 @@ Inventory screens INV-04/06/07 gated accordingly; no screen calls the two shortc
 except an ADMIN-only data-repair action. INV-06 "Use HQ's item" for the Store Manager;
 PROC-07 asks "Already stock this?" on the first order of an HQ item and links the
 picked item before ordering.
+
+### What was done — DONE, 23 Oct 2026
+
+Migration **V13**: `stock_adjustments.self_approved`; recreates `notifications_type_check`
+(+ STOCK_ADJUSTMENT_REQUESTED) and `notifications_reference_type_check` (+ STOCK_ADJUSTMENT),
+rule 3. Confirmed against the local PostgreSQL.
+
+1. **Shortcuts** (`PartStockService.manualAdjustment` / `receiveStock`): ADMIN role, else 403;
+   `reason` required (new field on both requests), else 400. Checked in the service. The
+   movement has no actor column yet, so the note carries it: "Data repair by {name}:
+   {reason}" — **BE-26 item 2 adds the real `actorId`/`actorName`; move it there then.**
+   `receiveStock` now uses `part.isConsumable()`.
+2. **Adjustments:** request → MANAGER+ (403). Approve/reject → OWNER+ and `findOwned` (the
+   store's own; HQ answers 400 "Stock adjustment not found", reads still cover the tree).
+   Your own request: 403 "Another Owner must approve your own adjustment" while the store has
+   another OWNER+ user; as its only one, approved with `selfApproved = true` (response field,
+   `GET /stock-adjustments?selfApproved=true`). "The store's Owner+" = users of that tenant with
+   OWNER or PRINCIPAL scope (`UserRepository.findByTenantIdAndScopeIn`): **users have no
+   "active" flag**, so a departed Owner still counts until their account is removed or rescoped.
+   Requester ≠ approver applies to approve only; rejecting your own request just withdraws it.
+3. **STOCK_ADJUSTMENT_REQUESTED** to that store's OWNER+ only, never the requester
+   ("{name} asks to remove 7 × Green gas: {reason}").
+4. **Items:** create/edit → MANAGER+ or ADMIN; retire/restore → OWNER+ or ADMIN (403).
+5. **Categories and types:** create, edit, delete and both `/seed` endpoints → ADMIN
+   (`@PreAuthorize`); reads unchanged. BE-29 narrows this to HQ admins.
+6. **Catalog link:** HQ admins as before (link, re-link, unlink); otherwise the store's own
+   MANAGER+ may only *create* a link on their own store's unlinked item, to an item HQ sells
+   (400 otherwise); re-link or unlink → 403. For everyone: items counted differently → 400
+   "These two items are counted differently". `HqCatalogService.isHqCatalogAdmin()` added.
+
+Tests: `WhoChangesStockTest` (10): the shortcuts for SM/Owner/operator (403), blank reason
+(400), the admin's movement note; receive of a consumable category named "Gas" creates 0
+instances and a per-unit receive of 3 creates 3; request gate and who's notified (both Owners,
+not the requester, not HQ); approval by the store's Owner, not the SM (403) or HQ (400);
+another-Owner rule and the only-Owner self-approval with the filter; item and category gates;
+the Store Manager's link-only path and the counted-differently refusal for the store and for
+HQ. Quantities −7/+13/3, never 1 (rule 6; no conversion factor on these paths). Against the
+unfixed code all 10 fail. BE-21's `HqCatalogTest` link test was updated for decision #20 (a store's link now succeeds; its re-link stays 403). Full suite 158/158. Postman: STOCK ADJUSTMENT folder, shortcuts with `reason`,
+`parts-catalog-link` description.
 
 ---
 

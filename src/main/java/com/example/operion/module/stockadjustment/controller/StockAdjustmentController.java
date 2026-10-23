@@ -34,12 +34,13 @@ public class StockAdjustmentController {
     }
 
     @GetMapping
-    public ApiResponse<List<StockAdjustmentResponse>> getAll() {
+    /** BE-25: {@code ?selfApproved=true} lists the ones the store's only Owner approved themself. */
+    public ApiResponse<List<StockAdjustmentResponse>> getAll(@RequestParam(required = false) Boolean selfApproved) {
 
         return ApiResponse.<List<StockAdjustmentResponse>>builder()
                 .success(true)
                 .message("Stock adjustments fetched")
-                .data(service.getAll())
+                .data(service.getAll(selfApproved))
                 .build();
     }
 
