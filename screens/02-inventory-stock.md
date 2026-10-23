@@ -1,8 +1,8 @@
 # Module 2 — Inventory & Stock Screen Inventory
 
 **Date:** 21 Oct 2026, completed 23 Oct 2026
-**Status:** **COMPLETE** — 9 screens (INV-01…09), gates 1–5 run, gap list produced. Four
-backend tasks came out of it (BE-25…BE-28).
+**Status:** **COMPLETE** — 9 screens (INV-01…09), gates 1–5 run, gap list produced. Five
+backend tasks came out of it (BE-25…BE-29).
 **Built against:** `OPERION_UI_SCREEN_INVENTORY_PLAN.md` v1.4, plus the module 1
 decisions of 16–21 Oct 2026 (`OPERION_BE_CHANGE_QUEUE.md` BE-14…BE-23).
 **Source read:** `module/inventory/` (controller, DTOs, enums, `PartStockService`),
@@ -273,7 +273,7 @@ adds the gates.
 **Cost visibility:** None on the item master.
 **Deferred decisions:**
   - Should a store Manager be able to link their own item to HQ's (today HQ admin only)?
-    **Recommended 23 Oct, waiting for the product owner:** yes, but one way only. The
+    **Decided 23 Oct (BE-25 item 6):** yes, but one way only. The
     store's Manager+ may link one of its own **unlinked** items to an item HQ sells — they
     know which box is which, and the natural moment is the first order from HQ ("you
     already stock this?"). Changing or removing a link stays HQ's: the link decides
@@ -301,13 +301,14 @@ whether stock is tracked per unit (part instances) and whether burn rate applies
 **Failure behaviour:** Blocking.
 **Backend status:** `[C]` CRUD exists, per store (master data is copied into each store,
 `MasterDataInitializer`, BE-21 report). Flipping `consumable` on a category silently
-changes how every item in it is counted from then on. **BE-25** gates it.
+changes how every item in it is counted from then on. **BE-25** gates it; **BE-29**
+makes it one list at HQ.
 **Vocabulary flag:** Yes — category and type names are domain vocabulary; tenant-
 configurable by nature.
 **Cost visibility:** N/A.
 **Deferred decisions:**
   - Per-store copies of categories drift (the open duplicate-`part_categories` item,
-    `OPERION_BE_PLAN.md` §5.3). **Recommended 23 Oct, waiting for the product owner:** one
+    `OPERION_BE_PLAN.md` §5.3). **Decided 23 Oct (BE-29):** one
     list, owned by HQ, read by every store, moved **before go-live** while the production
     database is wiped anyway. Why: the first order of an HQ item matches the store's
     category by name and creates a copy if it's missing (`HqCatalogService.newStorePart`),
@@ -405,11 +406,13 @@ value is ever added (INV-04, INV-05, INV-08): OWNER+, matching BE-06/BE-11.
 ### Gate 5 — Deferred-decision log
 1. ~~Requester ≠ approver for stock adjustments when the store has one Owner~~ **Decided
    23 Oct:** allowed for the store's only Owner, flagged "self-approved" (INV-04, BE-25).
-2. May a Store Manager link their own item to HQ's catalog item? **Recommended:** link
-   yes, change or remove a link HQ only (INV-06). Waiting for the product owner.
+2. ~~May a Store Manager link their own item to HQ's catalog item?~~ **Decided 23 Oct:**
+   link yes; change or remove a link, HQ only (INV-06, BE-25 item 6).
 3. ~~Should HQ's catalog carry a selling price?~~ **Decided 23 Oct:** yes (INV-09, BE-28).
-4. One shared category list from HQ instead of per-store copies? **Recommended:** yes,
-   before go-live (INV-07). Waiting for the product owner.
+4. ~~One shared category list from HQ instead of per-store copies?~~ **Decided 23 Oct:**
+   yes, before go-live (INV-07, BE-29).
+
+No open questions remain in this module.
 
 ---
 
@@ -425,6 +428,8 @@ value is ever added (INV-04, INV-05, INV-08): OWNER+, matching BE-06/BE-11.
 | INV-04, INV-06, INV-07 | Permission checks on adjustments, items, categories; the two shortcuts ADMIN-only | BE-25 |
 | INV-01 | Stock and burn rate in one call (nice to have) | BE-26 (optional) |
 | INV-09, PROC-07 | HQ's price on catalog items; orders to HQ take it instead of a typed price | BE-28 |
+| INV-06, PROC-07 | Store Manager may link their own item to HQ's (create only) | BE-25 item 6 |
+| INV-07 | One category and type list, at HQ | BE-29 |
 
 The store-on-every-row fix in BE-26 also closes the two gaps the app works around in module
 1 (`API_CONTRACT.md`): HQ picking parts and PRAs for a chosen store.
