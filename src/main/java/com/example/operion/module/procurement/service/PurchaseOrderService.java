@@ -123,9 +123,14 @@ public class PurchaseOrderService {
             }
         }
 
-        BigDecimal totalAmount = request.getItems().stream()
-                .map(i -> i.getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // BE-28: HQ sets the price; the drafter's typed price is ignored
+        List<BigDecimal> linePrices = lineParts.stream().map(this::hqPriceOf).toList();
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (int i = 0; i < request.getItems().size(); i++) {
+            totalAmount = totalAmount.add(
+                    linePrices.get(i).multiply(BigDecimal.valueOf(request.getItems().get(i).getQuantity())));
+        }
 
         PurchaseOrder po = PurchaseOrder.builder()
                 .tenant(tenant)
@@ -152,7 +157,7 @@ public class PurchaseOrderService {
                             .purchaseOrder(po)
                             .part(part)
                             .quantity(itemRequest.getQuantity())
-                            .price(itemRequest.getPrice())
+                            .price(linePrices.get(i))
                             .build());
         }
 
@@ -196,11 +201,25 @@ public class PurchaseOrderService {
                     "A supplier must be set before sending this purchase order.");
         }
 
-        if (itemRepository.findByPurchaseOrderId(po.getId()).isEmpty()) {
+        List<PurchaseOrderItem> lines = itemRepository.findByPurchaseOrderId(po.getId());
+
+        if (lines.isEmpty()) {
 
             throw new RuntimeException(
                     "Purchase order has no items.");
         }
+
+        // BE-28: sending commits the store's money, so the lines take HQ's price
+        // as it is now; after this they're frozen (nothing re-prices a sent order)
+        BigDecimal total = BigDecimal.ZERO;
+
+        for (PurchaseOrderItem line : lines) {
+            line.setPrice(hqPriceOf(line.getPart()));
+            itemRepository.save(line);
+            total = total.add(line.getPrice().multiply(BigDecimal.valueOf(line.getQuantity())));
+        }
+
+        po.setTotalAmount(total);
 
         PurchaseOrderStatus previous = po.getStatus();
         po.setStatus(PurchaseOrderStatus.ORDERED);
@@ -209,6 +228,19 @@ public class PurchaseOrderService {
         writeHistory(po, previous, PurchaseOrderStatus.ORDERED, currentUser());
 
         return map(po);
+    }
+
+    /** BE-28: the current HQ price of the HQ item a line is for; none set → 400. */
+    private BigDecimal hqPriceOf(Part part) {
+
+        Part item = hqCatalogService.catalogEntryOf(part);
+        BigDecimal price = item != null ? item.getHqPrice() : null;
+
+        if (price == null) {
+            throw new RuntimeException("HQ hasn't set a price for " + part.getName() + " yet");
+        }
+
+        return price;
     }
 
     /**

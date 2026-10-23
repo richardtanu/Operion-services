@@ -91,7 +91,7 @@ class AutomaticTriggerTest {
         PartCategory hqGasCategory = categoryRepository.save(PartCategory.builder()
                 .tenant(hq).name("Gas").consumable(true).build());
         Part hqGas = partRepository.save(Part.builder().tenant(hq).name("Green gas " + s)
-                .category(hqGasCategory).soldByHq(true).build());
+                .category(hqGasCategory).soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).build());
 
         PartCategory category = categoryRepository.save(PartCategory.builder()
                 .tenant(store).name("Gas").consumable(true).build());

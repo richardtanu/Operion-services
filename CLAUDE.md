@@ -99,7 +99,7 @@ Not two implementations of one thing. Documented as class-level Javadoc on `Purc
 | Franchise leg   | `PurchaseOrder`, `GoodsReceipt.purchaseOrder`                         | outlet → center        |
 | Direct purchase | `PurchaseRequestAuthorization`, `Realisasi`, `GoodsReceipt.realisasi` | marketplace / supplier |
 
-`PurchaseOrder.supplier` is **legacy** — supplier-based purchasing is Realisasi's job now. Since BE-21 it is always set to HQ's franchise-centre supplier on create; the request's `supplierId` is ignored.
+`PurchaseOrder.supplier` is **legacy** — supplier-based purchasing is Realisasi's job now. Since BE-21 it is always set to HQ's franchise-centre supplier on create; the request's `supplierId` is ignored. **Since BE-28 HQ sets the price:** `parts.hq_price` on HQ's own rows (HQ admins via `PATCH /parts/{id}/hq-flags`, required before `soldByHq`); each PO line copies it on draft and again when the Owner sends — then the order is frozen. A line's typed `price` is ignored. Prices are visible to OWNER+ and HQ admins only (`HqCatalogService.canSeeHqPrice`).
 
 ### HQ catalog — two ways a store buys (BE-21)
 

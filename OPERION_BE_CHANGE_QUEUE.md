@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
 ---
 
@@ -2385,7 +2385,7 @@ low-stock, stock-summary and dashboard descriptions.
 
 ## BE-28 — HQ sets the price of what it sells
 
-**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-09).
+**Status: DONE, 23 Oct 2026** (see end of entry). Product owner's decision, 23 Oct 2026 (module 2, INV-09).
 
 ### Why
 
@@ -2427,6 +2427,31 @@ null, at Owner → set. Every new test fails against the unfixed code.
 PROC-07 "Order from HQ" drops the per-line Price field; Owner+ sees each line's HQ price
 and the total before sending, below Owner the screen says prices are set by HQ. INV-09:
 HQ admins set the price per item. Remove the gap from `API_CONTRACT.md`.
+
+### What was done — DONE, 23 Oct 2026
+
+1. **V15:** `parts.hq_price` numeric(38,2), nullable, CHECK > 0. `Part.hqPrice`. Set through
+   `PATCH /parts/{id}/hq-flags` (`price`, > 0 else 400; null leaves it) by HQ admins only
+   (BE-21's gate, so a store's ADMIN/Owner → 403). `soldByHq = true` without a price → 400
+   "Set HQ's price before selling this item". Items already sold before prices existed keep
+   selling but can't be ordered until priced (below).
+2. **Reading it:** `GET /catalog` → `price`; `PartResponse.hqPrice` (a store item shows its HQ
+   item's price). Both null unless OWNER+ or an HQ admin (`HqCatalogService.canSeeHqPrice`).
+3. **Orders:** `PurchaseOrderItemRequest.price` is deprecated and ignored (no longer
+   `@NotNull`). `create()` copies each line's HQ price (`catalogEntryOf(part).hqPrice`) and
+   totals price × quantity; `sendToSupplier()` re-prices every line from HQ's current price
+   and recomputes `totalAmount` before ORDERED; nothing re-prices after that. No price →
+   400 "HQ hasn't set a price for {name} yet", on create or send.
+4. Urgent buys at HQ (Realisasi) unchanged, as specified.
+
+Tests: `HqPriceTest` (4): selling without a price and a price of 0 → 400, a store's ADMIN and
+Owner → 403, the HQ admin → 200 with `hqPrice`, a later flag change keeps it; `GET /catalog`
+price null for the Store Manager, set for the Owner and HQ; an order of 4 with a typed price of
+Rp 1 gets HQ's Rp 41,250 (total 165,000), HQ re-prices to 43,750 before the Owner sends → sent
+at 43,750 × 4, a change to 49,900 after sending leaves it; an item sold without a price can't be
+ordered. Existing fixtures that sell an HQ item now give it a price (`OrdersAndReceivingTest`,
+`AutomaticTriggerTest`, `HqCatalogTest`). Against the unfixed code all 4 fail. Full suite
+168/168. Postman: `parts-hq-flags` with `price`, PO create bodies without `price`, send.
 
 ---
 

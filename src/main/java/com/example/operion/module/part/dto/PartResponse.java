@@ -60,4 +60,7 @@ public class PartResponse {
   private UUID tenantId;
 
   private String tenantName;
+
+  /** BE-28: HQ's price per unit for this item (its HQ catalog item's), Owner+ and HQ admins only. */
+  private BigDecimal hqPrice;
 }

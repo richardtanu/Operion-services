@@ -1,5 +1,7 @@
 package com.example.operion.module.part.dto;
 
+import java.math.BigDecimal;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,4 +14,7 @@ public class UpdateHqFlagsRequest {
 
     /** Stores must buy it from HQ. Requires soldByHq. */
     private Boolean mandatoryFromHq;
+
+    /** BE-28: HQ's price per unit (> 0). Required before soldByHq can be true. */
+    private BigDecimal price;
 }

@@ -108,13 +108,13 @@ class HqCatalogTest {
 
         hqGas = partRepository.save(Part.builder().tenant(hq).name("Green gas 1000ml " + s).brand("Puff Dino")
                 .category(hqGasCategory).partType(hqGreenGas).reorderQuantity(24)
-                .soldByHq(true).mandatoryFromHq(true).build());
+                .soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).mandatoryFromHq(true).build());
         hqSpring = partRepository.save(Part.builder().tenant(hq).name("Hop-up spring " + s)
-                .category(hqParts).soldByHq(true).build());
+                .category(hqParts).soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).build());
         hqTool = partRepository.save(Part.builder().tenant(hq).name("Chrono tool " + s).category(hqParts).build());
 
         Part othersItem = partRepository.save(Part.builder().tenant(other).name("Other root BB " + s)
-                .category(category(other, "BB", true)).soldByHq(true).build());
+                .category(category(other, "BB", true)).soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).build());
         assertNotEquals(hqGas.getId(), othersItem.getId());
 
         // the store has a "Gas" category already (master data) but no "Green gas" type
@@ -138,7 +138,7 @@ class HqCatalogTest {
         assertTrue(!partRepository.findById(hqTool.getId()).orElseThrow().isSoldByHq());
 
         mvc.perform(as(hqAdmin, patch("/parts/" + hqTool.getId() + "/hq-flags"))
-                .content("{\"soldByHq\":true,\"mandatoryFromHq\":true}"))
+                .content("{\"soldByHq\":true,\"mandatoryFromHq\":true,\"price\":41250}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.soldByHq").value(true))
                 .andExpect(jsonPath("$.data.mandatoryFromHq").value(true));

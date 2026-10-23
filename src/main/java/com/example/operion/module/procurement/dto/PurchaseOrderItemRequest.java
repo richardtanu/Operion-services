@@ -18,7 +18,11 @@ public class PurchaseOrderItemRequest {
     @Positive
     private Integer quantity;
 
-    @NotNull
-    @Positive
+    /**
+     * BE-28: deprecated and ignored. HQ sets the price; the server copies the
+     * item's HQ price into the line when the order is drafted and when it's sent.
+     * Still accepted so older clients don't break.
+     */
+    @Deprecated
     private BigDecimal price;
 }
