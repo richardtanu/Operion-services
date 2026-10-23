@@ -13,6 +13,7 @@ import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.enums.Role;
 import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.repository.UserRepository;
+import com.example.operion.module.expense.entity.Expense;
 import com.example.operion.module.notification.dto.NotificationResponse;
 import com.example.operion.module.notification.entity.Notification;
 import com.example.operion.module.notification.enums.NotificationReferenceType;
@@ -124,18 +125,45 @@ public class NotificationService {
                 .map(r -> r.getTotalCost() != null ? r.getTotalCost() : java.math.BigDecimal.ZERO)
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
 
-        String amount = java.text.NumberFormat.getIntegerInstance(java.util.Locale.forLanguageTag("id-ID"))
-                .format(total);
-
         String refs = records.stream().map(Realisasi::getExternalOrderRef)
                 .collect(java.util.stream.Collectors.joining(", "));
 
         create(records.get(0).getTenant(), owed,
                 NotificationType.REIMBURSEMENT_PAID,
                 "Paid Back",
-                "Rp " + amount + " paid back by " + nameOf(actor) + " for " + refs,
+                "Rp " + rupiah(total) + " paid back by " + nameOf(actor) + " for " + refs,
                 NotificationReferenceType.REALISASI,
                 records.get(0).getId());
+    }
+
+    /**
+     * BE-19: the same "Paid back" notice for expenses the claimant paid
+     * personally. One per call, with the total; never to the person who marked it.
+     */
+    public void notifyExpensesReimbursed(User owed, List<Expense> expenses, User actor) {
+
+        if (owed == null || (actor != null && owed.getId().equals(actor.getId())) || expenses.isEmpty()) {
+            return;
+        }
+
+        java.math.BigDecimal total = expenses.stream()
+                .map(Expense::getAmount)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        String what = expenses.stream().map(Expense::getDescription)
+                .collect(java.util.stream.Collectors.joining(", "));
+
+        create(expenses.get(0).getTenant(), owed,
+                NotificationType.REIMBURSEMENT_PAID,
+                "Paid Back",
+                "Rp " + rupiah(total) + " paid back by " + nameOf(actor) + " for " + what,
+                NotificationReferenceType.EXPENSE,
+                expenses.get(0).getId());
+    }
+
+    private static String rupiah(java.math.BigDecimal amount) {
+
+        return java.text.NumberFormat.getIntegerInstance(java.util.Locale.forLanguageTag("id-ID")).format(amount);
     }
 
     /** BE-15: skipped when the requester cancelled their own PR (notifyRequester's rule). */

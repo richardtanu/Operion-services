@@ -3923,6 +3923,311 @@
                                                    ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "EXPENSES",
+                     "item":  [
+                                  {
+                                      "name":  "expense-create",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"description\": \"Printer paper A4, 2 reams\",\n  \"amount\": 87300,\n  \"expenseDate\": \"2026-10-23\",\n  \"category\": \"BRANCH_SPECIFIC\",\n  \"paidBy\": \"PERSONAL\",\n  \"receiptUploadIds\": [\n    \":uploadId\"\n  ]\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-19. The store\u0027s MANAGER+; paidBy STORE only OWNER+ (403). PERSONAL needs a receipt photo (POST /uploads with purpose EXPENSE_RECEIPT first), 400 otherwise. category HQ | BRANCH_SPECIFIC (a label; the branch pays both). Always on your own store."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "expense-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "category",
+                                                                                    "value":  "HQ",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "HQ | BRANCH_SPECIFIC (the two tabs)"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "reimbursementStatus",
+                                                                                    "value":  "PENDING",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "PENDING = Owed, REIMBURSED = Paid back"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "paidBy",
+                                                                                    "value":  "STORE",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "STORE | PERSONAL"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "status",
+                                                                                    "value":  "ACTIVE",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "ACTIVE | VOIDED"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "from",
+                                                                                    "value":  "2026-10-01",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "inclusive"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "to",
+                                                                                    "value":  "2026-10-31",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "inclusive"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-19. Your tenant tree, newest first. amount is null below OWNER except your own PERSONAL ones."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "expense-get-by-id",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses/:id",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses",
+                                                                               ":id"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-19."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "expense-void",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"reason\": \"Entered twice\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses/:id/void",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses",
+                                                                               ":id",
+                                                                               "void"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-19. No edit: void and enter again. The person who recorded it or the store\u0027s own OWNER+. A paid-back expense must be undone first (400)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "expense-mark-paid",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"ids\": [\n    \":expenseId\"\n  ],\n  \"paidAt\": \"2026-10-23\",\n  \"method\": \"TRANSFER\",\n  \"reference\": \"BCA 0981\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses/reimbursements/mark-paid",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses",
+                                                                               "reimbursements",
+                                                                               "mark-paid"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-19, BE-18\u0027s rules: the store\u0027s own OWNER+, one or several, all-or-nothing, never money owed to yourself. The claimant gets REIMBURSEMENT_PAID."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "expense-undo-paid",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"reason\": \"Marked the wrong one\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/expenses/:id/reimbursement/undo",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "expenses",
+                                                                               ":id",
+                                                                               "reimbursement",
+                                                                               "undo"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-19. The store\u0027s own OWNER+, reason required (kept as reimbursementUndoReason)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ]
                  }
              ],
     "auth":  {
