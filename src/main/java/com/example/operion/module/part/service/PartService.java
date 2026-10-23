@@ -137,12 +137,10 @@ public class PartService {
                 return map(saved);
         }
 
-        public List<PartResponse> getAll() {
+        /** {@code tenantId} (BE-26): one store inside the caller's tree; null = the whole tree. */
+        public List<PartResponse> getAll(UUID tenantId) {
 
-                UUID tenantId = UUID.fromString(
-                                TenantContext.getTenantId());
-
-                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+                List<UUID> tenantIds = tenantHierarchyService.readScope(tenantId);
 
                 return repository.findByTenantIdInAndActiveTrue(tenantIds)
                                 .stream()
@@ -211,6 +209,8 @@ public class PartService {
                                 .catalogPartId(part.getCatalogPart() != null ? part.getCatalogPart().getId() : null)
                                 .soldByHq(hqCatalogService.isSoldByHq(part))
                                 .mandatoryFromHq(hqCatalogService.isMandatoryFromHq(part))
+                                .tenantId(part.getTenant().getId())
+                                .tenantName(part.getTenant().getName())
                                 .build();
         }
 

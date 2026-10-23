@@ -15,6 +15,11 @@ public class PurchaseRequestAuthorizationResponse {
 
     private UUID id;
 
+    /** BE-26: which store the authorization belongs to (HQ picking a store's PRA). */
+    private UUID tenantId;
+
+    private String tenantName;
+
     private String status;
 
     private UUID approvedById;

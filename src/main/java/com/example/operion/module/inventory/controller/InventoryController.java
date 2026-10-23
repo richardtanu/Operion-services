@@ -60,24 +60,24 @@ public class InventoryController {
   }
 
   @GetMapping("/low-stock")
-  public ApiResponse<List<LowStockResponse>> lowStock() {
+  public ApiResponse<List<LowStockResponse>> lowStock(@RequestParam(required = false) UUID tenantId) {
 
     return ApiResponse
         .<List<LowStockResponse>>builder()
         .success(true)
         .message("Low stock fetched")
-        .data(stockService.lowStock())
+        .data(stockService.lowStock(tenantId))
         .build();
   }
 
   @GetMapping("/stock-summary")
-  public ApiResponse<List<LowStockResponse>> stockSummary() {
+  public ApiResponse<List<LowStockResponse>> stockSummary(@RequestParam(required = false) UUID tenantId) {
 
     return ApiResponse
         .<List<LowStockResponse>>builder()
         .success(true)
         .message("Stock summary fetched")
-        .data(stockService.stockSummary())
+        .data(stockService.stockSummary(tenantId))
         .build();
   }
 }

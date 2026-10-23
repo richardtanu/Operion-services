@@ -277,6 +277,8 @@ public class StockAdjustmentService {
                 .requestedByName(
                         adjustment.getRequestedBy() != null ? adjustment.getRequestedBy().getFullName() : null)
                 .selfApproved(adjustment.isSelfApproved())
+                .tenantId(adjustment.getTenant().getId())
+                .tenantName(adjustment.getTenant().getName())
                 .createdAt(adjustment.getCreatedAt())
                 .build();
     }

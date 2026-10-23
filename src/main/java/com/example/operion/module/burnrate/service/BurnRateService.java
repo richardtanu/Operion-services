@@ -48,13 +48,10 @@ public class BurnRateService {
 
     private final TenantHierarchyService tenantHierarchyService;
 
-    public List<BurnRateResponse> getAll() {
+    /** {@code tenantId} (BE-26): one store's subtree inside the caller's tree; null = the whole tree. */
+    public List<BurnRateResponse> getAll(UUID tenantId) {
 
-        UUID tenantId = UUID.fromString(TenantContext.getTenantId());
-
-        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
-
-        return computeAll(tenantId, tenantIds);
+        return computeAll(tenantHierarchyService.readScope(tenantId));
     }
 
     public BurnRateResponse getByPart(UUID partId) {
@@ -63,21 +60,33 @@ public class BurnRateService {
 
         List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
 
-        return computeAll(tenantId, tenantIds).stream()
+        return computeAll(tenantIds).stream()
                 .filter(r -> r.getPartId().equals(partId))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Part not found"));
     }
 
     /**
-     * One grouped query for takes, one for first-seen — not a per-part loop
-     * (spec §6.1: the PR creation screen requests the whole catalog at once).
+     * BE-26: each item is computed with its **own store's** MaintenancePolicy,
+     * not the caller's: HQ reading a store's burn rate must see that store's
+     * window and target, as the store does. One pass per store in scope, each
+     * with one grouped query for takes and one for first-seen — not a per-part
+     * loop (spec §6.1: the PR creation screen requests the whole catalog at once).
      */
-    private List<BurnRateResponse> computeAll(UUID tenantId, List<UUID> tenantIds) {
+    private List<BurnRateResponse> computeAll(List<UUID> tenantIds) {
+
+        return tenantIds.stream()
+                .flatMap(storeId -> computeStore(storeId).stream())
+                .toList();
+    }
+
+    private List<BurnRateResponse> computeStore(UUID storeId) {
+
+        List<UUID> tenantIds = List.of(storeId);
 
         LocalDateTime now = LocalDateTime.now();
 
-        MaintenancePolicy policy = maintenancePolicyRepository.findByTenantId(tenantId).orElse(null);
+        MaintenancePolicy policy = maintenancePolicyRepository.findByTenantId(storeId).orElse(null);
 
         int windowDays = intOrDefault(policy == null ? null : policy.getBurnRateWindowDays(), DEFAULT_WINDOW_DAYS);
         int minObservationDays = intOrDefault(
@@ -209,6 +218,9 @@ public class BurnRateService {
                 .suggestedQty(suggestedQty)
                 .manualReorderPoint(manualReorderPoint)
                 .belowLevel(belowLevel)
+                .tenantId(part.getTenant().getId())
+                .tenantName(part.getTenant().getName())
+                .catalogPartId(part.getCatalogPart() != null ? part.getCatalogPart().getId() : null)
                 .build();
     }
 

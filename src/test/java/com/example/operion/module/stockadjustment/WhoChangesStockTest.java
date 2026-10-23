@@ -131,8 +131,10 @@ class WhoChangesStockTest {
                 .andExpect(status().isOk());
         assertEquals(13, partRepository.findById(gas.getId()).orElseThrow().getCurrentStock());
 
-        String note = movementRepository.findByPartIdOrderByCreatedAtDesc(gas.getId()).get(0).getNotes();
-        assertEquals("Data repair by " + admin.getFullName() + ": Miscount at closing", note);
+        // BE-26: the admin is the movement's actor; the note says why
+        var movement = movementRepository.findByPartIdOrderByCreatedAtDesc(gas.getId()).get(0);
+        assertEquals("Data repair: Miscount at closing", movement.getNotes());
+        assertEquals(admin.getId(), movement.getActor().getId());
     }
 
     @Test

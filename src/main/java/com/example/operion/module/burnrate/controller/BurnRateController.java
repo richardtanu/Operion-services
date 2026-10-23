@@ -19,12 +19,13 @@ public class BurnRateController {
     private final BurnRateService service;
 
     @GetMapping
-    public ApiResponse<List<BurnRateResponse>> getAll() {
+    /** BE-26: {@code ?tenantId=} narrows HQ's list to one store. */
+    public ApiResponse<List<BurnRateResponse>> getAll(@RequestParam(required = false) UUID tenantId) {
 
         return ApiResponse.<List<BurnRateResponse>>builder()
                 .success(true)
                 .message("Burn rate fetched")
-                .data(service.getAll())
+                .data(service.getAll(tenantId))
                 .build();
     }
 

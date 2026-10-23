@@ -3,6 +3,7 @@ package com.example.operion.module.inventory.entity;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.inventory.enums.StockMovementType;
 import com.example.operion.module.inventory.enums.StockReferenceType;
 import com.example.operion.module.part.entity.Part;
@@ -63,6 +64,11 @@ public class StockMovement {
 
   @Column(columnDefinition = "TEXT")
   private String notes;
+
+  /** BE-26: the signed-in user whose action moved the stock (null on old rows). */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "actor_id")
+  private User actor;
 
   private LocalDateTime createdAt;
 

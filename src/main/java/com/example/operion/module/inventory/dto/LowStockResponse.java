@@ -22,4 +22,12 @@ public class LowStockResponse {
   private Integer minimumStock;
 
   private InventoryStockStatus status;
+
+  /** BE-26: which store the row belongs to, so HQ can tell stores apart. */
+  private UUID tenantId;
+
+  private String tenantName;
+
+  /** BE-26: the HQ catalog item this store item is, if linked. */
+  private UUID catalogPartId;
 }

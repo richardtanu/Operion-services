@@ -55,4 +55,9 @@ public class PartResponse {
 
   /** BE-21: read from the HQ item (itself on HQ rows). Hide these from "Buy elsewhere". */
   private boolean mandatoryFromHq;
+
+  /** BE-26: which store the item belongs to, so HQ can tell stores apart. */
+  private UUID tenantId;
+
+  private String tenantName;
 }

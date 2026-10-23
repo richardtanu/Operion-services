@@ -28,6 +28,11 @@ public class StockAdjustmentResponse {
 
     private String requestedByName;
 
+    /** BE-26: which store the adjustment belongs to. */
+    private UUID tenantId;
+
+    private String tenantName;
+
     /** BE-25: approved by its own requester, the store's only Owner+. */
     private boolean selfApproved;
 

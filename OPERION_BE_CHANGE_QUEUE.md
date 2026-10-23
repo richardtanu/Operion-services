@@ -23,7 +23,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
-**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
+**BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
 **BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
 ---
@@ -2249,7 +2249,7 @@ unfixed code all 10 fail. BE-21's `HqCatalogTest` link test was updated for deci
 
 ## BE-26 — Inventory reads: store on every row, item history, consumables in "used today"
 
-**Status: OPEN.** From the module 2 screen inventory's gap list (INV-03, INV-05, INV-08,
+**Status: DONE, 23 Oct 2026** (see end of entry, item 5 left out). From the module 2 screen inventory's gap list (INV-03, INV-05, INV-08,
 INV-09).
 
 ### Why
@@ -2288,6 +2288,37 @@ HQ caller sees two stores' rows told apart by `tenantId`; `?tenantId=` outside t
 400; a movement written by an approval carries the approver; "used today" counts a
 consumable take (conversion factor ≠ 1, rule 2); burn rate for a store item uses the
 store's policy, not HQ's (rule 6: a non-default policy value).
+
+### What was done — DONE, 23 Oct 2026
+
+1. **Store on every row:** `tenantId`, `tenantName` on `PartResponse`, `LowStockResponse`
+   (stock-summary and low-stock), `BurnRateResponse`, `StockAdjustmentResponse` and
+   `PurchaseRequestAuthorizationResponse`; `catalogPartId` on the stock and burn-rate rows.
+   `?tenantId=` on `GET /parts`, `/inventory/stock-summary`, `/inventory/low-stock` and
+   `/burn-rate`, through the new `TenantHierarchyService.readScope` (that store's subtree,
+   inside the caller's tree; outside → 400 "Store not found").
+2. **Item history:** `GET /parts/{id}/movements?limit=` (default 50, max 500), tree-scoped,
+   another root → 400 "Part not found". **V14** adds `stock_movements.actor_id`;
+   `adjustStock` (the one place stock moves) stamps the signed-in user, so every path is
+   covered: scans, approvals (the approver), goods receipts, work orders, data repair.
+   `StockMovementResponse` gains `partId`, `referenceType`, `referenceId`, `actorId`,
+   `actorName`. BE-25's data-repair note dropped the admin's name (it's the actor now):
+   "Data repair: {reason}".
+3. **"Used today"** counts MAINTENANCE_USAGE and CONSUMABLE_TAKE.
+4. **Burn rate per store:** each item is computed with its own store's `MaintenancePolicy`
+   (one pass per store in scope, still two grouped queries per store, not per item).
+5. **Not done (optional):** `daysOfCover`/`suggestedQty`/`burnRateSource` on stock-summary
+   rows. The app already builds INV-01 from two calls; add it if that turns out slow.
+
+Tests: `InventoryReadsTest` (4): HQ sees Store A and Store B rows told apart on all four
+lists, narrows with `?tenantId=`, and gets 400 for another root; an approved adjustment's
+movement names the approving Owner, HQ reads the history, another root can't; after a
+goods receipt of 2 pakets × 6 (rule 2) and 3 scanned-in takes, the dashboard says received
+12, used 3, stock 39, and each take names the taker; gas A's burn rate reports Store A's
+20-day target to HQ (whose own is 7, rule 6). `PartStockServiceTest` now also checks the
+store on each row; BE-25's data-repair test checks the actor instead of the note. Against
+the unfixed code all 4 fail (checked after a first attempt hit a compile error and read a
+stale report). Full suite 162/162. Postman: `parts-movements`, `?tenantId=` on the four lists.
 
 ---
 

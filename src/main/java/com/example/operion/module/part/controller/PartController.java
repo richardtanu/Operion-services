@@ -6,6 +6,8 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.module.inventory.dto.StockMovementResponse;
+import com.example.operion.module.inventory.services.PartStockService;
 import com.example.operion.module.part.dto.CreatePartRequest;
 import com.example.operion.module.part.dto.LinkCatalogPartRequest;
 import com.example.operion.module.part.dto.PartResponse;
@@ -25,6 +27,8 @@ public class PartController {
 
         private final PartService service;
 
+        private final PartStockService stockService;
+
         @PostMapping
         public ApiResponse<PartResponse> create(
                         @Valid @RequestBody CreatePartRequest request) {
@@ -37,14 +41,29 @@ public class PartController {
                                 .build();
         }
 
+        /** BE-26: {@code ?tenantId=} narrows HQ's list to one store. */
         @GetMapping
-        public ApiResponse<List<PartResponse>> getAll() {
+        public ApiResponse<List<PartResponse>> getAll(@RequestParam(required = false) UUID tenantId) {
 
                 return ApiResponse
                                 .<List<PartResponse>>builder()
                                 .success(true)
                                 .message("Parts fetched")
-                                .data(service.getAll())
+                                .data(service.getAll(tenantId))
+                                .build();
+        }
+
+        /** BE-26: one item's stock history, newest first, with who moved it. */
+        @GetMapping("/{partId}/movements")
+        public ApiResponse<List<StockMovementResponse>> movements(
+                        @PathVariable UUID partId,
+                        @RequestParam(required = false) Integer limit) {
+
+                return ApiResponse
+                                .<List<StockMovementResponse>>builder()
+                                .success(true)
+                                .message("Stock movements fetched")
+                                .data(stockService.movements(partId, limit))
                                 .build();
         }
 

@@ -86,6 +86,8 @@ public class PartStockService {
                                 .beforeStock(before)
                                 .afterStock(after)
                                 .notes(notes)
+                                // BE-26: every movement names whose action wrote it
+                                .actor(currentUserOrNull())
                                 .build();
 
                 movementRepository.save(movement);
@@ -211,18 +213,58 @@ public class PartStockService {
                         throw new RuntimeException("A reason is required to set stock directly");
                 }
 
-                UUID userId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
-                String name = userRepository.findById(userId).map(User::getFullName).orElse("Unknown");
-
-                return "Data repair by " + name + ": " + reason.trim()
+                // BE-26: the admin is the movement's actor now, so the note says only why
+                return "Data repair: " + reason.trim()
                                 + (notes != null && !notes.isBlank() ? " (" + notes.trim() + ")" : "");
+        }
+
+        /** The signed-in user, or null when nobody is (a startup runner, a scheduled job). */
+        private User currentUserOrNull() {
+
+                var auth = SecurityContextHolder.getContext().getAuthentication();
+
+                if (auth == null || auth.getName() == null) {
+                        return null;
+                }
+
+                try {
+                        return userRepository.findById(UUID.fromString(auth.getName())).orElse(null);
+                } catch (IllegalArgumentException notAUserId) {
+                        return null;
+                }
+        }
+
+        /**
+         * BE-26: one item's stock history, newest first, for anyone who can see
+         * the item (the caller's tree). {@code limit} defaults to 50, at most 500.
+         */
+        public List<StockMovementResponse> movements(UUID partId, Integer limit) {
+
+                List<UUID> tree = tenantHierarchyService.getEffectiveTenantIds(
+                                UUID.fromString(TenantContext.getTenantId()));
+
+                partRepository.findById(partId)
+                                .filter(p -> tree.contains(p.getTenant().getId()))
+                                .orElseThrow(() -> new RuntimeException("Part not found"));
+
+                int max = limit == null ? 50 : Math.max(1, Math.min(limit, 500));
+
+                return movementRepository.findByPartIdOrderByCreatedAtDesc(partId).stream()
+                                .limit(max)
+                                .map(this::map)
+                                .toList();
         }
 
         private StockMovementResponse map(StockMovement movement) {
 
                 return StockMovementResponse.builder()
                                 .id(movement.getId())
+                                .partId(movement.getPart().getId())
                                 .partName(movement.getPart().getName())
+                                .referenceType(movement.getReferenceType())
+                                .referenceId(movement.getReferenceId())
+                                .actorId(movement.getActor() != null ? movement.getActor().getId() : null)
+                                .actorName(movement.getActor() != null ? movement.getActor().getFullName() : null)
                                 .movementType(movement.getMovementType())
                                 .quantity(movement.getQuantity())
                                 .beforeStock(movement.getBeforeStock())
@@ -265,10 +307,12 @@ public class PartStockService {
                                                 StockMovement::getQuantity)
                                 .sum();
 
+                // BE-26: consumables taken off the shelf are used too, not only parts fitted in maintenance
                 int usedToday = movementRepository
-                                .findByTenantIdInAndMovementTypeAndCreatedAtAfter(
+                                .findByTenantIdInAndMovementTypeInAndCreatedAtAfter(
                                                 tenantIds,
-                                                StockMovementType.MAINTENANCE_USAGE,
+                                                List.of(StockMovementType.MAINTENANCE_USAGE,
+                                                                StockMovementType.CONSUMABLE_TAKE),
                                                 today)
                                 .stream()
                                 .mapToInt(m -> Math.abs(m.getQuantity()))
@@ -284,12 +328,10 @@ public class PartStockService {
                                 .build();
         }
 
-        public List<LowStockResponse> lowStock() {
+        /** {@code tenantId} (BE-26): one store's subtree inside the caller's tree; null = the whole tree. */
+        public List<LowStockResponse> lowStock(UUID tenantId) {
 
-                UUID tenantId = UUID.fromString(
-                                TenantContext.getTenantId());
-
-                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+                List<UUID> tenantIds = tenantHierarchyService.readScope(tenantId);
 
                 return getLowStockParts(tenantIds)
                                 .stream()
@@ -297,12 +339,10 @@ public class PartStockService {
                                 .toList();
         }
 
-        public List<LowStockResponse> stockSummary() {
+        /** {@code tenantId} (BE-26): one store's subtree inside the caller's tree; null = the whole tree. */
+        public List<LowStockResponse> stockSummary(UUID tenantId) {
 
-                UUID tenantId = UUID.fromString(
-                                TenantContext.getTenantId());
-
-                List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+                List<UUID> tenantIds = tenantHierarchyService.readScope(tenantId);
 
                 return partRepository.findByTenantIdIn(tenantIds)
                                 .stream()
@@ -338,6 +378,9 @@ public class PartStockService {
                                 .currentStock(currentStock)
                                 .minimumStock(minimumStock)
                                 .status(status)
+                                .tenantId(part.getTenant().getId())
+                                .tenantName(part.getTenant().getName())
+                                .catalogPartId(part.getCatalogPart() != null ? part.getCatalogPart().getId() : null)
                                 .build();
         }
 
