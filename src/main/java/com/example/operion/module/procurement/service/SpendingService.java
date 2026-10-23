@@ -20,6 +20,10 @@ import org.springframework.stereotype.Service;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.enums.Scope;
+import com.example.operion.module.expense.entity.Expense;
+import com.example.operion.module.expense.enums.ExpenseCategory;
+import com.example.operion.module.expense.enums.ExpenseStatus;
+import com.example.operion.module.expense.repository.ExpenseRepository;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.procurement.dto.SpendingPartResponse;
 import com.example.operion.module.procurement.dto.StoreSpendingResponse;
@@ -96,6 +100,8 @@ public class SpendingService {
 
     private final TenantHierarchyService tenantHierarchyService;
 
+    private final ExpenseRepository expenseRepository;
+
     /**
      * OWNER+ only. A store Owner gets their own store (and any below it); HQ
      * gets one row per store in its tree, or the one {@code tenantId} names
@@ -163,6 +169,20 @@ public class SpendingService {
         BigDecimal committed = committedNow(tenant.getId());
         BigDecimal budget = tenant.getMonthlyPurchaseBudget();
 
+        // BE-19: other expenses, by the month of their date; the branch pays both categories
+        BigDecimal expensesHq = BigDecimal.ZERO;
+        BigDecimal expensesBranch = BigDecimal.ZERO;
+
+        for (Expense e : expenseRepository.findDatedBetween(tenant.getId(), ExpenseStatus.ACTIVE, first, next)) {
+            if (e.getCategory() == ExpenseCategory.HQ) {
+                expensesHq = expensesHq.add(e.getAmount());
+            } else {
+                expensesBranch = expensesBranch.add(e.getAmount());
+            }
+        }
+
+        BigDecimal otherExpenses = expensesHq.add(expensesBranch);
+
         List<SpendingPartResponse> topParts = byPart.entrySet().stream()
                 .sorted(Map.Entry.<UUID, BigDecimal>comparingByValue().reversed()
                         .thenComparing(e -> partNames.get(e.getKey()), Comparator.nullsLast(String::compareTo)))
@@ -182,8 +202,11 @@ public class SpendingService {
                 .spentOutside(outside)
                 .spent(spent)
                 .committed(committed)
+                .otherExpenses(otherExpenses)
+                .otherExpensesHq(expensesHq)
+                .otherExpensesBranch(expensesBranch)
                 .budget(budget)
-                .overBudget(budget != null ? spent.add(committed).compareTo(budget) > 0 : null)
+                .overBudget(budget != null ? spent.add(committed).add(otherExpenses).compareTo(budget) > 0 : null)
                 .topParts(topParts)
                 .build();
     }

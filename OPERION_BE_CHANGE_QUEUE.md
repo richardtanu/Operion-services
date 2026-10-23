@@ -22,7 +22,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
-**BE-19 confirmed, 20 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
+**BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 open** (store on every inventory row, item history, consumables in "used today"), **BE-27 open** (one definition of "low"; tell the Store Manager).
 **BE-25 ready to build, 23 Oct 2026** (self-approval question answered). **BE-28 open, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
@@ -1477,8 +1477,8 @@ against the old service/controller. Full suite 103/103. Postman: new `REALISASI`
 
 ## BE-19 — Expense claims: branch spending that isn't stock
 
-**Status: CONFIRMED by the product owner, 20 Oct 2026. Screen record written 23 Oct 2026:
-PROC-10 in `screens/01-procurement.md` (addendum) — ready to build.** Depends on BE-23 for receipt photos.
+**Status: DONE, 23 Oct 2026** (see end of entry). Confirmed by the product owner 20 Oct 2026;
+screen record PROC-10 in `screens/01-procurement.md` (addendum), 23 Oct 2026. Depends on BE-23 for receipt photos.
 
 ### Why
 
@@ -1514,6 +1514,46 @@ and tracking their stock.
 - Create: the store's MANAGER+ (SM, Owner). Paid-by "store" only by OWNER+.
 - Edit: no edit; correct by void-and-recreate with a reason, like supersede.
 - Money visible OWNER+, plus the claimant for their own (same exception as BE-18).
+
+### What was done — DONE, 23 Oct 2026
+
+New module `expense` (`Expense`, `ExpenseService`, `ExpenseController`), migration **V12**
+(`expenses` table; enum columns without CHECK constraints on purpose, as V6 did; recreates
+`notifications_reference_type_check` with `EXPENSE`, rule 3). Confirmed against the local
+PostgreSQL.
+
+- `POST /expenses` `{description, amount, expenseDate?, category, paidBy, receiptUploadIds}`:
+  the store's MANAGER+ (403 below); `paidBy` STORE only OWNER+ (403). Always the caller's own
+  store. Receipts attach as BE-23 uploads (purpose `EXPENSE_RECEIPT`, type `EXPENSE`) in the
+  same transaction. `paidBy` values are `STORE` / `PERSONAL` ("me" on screen; the API value
+  can't be relative to who's reading).
+- `GET /expenses` (filters `category`, `paidBy`, `reimbursementStatus`, `status`, `from`, `to`)
+  and `GET /expenses/{id}`: the caller's tree, so HQ reads every store's; outside it → 400
+  "Expense not found". `amount` null below OWNER except the claimant's own PERSONAL one.
+- `PATCH /expenses/{id}/void {reason}`: the creator or that store's OWNER+ (HQ → 403). Only
+  ACTIVE; a paid-back one must be undone first (400). A voided expense owes nothing
+  (`reimbursementStatus` → NOT_APPLICABLE), so it leaves "Owed".
+- `PATCH /expenses/reimbursements/mark-paid` (BE-18's `MarkReimbursedRequest`) and
+  `PATCH /expenses/{id}/reimbursement/undo {reason}`: BE-18's rules exactly — the store's own
+  OWNER+, one or several, all-or-nothing, never money owed to yourself; the claimant gets one
+  REIMBURSEMENT_PAID with the total (`NotificationService.notifyExpensesReimbursed`). Expenses
+  have no history table, so the last undo reason is kept on the row (`reimbursementUndoReason`).
+- **BE-16:** the spending summary gains `otherExpenses`, `otherExpensesHq`,
+  `otherExpensesBranch` (ACTIVE expenses by the month of `expenseDate`), and `overBudget` is now
+  spent + committed + otherExpenses > budget, as the Definitions say.
+
+**PROC-10's two deferred decisions, taken as its own recommendations (revisable):**
+1. Receipt photo **required for "paid by me"** (400 "Add a photo of the receipt: it's what
+   you're paid back against"), optional for "paid by store".
+2. Spending summary: **one "other expenses" line, with the HQ / Branch split** alongside it.
+
+Tests: `ExpenseTest` (7): who may record what (operator 403, SM paid-by-store 403, no receipt
+400, amount 0 400, someone else's photo 400, Owner store-paid without receipt 200); amounts by
+viewer and HQ/other-root reads; the two tabs and Owed filters; mark-paid by the Owner for two
+expenses with one notification of Rp 1.051.150 (reference type EXPENSE, proving V12), refused for
+the SM, a colleague and HQ; all-or-nothing and never-your-own (a second Owner pays the first);
+undo with reason, void rules; other expenses in the October summary (HQ/Branch split, voided and
+November excluded, over budget). Against the unfixed code all 7 fail. Full suite 148/148. Postman: EXPENSES folder.
 
 ---
 

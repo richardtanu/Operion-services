@@ -7,5 +7,6 @@ public enum NotificationReferenceType {
     PART,
     AIRSOFT_UNIT,
     REALISASI,
-    PURCHASE_REQUEST_AUTHORIZATION
+    PURCHASE_REQUEST_AUTHORIZATION,
+    EXPENSE
 }
