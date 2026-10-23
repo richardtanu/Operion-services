@@ -1,5 +1,6 @@
 package com.example.operion.module.part.dto;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import lombok.Builder;
@@ -27,6 +28,9 @@ public class CatalogItemResponse {
     private boolean consumable;
 
     private boolean mandatoryFromHq;
+
+    /** BE-28: HQ's price per unit; Owner+ (and HQ admins) only, null below. */
+    private BigDecimal price;
 
     private UUID storePartId;
 

@@ -1,5 +1,6 @@
 package com.example.operion.module.part.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -76,6 +77,19 @@ public class HqCatalogService {
         return entry != null && entry.isMandatoryFromHq();
     }
 
+    /** BE-28: HQ's price for the HQ item a part is, or null. */
+    public BigDecimal hqPriceOf(Part part) {
+
+        Part entry = catalogEntryOf(part);
+        return entry != null ? entry.getHqPrice() : null;
+    }
+
+    /** BE-28: a price, so Owner+ (BE-11's rule), plus HQ admins on their own catalog. */
+    public boolean canSeeHqPrice() {
+
+        return ScopeContext.hasAtLeast(Scope.OWNER) || isHqCatalogAdmin();
+    }
+
     /**
      * Flags and links are HQ's: ADMIN role or PRINCIPAL scope, signed in at
      * the root tenant. A store's ADMIN, Owner or Manager is refused (403).
@@ -101,6 +115,7 @@ public class HqCatalogService {
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
         UUID rootId = tenantHierarchyService.getRootTenantId(tenantId);
         boolean atRoot = rootId.equals(tenantId);
+        boolean canSeePrice = canSeeHqPrice();
 
         return partRepository.findHqCatalog(rootId).stream()
                 .map(item -> {
@@ -115,6 +130,7 @@ public class HqCatalogService {
                             .partTypeName(item.getPartType() != null ? item.getPartType().getName() : null)
                             .consumable(item.isConsumable())
                             .mandatoryFromHq(item.isMandatoryFromHq())
+                            .price(canSeePrice ? item.getHqPrice() : null)
                             .storePartId(own != null ? own.getId() : null)
                             .storeCurrentStock(own != null ? own.getCurrentStock() : null)
                             .build();

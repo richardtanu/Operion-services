@@ -1,5 +1,6 @@
 package com.example.operion.module.part.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -211,6 +212,7 @@ public class PartService {
                                 .mandatoryFromHq(hqCatalogService.isMandatoryFromHq(part))
                                 .tenantId(part.getTenant().getId())
                                 .tenantName(part.getTenant().getName())
+                                .hqPrice(hqCatalogService.canSeeHqPrice() ? hqCatalogService.hqPriceOf(part) : null)
                                 .build();
         }
 
@@ -240,8 +242,20 @@ public class PartService {
                                         "An item stores must buy from HQ has to be sold by HQ too");
                 }
 
+                // BE-28: HQ's price; an item can't be sold without one
+                if (request.getPrice() != null && request.getPrice().signum() <= 0) {
+                        throw new RuntimeException("HQ's price must be more than 0");
+                }
+
+                BigDecimal price = request.getPrice() != null ? request.getPrice() : part.getHqPrice();
+
+                if (sold && price == null) {
+                        throw new RuntimeException("Set HQ's price before selling this item");
+                }
+
                 part.setSoldByHq(sold);
                 part.setMandatoryFromHq(mandatory);
+                part.setHqPrice(price);
 
                 return map(repository.save(part));
         }

@@ -125,6 +125,13 @@ public class Part {
     @Builder.Default
     private boolean mandatoryFromHq = false;
 
+    /**
+     * BE-28: HQ's selling price per unit, on HQ rows only. Required before an
+     * item can be sold by HQ; orders to HQ take it (stores no longer type a price).
+     */
+    @Column(name = "hq_price", precision = 38, scale = 2)
+    private BigDecimal hqPrice;
+
     /*
      * =====================================================
      * Misc

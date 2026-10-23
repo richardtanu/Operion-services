@@ -120,7 +120,7 @@ class OrdersAndReceivingTest {
                 .tenant(hq).name("Gas").consumable(true).build());
         Part hqGas = partRepository.save(Part.builder()
                 .tenant(hq).name("Green gas " + s).category(hqCategory)
-                .soldByHq(true).active(true).retired(false).build());
+                .soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).active(true).retired(false).build());
 
         PartCategory category = categoryRepository.save(PartCategory.builder()
                 .tenant(store).name("Gas").consumable(true).build());

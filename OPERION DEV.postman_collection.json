@@ -695,56 +695,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "parts-hq-flags",
-                                      "request":  {
-                                                      "method":  "PATCH",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     },
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "{\n  \"soldByHq\": true,\n  \"mandatoryFromHq\": true\n}",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               },
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/parts/:partId/hq-flags",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "port":  "8080",
-                                                                  "path":  [
-                                                                               "parts",
-                                                                               ":partId",
-                                                                               "hq-flags"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "partId",
-                                                                                       "value":  ""
-                                                                                   }
-                                                                               ]
-                                                              },
-                                                      "description":  "BE-21. HQ admins only (ADMIN role or PRINCIPAL scope, signed in at HQ); 403 otherwise. On HQ\u0027s own items only. Null leaves a flag unchanged; mandatory requires sold (400)."
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "parts-catalog-link",
                                       "request":  {
                                                       "method":  "PATCH",
@@ -869,6 +819,56 @@
                                                                                ]
                                                               },
                                                       "description":  "BE-26: one item\u0027s stock history, newest first: type, quantity, before/after, what it came from (referenceType/referenceId) and who moved it (actorId/actorName; null on rows before 23 Oct 2026)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "parts-hq-flags",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"soldByHq\": true,\n  \"mandatoryFromHq\": true,\n  \"price\": 41250\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/parts/:partId/hq-flags",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "parts",
+                                                                               ":partId",
+                                                                               "hq-flags"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "partId",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-21/28. HQ admins only. price = HQ\u0027s price per unit (\u003e 0); required before soldByHq can be true (400 \u0027Set HQ\u0027s price before selling this item\u0027). Nulls leave a field unchanged."
                                                   },
                                       "response":  [
 
@@ -2597,40 +2597,6 @@
                                                    ]
                                   },
                                   {
-                                      "name":  "purchase-order-send",
-                                      "request":  {
-                                                      "method":  "PATCH",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Authorization",
-                                                                         "value":  "Bearer {{bearerToken}}",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "http://localhost:8080/purchase-orders/:id/send",
-                                                                  "protocol":  "http",
-                                                                  "host":  [
-                                                                               "localhost"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "purchase-orders",
-                                                                               ":id",
-                                                                               "send"
-                                                                           ],
-                                                                  "variable":  [
-                                                                                   {
-                                                                                       "key":  "id"
-                                                                                   }
-                                                                               ],
-                                                                  "port":  "8080"
-                                                              }
-                                                  },
-                                      "response":  [
-
-                                                   ]
-                                  },
-                                  {
                                       "name":  "purchase-order-history",
                                       "request":  {
                                                       "method":  "GET",
@@ -2732,7 +2698,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 10,\n      \"price\": 25000\n    }\n  ]\n}",
+                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 10\n    }\n  ]\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2750,7 +2716,7 @@
                                                                                "purchase-orders"
                                                                            ]
                                                               },
-                                                      "description":  "BE-20/21. An order to HQ: MANAGER+ or PROCUREMENT. partId = an HQ catalog item id (GET /catalog) or your store\u0027s own part linked to one; the first order of an HQ item creates your store\u0027s part. Items HQ doesn\u0027t sell → 400. The supplier is set to HQ\u0027s franchise-centre supplier; supplierId is ignored."
+                                                      "description":  "BE-20/21/28. An order to HQ: MANAGER+ or PROCUREMENT. Each line takes HQ\u0027s price (a typed price is ignored); an item with no HQ price → 400. The Owner\u0027s send re-prices from HQ\u0027s current price, then the order is frozen."
                                                   },
                                       "response":  [
 
@@ -2774,7 +2740,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 5,\n      \"price\": 25000\n    }\n  ],\n  \"purchaseRequestIds\": [\n    \":purchaseRequestId\"\n  ]\n}",
+                                                                   "raw":  "{\n  \"items\": [\n    {\n      \"partId\": \":partId\",\n      \"quantity\": 5\n    }\n  ],\n  \"purchaseRequestIds\": [\n    \":purchaseRequestId\"\n  ]\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2792,7 +2758,43 @@
                                                                                "purchase-orders"
                                                                            ]
                                                               },
-                                                      "description":  "BE-20/21. Same rules as create-standalone; also moves the APPROVED requests to ORDERED."
+                                                      "description":  "BE-20/21/28. Same rules as create-standalone; also moves the APPROVED requests to ORDERED."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "purchase-order-send",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/purchase-orders/:id/send",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "purchase-orders",
+                                                                               ":id",
+                                                                               "send"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-20/28. OWNER+. Copies each item\u0027s current HQ price into its line and recomputes the total; after this the order\u0027s prices never change."
                                                   },
                                       "response":  [
 
