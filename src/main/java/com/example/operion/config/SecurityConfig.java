@@ -32,6 +32,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login")
                         .permitAll()
+                        // BE-30: local upload links carry their own signature, like R2 presigned URLs
+                        .requestMatchers("/uploads-local")
+                        .permitAll()
                         .anyRequest().authenticated())
 
                 .addFilterBefore(

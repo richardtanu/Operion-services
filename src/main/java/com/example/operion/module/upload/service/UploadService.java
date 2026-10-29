@@ -63,7 +63,7 @@ public class UploadService {
 
     private final UploadRepository repository;
 
-    private final R2Storage storage;
+    private final ObjectStorage storage;
 
     private final UserRepository userRepository;
 
@@ -103,7 +103,7 @@ public class UploadService {
                 .sizeBytes(request.getSizeBytes())
                 .build());
 
-        R2Storage.Presigned put = storage.presignPut(key, contentType, request.getSizeBytes(), PUT_TTL);
+        ObjectStorage.Presigned put = storage.presignPut(key, contentType, request.getSizeBytes(), PUT_TTL);
 
         return UploadTicketResponse.builder()
                 .uploadId(id)
@@ -128,7 +128,7 @@ public class UploadService {
                 .filter(u -> u.getAttachedType() != null || isCaller(u.getUploadedBy()))
                 .orElseThrow(() -> new RuntimeException(NOT_FOUND));
 
-        R2Storage.Presigned get = storage.presignGet(upload.getObjectKey(), GET_TTL);
+        ObjectStorage.Presigned get = storage.presignGet(upload.getObjectKey(), GET_TTL);
 
         return UploadViewResponse.builder()
                 .uploadId(upload.getId())

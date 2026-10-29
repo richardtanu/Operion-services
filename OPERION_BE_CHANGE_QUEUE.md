@@ -22,7 +22,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-20 done, 22 Oct 2026** (orders to HQ: draft/send/cancel; who receives; self-receive with photo).
 **BE-21 done, 22 Oct 2026** (HQ catalog + mandatory items: buy from HQ vs buy elsewhere; HQ super admin created locked by V11, 22 Oct).
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
-**BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
+**BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
 **BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
 
@@ -2507,6 +2507,50 @@ unfixed code.
 ### Client follow-up (mobile repo)
 
 None for reads (same endpoints, one list). INV-07 is an HQ-only screen.
+
+---
+
+## BE-30 — Uploads without R2: keep files on this server's disk (local testing)
+
+**Status: DONE, 29 Oct 2026.** Product owner, 29 Oct 2026: "the R2 bucket is not good for
+now. In local test, can we skip the upload … BE receive the file and save it locally?"
+
+### Why
+
+BE-23 only works with a Cloudflare R2 bucket; without one every upload answers 503, so
+goods photos (BE-20), expense receipts (BE-19) and self-receiving can't be tried at all.
+
+### What was done
+
+- **`ObjectStorage`** interface (what `UploadService` uses) with two implementations, chosen
+  by `uploads.storage` / env `UPLOAD_STORAGE`:
+  - `local` (**default**) — `LocalDiskStorage`: files under `uploads.local.dir`
+    (`UPLOAD_LOCAL_DIR`, default `local-uploads/`, git-ignored), one file per upload plus a
+    `.content-type` sidecar. Logs a WARN at startup.
+  - `r2` — BE-23's `R2Storage`, unchanged.
+- **Same contract, so the app needs no change.** `POST /uploads` still returns a 10-minute
+  `putUrl` and `GET /uploads/{id}` a 5-minute `getUrl`; in local mode they point back at this
+  server: `PUT/GET /uploads-local?key=…&expires=…&sig=…` (`LocalUploadController`, local mode
+  only). Like R2 presigned URLs they need **no login**: the link is an HMAC-SHA256 signature
+  over the method, key, and for PUT the declared type and size, plus the expiry. Changed or
+  expired link → 403; wrong Content-Type, larger than declared, or empty → 400. The signing
+  key is random per start (`uploads.local.signing-key` to fix it), so a restart ends open links.
+- Links use the address the phone called (host and port), so a phone on the LAN gets a LAN
+  link; `UPLOAD_PUBLIC_BASE_URL` overrides it. Keys can't leave the upload folder.
+- `SecurityConfig` permits `/uploads-local` (the signature is the permission).
+
+**Production must set `UPLOAD_STORAGE=r2`** (with the R2 variables): a Railway disk is wiped
+on every redeploy and local mode streams every file through the app.
+
+Tests: `LocalUploadTest` (4): local is the default; the phone's flow — ticket, PUT with only
+the returned header and no login, attach to an expense, view with no login, identical bytes and
+type, forged view link 403; a size changed in the link 403, wrong type / one byte too many /
+empty 400, then the right PUT works; expired link 403 and `../` keys refused. `LocalUploadHttpTest`
+(1): the same over a real server on a random port (raw body through Tomcat, 123,457 bytes,
+link carries that port). `R2ModeTest` (1): `UPLOAD_STORAGE=r2` uses R2 (503 without its
+variables) and `/uploads-local` is 404. Tests that mocked `R2Storage` now mock `ObjectStorage`.
+Mutation: with the signature check disabled, the two tamper tests fail. Full suite 174/174.
+Postman: `upload-create` / `upload-view` descriptions, new `upload-put-file`.
 
 ---
 

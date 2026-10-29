@@ -201,7 +201,8 @@ One `Role` enum only. No `roles`/`user_roles` table pair.
 ## Deliberately not built
 
 - **Barcode redemption path** — offline-generated codes → real `PartInstance` rows on sync. The endpoint reserves number space only. Blocked on an unmeasured question: how often outlets actually lose connectivity.
-- Realisasi `attachments` is still a plain text/URL field. File uploads now exist (BE-23: Cloudflare R2, private bucket, presigned PUT/GET, `UploadService.attach` for records that take files); wiring them into Realisasi is a later task (`UploadPurpose.PURCHASE_RECEIPT` is reserved for it).
+- Realisasi `attachments` is still a plain text/URL field. File uploads now exist (BE-23: presigned PUT/GET, `UploadService.attach` for records that take files); wiring them into Realisasi is a later task (`UploadPurpose.PURCHASE_RECEIPT` is reserved for it).
+- **Upload storage** (BE-30): `UploadService` talks to `ObjectStorage`, chosen by `UPLOAD_STORAGE`. `local` (the default) is `LocalDiskStorage`: files in `local-uploads/`, signed links served by this app at `/uploads-local` (no login, HMAC-signed like R2's presigned URLs, built from the address the phone called). `r2` is Cloudflare R2 (BE-23). **Deployed servers must set `UPLOAD_STORAGE=r2`** — Railway's disk is wiped on every redeploy. Tests that need storage mocked mock `ObjectStorage`, not `R2Storage`.
 - A filter surfacing `retroPurchaseFlag=true` records for the Owner. Field exists; nothing queries it.
 
 ## Deployment

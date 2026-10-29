@@ -12,6 +12,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.operion.module.upload.service.ObjectStorage;
 import com.example.operion.module.upload.service.R2Storage;
 
 /**
@@ -28,7 +29,7 @@ class R2StorageTest {
     void putUrl_isSignedForThatKey_typeAndSize_andExpiresIn10Minutes() {
 
         Instant before = Instant.now();
-        R2Storage.Presigned put = storage.presignPut(
+        ObjectStorage.Presigned put = storage.presignPut(
                 "tenant-1/goods_receipt_photo/abc", "image/jpeg", 345_678, Duration.ofMinutes(10));
 
         URI url = URI.create(put.url());
@@ -49,7 +50,7 @@ class R2StorageTest {
     @Test
     void getUrl_isSignedAndShortLived() {
 
-        R2Storage.Presigned get = storage.presignGet("tenant-1/expense_receipt/xyz", Duration.ofMinutes(5));
+        ObjectStorage.Presigned get = storage.presignGet("tenant-1/expense_receipt/xyz", Duration.ofMinutes(5));
 
         assertTrue(get.url().contains("/operion-test/tenant-1/expense_receipt/xyz"));
         assertTrue(get.url().contains("X-Amz-Expires=300"));
