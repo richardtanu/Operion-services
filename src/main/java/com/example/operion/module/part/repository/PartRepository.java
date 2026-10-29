@@ -41,6 +41,8 @@ public interface PartRepository
 
         boolean existsByPartTypeId(UUID partTypeId);
 
+        boolean existsByCategoryId(UUID categoryId);
+
         List<Part> findByTenantIdAndPartTypeId(
                         UUID tenantId,
                         UUID partTypeId);

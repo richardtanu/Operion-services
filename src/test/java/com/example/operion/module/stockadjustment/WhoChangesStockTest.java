@@ -98,17 +98,16 @@ class WhoChangesStockTest {
         hqPrincipal = user("be25-hq-" + s, Role.ADMIN, Scope.PRINCIPAL, hq);
         loneOwner = user("be25-lone-" + s, Role.OPERATOR, Scope.OWNER, smallStore);
 
-        gasCategory = category(store, "Gas", true);
-        hopUp = category(store, "Hop-up", false);
-        hopUpSpring = partTypeRepository.save(PartType.builder().tenant(store).category(hopUp).name("Spring").build());
+        // BE-29: one category list, HQ's; store items use it
+        gasCategory = category(hq, "Gas", true);
+        hopUp = category(hq, "Hop-up", false);
+        hopUpSpring = partTypeRepository.save(PartType.builder().tenant(hq).category(hopUp).name("Spring").build());
         gas = partRepository.save(Part.builder().tenant(store).name("Green gas " + s).category(gasCategory).currentStock(20).build());
         spring = partRepository.save(Part.builder().tenant(store).name("Spring " + s).category(hopUp).currentStock(0).build());
 
-        PartCategory hqGasCategory = category(hq, "Gas", true);
-        PartCategory hqHopUp = category(hq, "Hop-up", false);
-        hqGas = partRepository.save(Part.builder().tenant(hq).name("HQ gas " + s).category(hqGasCategory).soldByHq(true).build());
-        hqSpring = partRepository.save(Part.builder().tenant(hq).name("HQ spring " + s).category(hqHopUp).soldByHq(true).build());
-        hqTool = partRepository.save(Part.builder().tenant(hq).name("HQ tool " + s).category(hqHopUp).build());
+        hqGas = partRepository.save(Part.builder().tenant(hq).name("HQ gas " + s).category(gasCategory).soldByHq(true).build());
+        hqSpring = partRepository.save(Part.builder().tenant(hq).name("HQ spring " + s).category(hopUp).soldByHq(true).build());
+        hqTool = partRepository.save(Part.builder().tenant(hq).name("HQ tool " + s).category(hopUp).build());
     }
 
     // ---- item 1: the two shortcuts ----
@@ -249,17 +248,18 @@ class WhoChangesStockTest {
     }
 
     @Test
-    void categoriesAndTypes_adminOnly() throws Exception {
+    void categoriesAndTypes_hqAdminsOnly() throws Exception {
 
         String body = "{\"name\":\"Targets\",\"consumable\":true}";
 
-        for (User refused : List.of(sm, owner, operator)) {
+        // BE-29 narrowed BE-25's "ADMIN only" to HQ admins: the store's own ADMIN is refused too
+        for (User refused : List.of(sm, owner, operator, admin)) {
             mvc.perform(as(refused, post("/part-categories")).content(body)).andExpect(status().isForbidden());
             mvc.perform(as(refused, post("/part-categories/seed"))).andExpect(status().isForbidden());
             mvc.perform(as(refused, post("/part-types/seed"))).andExpect(status().isForbidden());
         }
 
-        mvc.perform(as(admin, post("/part-categories")).content(body)).andExpect(status().isOk());
+        mvc.perform(as(hqPrincipal, post("/part-categories")).content(body)).andExpect(status().isOk());
         mvc.perform(as(sm, get("/part-categories"))).andExpect(status().isOk());
     }
 

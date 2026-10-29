@@ -76,13 +76,16 @@ public class PartService {
                                 .findById(tenantId)
                                 .orElseThrow();
 
+                // BE-29: categories and types are HQ's, one list for the whole tree
+                UUID rootId = tenantHierarchyService.getRootTenantId(tenantId);
+
                 // PartCategory category;
 
                 // if (request.getCategoryId() != null) {
                 PartCategory category = categoryRepository
                                 .findByIdAndTenantId(
                                                 request.getCategoryId(),
-                                                tenantId)
+                                                rootId)
                                 .orElseThrow(() -> new RuntimeException(
                                                 "Category not found"));
                 // System.out.println(category);
@@ -91,7 +94,7 @@ public class PartService {
                 PartType partType = partTypeRepository
                                 .findByIdAndTenantId(
                                                 request.getPartTypeId(),
-                                                tenantId)
+                                                rootId)
                                 .orElseThrow(() -> new RuntimeException(
                                                 "Part Type not found"));
 
@@ -375,8 +378,10 @@ public class PartService {
                                 .orElseThrow(() -> new RuntimeException("Part not found"));
 
                 /*
-                 * Determine final category
+                 * Determine final category (BE-29: from HQ's one list)
                  */
+
+                UUID rootId = tenantHierarchyService.getRootTenantId(tenantId);
 
                 PartCategory finalCategory = part.getCategory();
 
@@ -385,7 +390,7 @@ public class PartService {
                         finalCategory = categoryRepository
                                         .findByIdAndTenantId(
                                                         request.getCategoryId(),
-                                                        tenantId)
+                                                        rootId)
                                         .orElseThrow(() -> new RuntimeException("Category not found"));
                 }
 
@@ -400,7 +405,7 @@ public class PartService {
                         finalPartType = partTypeRepository
                                         .findByIdAndTenantId(
                                                         request.getPartTypeId(),
-                                                        tenantId)
+                                                        rootId)
                                         .orElseThrow(() -> new RuntimeException("Part Type not found"));
                 }
 

@@ -11,6 +11,7 @@ import com.example.operion.module.part.dto.PartCategoryResponse;
 import com.example.operion.module.part.dto.UpdatePartCategoryRequest;
 import com.example.operion.module.part.entity.PartCategory;
 import com.example.operion.module.part.repository.PartCategoryRepository;
+import com.example.operion.module.part.repository.PartRepository;
 import com.example.operion.module.part.repository.PartTypeRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
@@ -19,6 +20,13 @@ import com.example.operion.module.tenant.service.TenantHierarchyService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * BE-29: one category list, owned by HQ. Categories exist only on the root
+ * tenant; every store reads that list, and only HQ admins change it
+ * ({@link HqCatalogService#requireHqCatalogAdmin}). A copy per store drifted:
+ * a renamed or re-flagged "consumable" made two stores count the same gas
+ * differently.
+ */
 @Service
 @RequiredArgsConstructor
 public class PartCategoryService {
@@ -29,14 +37,19 @@ public class PartCategoryService {
 
     private final PartTypeRepository partTypeRepository;
 
+    private final PartRepository partRepository;
+
     private final TenantHierarchyService tenantHierarchyService;
+
+    private final HqCatalogService hqCatalogService;
 
     @Transactional
     public PartCategoryResponse create(
             CreatePartCategoryRequest request) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         Tenant tenant = tenantRepository
                 .findById(tenantId)
@@ -65,8 +78,9 @@ public class PartCategoryService {
             UUID categoryId,
             UpdatePartCategoryRequest request) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         PartCategory category = categoryRepository
                 .findByIdAndTenantId(
@@ -103,18 +117,21 @@ public class PartCategoryService {
         return map(categoryRepository.save(category));
     }
 
+    /** HQ's list, whoever asks: a store reads its root's categories, never its own. */
     public List<PartCategoryResponse> getAll() {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
-
-        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
-
         return categoryRepository
-                .findByTenantIdIn(tenantIds)
+                .findByTenantId(rootTenantId())
                 .stream()
                 .map(this::map)
                 .toList();
+    }
+
+    /** The caller's root tenant: where the one list lives. */
+    private UUID rootTenantId() {
+
+        return tenantHierarchyService.getRootTenantId(
+                UUID.fromString(TenantContext.getTenantId()));
     }
 
     private PartCategoryResponse map(
@@ -131,8 +148,9 @@ public class PartCategoryService {
     @Transactional
     public void delete(UUID categoryId) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         PartCategory category = categoryRepository
                 .findByIdAndTenantId(
@@ -146,7 +164,23 @@ public class PartCategoryService {
                     "Cannot delete category because it still contains Part Types.");
         }
 
+        // BE-29: every store's items point at HQ's categories now
+        if (partRepository.existsByCategoryId(categoryId)) {
+
+            throw new RuntimeException(
+                    "Cannot delete category because items still use it.");
+        }
+
         categoryRepository.delete(category);
+    }
+
+    /** {@code POST /part-categories/seed}: HQ admins, on HQ's list. */
+    @Transactional
+    public void seedForCaller() {
+
+        hqCatalogService.requireHqCatalogAdmin();
+
+        seedDefaultCategories(rootTenantId());
     }
 
     /**
@@ -155,6 +189,7 @@ public class PartCategoryService {
      * call repeatedly — on a brand-new tenant, on an already-seeded one, or
      * after the default list itself has grown — it only ever adds what's
      * missing, never duplicates or touches unrelated/custom categories.
+     * BE-29: called for root tenants only ({@code MasterDataInitializer}).
      */
     @Transactional
     public void seedDefaultCategories(

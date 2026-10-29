@@ -117,7 +117,7 @@ class HqCatalogTest {
                 .category(category(other, "BB", true)).soldByHq(true).hqPrice(new java.math.BigDecimal("38500")).build());
         assertNotEquals(hqGas.getId(), othersItem.getId());
 
-        // the store has a "Gas" category already (master data) but no "Green gas" type
+        // a store-level "Gas" left over from before BE-29; a first order no longer maps to it
         storeGasCategory = category(store, "Gas", true);
         storeSpare = partRepository.save(Part.builder().tenant(store).name("Store-only spare " + s)
                 .category(category(store, "Hop-up", false)).build());
@@ -198,8 +198,9 @@ class HqCatalogTest {
         assertEquals(store.getId(), storeGas.getTenant().getId());
         assertEquals(hqGas.getId(), storeGas.getCatalogPart().getId());
         assertEquals(hqGas.getName(), storeGas.getName());
-        assertEquals(storeGasCategory.getId(), storeGas.getCategory().getId(), "mapped to the store's same-named category");
-        assertEquals(store.getId(), storeGas.getPartType().getTenant().getId(), "type created for the store");
+        // BE-29 (was: mapped to the store's same-named category, type created for the store)
+        assertEquals(hqGas.getCategory().getId(), storeGas.getCategory().getId(), "HQ's own category");
+        assertEquals(hqGas.getPartType().getId(), storeGas.getPartType().getId(), "HQ's own type");
         assertEquals("Green gas", storeGas.getPartType().getName());
         assertEquals(0, storeGas.getCurrentStock());
 

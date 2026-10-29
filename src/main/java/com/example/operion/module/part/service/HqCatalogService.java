@@ -15,10 +15,7 @@ import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.part.dto.CatalogItemResponse;
 import com.example.operion.module.part.entity.Part;
 import com.example.operion.module.part.entity.PartCategory;
-import com.example.operion.module.part.entity.PartType;
-import com.example.operion.module.part.repository.PartCategoryRepository;
 import com.example.operion.module.part.repository.PartRepository;
-import com.example.operion.module.part.repository.PartTypeRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
 import com.example.operion.module.tenant.service.TenantHierarchyService;
@@ -46,10 +43,6 @@ public class HqCatalogService {
     static final String NOT_SOLD = "Only items HQ sells can be ordered from HQ: ";
 
     private final PartRepository partRepository;
-
-    private final PartCategoryRepository categoryRepository;
-
-    private final PartTypeRepository partTypeRepository;
 
     private final TenantRepository tenantRepository;
 
@@ -170,49 +163,23 @@ public class HqCatalogService {
 
     /**
      * The store's copy of an HQ item: name, brand, lifespan and reorder
-     * quantity copied; category and type mapped to the store's same-named ones
-     * (created if the store doesn't have them). Stock starts at 0.
+     * quantity copied. BE-29: category and type are the HQ item's own (one
+     * list for the whole tree, so the store counts it exactly as HQ does); no
+     * name matching, no copies. Stock starts at 0.
      */
     private Part newStorePart(Part item, UUID storeTenantId) {
 
         Tenant store = tenantRepository.findById(storeTenantId).orElseThrow();
 
-        PartCategory hqCategory = item.getCategory();
-
-        PartCategory category = categoryRepository.findByTenantId(storeTenantId).stream()
-                .filter(c -> c.getName().equalsIgnoreCase(hqCategory.getName()))
-                .findFirst()
-                .orElseGet(() -> categoryRepository.save(PartCategory.builder()
-                        .tenant(store)
-                        .name(hqCategory.getName())
-                        .description(hqCategory.getDescription())
-                        .consumable(hqCategory.getConsumable())
-                        .build()));
-
-        PartType partType = null;
-
-        if (item.getPartType() != null) {
-
-            String typeName = item.getPartType().getName();
-
-            partType = partTypeRepository.findByCategoryIdAndTenantId(category.getId(), storeTenantId).stream()
-                    .filter(t -> t.getName() != null && t.getName().equalsIgnoreCase(typeName))
-                    .findFirst()
-                    .orElseGet(() -> partTypeRepository.save(PartType.builder()
-                            .tenant(store)
-                            .category(category)
-                            .name(typeName)
-                            .description(item.getPartType().getDescription())
-                            .build()));
-        }
+        PartCategory category = item.getCategory();
 
         return Part.builder()
                 .tenant(store)
                 .name(item.getName())
                 .brand(item.getBrand())
                 .category(category)
-                .legacyCategory(category.getName())
-                .partType(partType)
+                .legacyCategory(category != null ? category.getName() : null)
+                .partType(item.getPartType())
                 .expectedLifespanDays(item.getExpectedLifespanDays())
                 .reorderQuantity(item.getReorderQuantity())
                 .minimumStock(0)

@@ -15,7 +15,8 @@ import lombok.extern.slf4j.Slf4j;
  * seedDefaultCategories/seedDefaultPartTypes are idempotent (insert-only-if-
  * missing, by name), so this is how an already-provisioned tenant picks up
  * new defaults added to those lists later, without anyone re-triggering it
- * per tenant by hand.
+ * per tenant by hand. BE-29: only root tenants are seeded (MasterDataInitializer
+ * skips stores); a store reads its root's list.
  */
 @Slf4j
 @Component
