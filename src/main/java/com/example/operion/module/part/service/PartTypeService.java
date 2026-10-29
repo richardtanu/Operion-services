@@ -23,6 +23,10 @@ import com.example.operion.module.tenant.service.TenantHierarchyService;
 import lombok.RequiredArgsConstructor;
 import jakarta.transaction.Transactional;
 
+/**
+ * BE-29: part types live with the categories, once, on the root tenant (HQ).
+ * Stores read HQ's types; only HQ admins change them.
+ */
 @Service
 @RequiredArgsConstructor
 public class PartTypeService {
@@ -37,6 +41,8 @@ public class PartTypeService {
 
     private final TenantHierarchyService tenantHierarchyService;
 
+    private final HqCatalogService hqCatalogService;
+
     /*
      * CREATE
      */
@@ -45,8 +51,9 @@ public class PartTypeService {
     public PartTypeResponse create(
             CreatePartTypeRequest request) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         Tenant tenant = tenantRepository
                 .findById(tenantId)
@@ -101,6 +108,7 @@ public class PartTypeService {
      * after the default list itself has grown — it only ever adds what's
      * missing, never duplicates or touches unrelated/custom part types.
      * Assumes the default categories have already been seeded.
+     * BE-29: called for root tenants only ({@code MasterDataInitializer}).
      */
     @Transactional
     public void seedDefaultPartTypes(UUID tenantId) {
@@ -184,6 +192,22 @@ public class PartTypeService {
         }
     }
 
+    /** {@code POST /part-types/seed}: HQ admins, on HQ's list. */
+    @Transactional
+    public void seedForCaller() {
+
+        hqCatalogService.requireHqCatalogAdmin();
+
+        seedDefaultPartTypes(rootTenantId());
+    }
+
+    /** The caller's root tenant: where the one list lives. */
+    private UUID rootTenantId() {
+
+        return tenantHierarchyService.getRootTenantId(
+                UUID.fromString(TenantContext.getTenantId()));
+    }
+
     private PartCategory requiredCategory(UUID tenantId, String name) {
 
         return categoryRepository
@@ -207,13 +231,8 @@ public class PartTypeService {
 
     public List<PartTypeResponse> getAll() {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
-
-        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
-
         return repository
-                .findByTenantIdIn(tenantIds)
+                .findByTenantId(rootTenantId())
 
                 .stream()
 
@@ -229,22 +248,19 @@ public class PartTypeService {
     public List<PartTypeResponse> getByCategory(
             UUID categoryId) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
-
-        List<UUID> tenantIds = tenantHierarchyService.getEffectiveTenantIds(tenantId);
+        UUID rootId = rootTenantId();
 
         categoryRepository
-                .findByIdAndTenantIdIn(
+                .findByIdAndTenantId(
                         categoryId,
-                        tenantIds)
+                        rootId)
                 .orElseThrow(() -> new RuntimeException(
                         "Category not found"));
 
         return repository
-                .findByCategoryIdAndTenantIdIn(
+                .findByCategoryIdAndTenantId(
                         categoryId,
-                        tenantIds)
+                        rootId)
 
                 .stream()
 
@@ -264,8 +280,9 @@ public class PartTypeService {
 
             UpdatePartTypeRequest request) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         PartType partType = repository
                 .findByIdAndTenantId(
@@ -315,8 +332,9 @@ public class PartTypeService {
     @Transactional
     public void delete(UUID id) {
 
-        UUID tenantId = UUID.fromString(
-                TenantContext.getTenantId());
+        hqCatalogService.requireHqCatalogAdmin();
+
+        UUID tenantId = rootTenantId();
 
         PartType partType = repository
                 .findByIdAndTenantId(

@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done.
 
 ---
 
@@ -2457,7 +2457,7 @@ ordered. Existing fixtures that sell an HQ item now give it a price (`OrdersAndR
 
 ## BE-29 — One category list, owned by HQ
 
-**Status: OPEN.** Product owner's decision, 23 Oct 2026 (module 2, INV-07). **Build before
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner's decision, 23 Oct 2026 (module 2, INV-07). **Build before
 go-live:** the production database is wiped then, so no store's data has to be moved.
 
 ### Why
@@ -2507,6 +2507,55 @@ unfixed code.
 ### Client follow-up (mobile repo)
 
 None for reads (same endpoints, one list). INV-07 is an HQ-only screen.
+
+### What was done
+
+All five task items, as written.
+
+- **Reads** (`PartCategoryService.getAll`, `PartTypeService.getAll` / `getByCategory`)
+  resolve the caller's root (`getRootTenantId`) and return its list only. A store-level row
+  left over from before is never returned.
+- **Writes** (category create, update, delete, seed; type create, update, delete, seed) call
+  `HqCatalogService.requireHqCatalogAdmin` in the service: ADMIN role or PRINCIPAL scope,
+  signed in at the root. The controllers' `@PreAuthorize("hasRole('ADMIN')")` (BE-25 item 5)
+  is gone, so a store's ADMIN is now refused (403) and HQ's PRINCIPAL is allowed. Delete is
+  refused while a type uses the category (as before) or any item does (new
+  `PartRepository.existsByCategoryId`, 400 "Cannot delete category because items still use it.").
+- **Items** (`PartService.create` / `update`) look the category and type up on the root;
+  another tree's ids, or a store's own leftover copy, → 400 "Category not found".
+  `HqCatalogService.newStorePart` gives the store's first copy of an HQ item that item's own
+  category and type: no name matching, no copies (it no longer needs the category and type
+  repositories).
+- **Seeding**: `MasterDataInitializer.initialize` returns at once for a tenant with a
+  parent, so creating a store (`TenantService.create`) and the startup sync
+  (`MasterDataSyncRunner`) seed roots only.
+- **`V16__one_category_list.sql`**: finds each tenant's root (recursive CTE), creates at the
+  root any category or type a store has that the root lacks (matched ignoring case, within
+  the root's same category for types), repoints `parts.category_id` / `part_type_id`, sets the
+  legacy `parts.category` text to HQ's name, then deletes the store-level rows. It raises if
+  any store row has nowhere to go. No CHECK or UNIQUE constraint changes (rule 3).
+  Dry-run on the local DB inside a rolled-back transaction, then applied by Flyway: 91 store
+  types and 12 store categories removed, 32 items repointed, OUTLET_2's custom "Test Gear"
+  type created at FRANCHISE_HQ, both stores left with no rows of their own. The local DB was
+  backed up first (`pg_dump -Fc`).
+- `OPERION_BE_PLAN.md` §5.3 (duplicate `part_categories`): nothing left to clean on the local
+  DB; production is wiped before go-live.
+
+Tests: `OneCategoryListTest` (7): a store reads HQ's categories and types, never its own copy
+or another tree's; HQ adds a category and the store sees it; a store's ADMIN, Owner and
+Manager get 403 on create, rename, flipping `consumable`, delete, new type and seed, nothing
+changes, and HQ's non-ADMIN PRINCIPAL may; the first order of an HQ item uses HQ's category
+and type and creates no rows for the store; a new store gets no categories or types, the
+startup initializer leaves a store alone and seeds a new root (6 categories, 45 types); a store
+item takes HQ's category and type, 400 for another tree's or the store's leftover; deleting a
+category a store item uses → 400, an unused one → 204. All 7 fail against the old code.
+Changed by design: `HqCatalogTest` (first order now asserts HQ's category and type, not the
+store's same-named copy) and `WhoChangesStockTest` (fixture categories are HQ's; a store's
+ADMIN is now refused category writes, HQ's PRINCIPAL allowed). Full suite 181/181.
+
+Found while testing: a mutation run (fix stashed, tests re-run on the old code) boots the app
+against the same local DB, and the old `MasterDataSyncRunner` re-created store copies. No item
+pointed at them; they were deleted by hand, and a rerun on the fixed code leaves stores empty.
 
 ---
 

@@ -3,7 +3,6 @@ package com.example.operion.module.part.controller;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.operion.common.response.ApiResponse;
-import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.part.dto.CreatePartTypeRequest;
 import com.example.operion.module.part.dto.PartTypeResponse;
 import com.example.operion.module.part.dto.UpdatePartTypeRequest;
@@ -33,8 +31,7 @@ public class PartTypeController {
    * CREATE
    */
 
-  // BE-25: categories and types change how stock is counted, so ADMIN only
-  @PreAuthorize("hasRole('ADMIN')")
+  // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
   @PostMapping
   public ApiResponse<PartTypeResponse> create(
       @RequestBody CreatePartTypeRequest request) {
@@ -51,15 +48,11 @@ public class PartTypeController {
    * SEED DEFAULTS
    */
 
-  // BE-25: categories and types change how stock is counted, so ADMIN only
-  @PreAuthorize("hasRole('ADMIN')")
+  // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
   @PostMapping("/seed")
   public ApiResponse<Void> seed() {
 
-    UUID tenantId = UUID.fromString(
-        TenantContext.getTenantId());
-
-    service.seedDefaultPartTypes(tenantId);
+    service.seedForCaller();
 
     return ApiResponse.<Void>builder()
         .success(true)
@@ -102,8 +95,7 @@ public class PartTypeController {
    * UPDATE
    */
 
-  // BE-25: categories and types change how stock is counted, so ADMIN only
-  @PreAuthorize("hasRole('ADMIN')")
+  // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
   @PutMapping("/{id}")
   public ApiResponse<PartTypeResponse> update(
 
@@ -123,8 +115,7 @@ public class PartTypeController {
    * DELETE
    */
 
-  // BE-25: categories and types change how stock is counted, so ADMIN only
-  @PreAuthorize("hasRole('ADMIN')")
+  // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
   @DeleteMapping("/{id}")
   public ApiResponse<Void> delete(
       @PathVariable UUID id) {

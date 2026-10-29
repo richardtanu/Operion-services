@@ -7,7 +7,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.operion.common.response.ApiResponse;
-import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.inventory.services.PartStockService;
 import com.example.operion.module.part.dto.CreatePartCategoryRequest;
 import com.example.operion.module.part.dto.PartCategoryResponse;
@@ -46,8 +44,7 @@ public class PartCategoryController {
 
         private final PartRepository partRepository;
 
-        // BE-25: categories and types change how stock is counted, so ADMIN only
-        @PreAuthorize("hasRole('ADMIN')")
+        // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
         @PostMapping
         public ApiResponse<PartCategoryResponse> create(@RequestBody CreatePartCategoryRequest request) {
                 return ApiResponse.<PartCategoryResponse>builder()
@@ -68,8 +65,7 @@ public class PartCategoryController {
                                 .build();
         }
 
-        // BE-25: categories and types change how stock is counted, so ADMIN only
-        @PreAuthorize("hasRole('ADMIN')")
+        // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
         @PutMapping("/{id}")
         public PartCategoryResponse update(
                         @PathVariable UUID id,
@@ -78,8 +74,7 @@ public class PartCategoryController {
                 return service.update(id, request);
         }
 
-        // BE-25: categories and types change how stock is counted, so ADMIN only
-        @PreAuthorize("hasRole('ADMIN')")
+        // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
         @DeleteMapping("/{id}")
         public ResponseEntity<Void> delete(
                         @PathVariable UUID id) {
@@ -89,15 +84,11 @@ public class PartCategoryController {
                 return ResponseEntity.noContent().build();
         }
 
-        // BE-25: categories and types change how stock is counted, so ADMIN only
-        @PreAuthorize("hasRole('ADMIN')")
+        // BE-29: HQ admins only, checked in the service (requireHqCatalogAdmin)
         @PostMapping("/seed")
         public ApiResponse<Void> seed() {
 
-                UUID tenantId = UUID.fromString(
-                                TenantContext.getTenantId());
-
-                service.seedDefaultCategories(tenantId);
+                service.seedForCaller();
 
                 return ApiResponse.<Void>builder()
                                 .success(true)
