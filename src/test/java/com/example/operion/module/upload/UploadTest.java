@@ -48,7 +48,7 @@ import com.example.operion.module.tenant.repository.TenantRepository;
 import com.example.operion.module.upload.entity.Upload;
 import com.example.operion.module.upload.enums.UploadPurpose;
 import com.example.operion.module.upload.repository.UploadRepository;
-import com.example.operion.module.upload.service.R2Storage;
+import com.example.operion.module.upload.service.ObjectStorage;
 import com.example.operion.module.upload.service.UploadService;
 import com.jayway.jsonpath.JsonPath;
 
@@ -70,7 +70,7 @@ class UploadTest {
     @Autowired private UploadService uploadService;
     @Autowired private JdbcTemplate jdbc;
 
-    @MockitoBean private R2Storage storage;
+    @MockitoBean private ObjectStorage storage;
 
     private Tenant outlet;
     private User outletUser;
@@ -94,10 +94,10 @@ class UploadTest {
 
         when(storage.isConfigured()).thenReturn(true);
         when(storage.presignPut(anyString(), anyString(), anyLong(), any()))
-                .thenAnswer(i -> new R2Storage.Presigned("https://r2.example/put/" + i.getArgument(0),
+                .thenAnswer(i -> new ObjectStorage.Presigned("https://r2.example/put/" + i.getArgument(0),
                         Instant.now().plusSeconds(600)));
         when(storage.presignGet(anyString(), any()))
-                .thenAnswer(i -> new R2Storage.Presigned("https://r2.example/get/" + i.getArgument(0),
+                .thenAnswer(i -> new ObjectStorage.Presigned("https://r2.example/get/" + i.getArgument(0),
                         Instant.now().plusSeconds(300)));
         when(storage.exists(anyString())).thenReturn(true);
     }

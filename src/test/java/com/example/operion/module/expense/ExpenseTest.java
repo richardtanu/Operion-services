@@ -40,7 +40,7 @@ import com.example.operion.module.tenant.repository.TenantRepository;
 import com.example.operion.module.upload.entity.Upload;
 import com.example.operion.module.upload.enums.UploadPurpose;
 import com.example.operion.module.upload.repository.UploadRepository;
-import com.example.operion.module.upload.service.R2Storage;
+import com.example.operion.module.upload.service.ObjectStorage;
 import com.jayway.jsonpath.JsonPath;
 
 /**
@@ -64,7 +64,7 @@ class ExpenseTest {
     @Autowired private UploadRepository uploadRepository;
     @Autowired private NotificationRepository notificationRepository;
 
-    @MockitoBean private R2Storage storage;
+    @MockitoBean private ObjectStorage storage;
 
     private Tenant store;
     private User sm;

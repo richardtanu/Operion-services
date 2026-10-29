@@ -3665,7 +3665,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"purpose\": \"GOODS_RECEIPT_PHOTO\",\r\n  \"contentType\": \"image/jpeg\",\r\n  \"sizeBytes\": 350000\r\n}",
+                                                                   "raw":  "{\n  \"purpose\": \"GOODS_RECEIPT_PHOTO\",\n  \"contentType\": \"image/jpeg\",\n  \"sizeBytes\": 350000\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -3685,7 +3685,37 @@
                                                                                "uploads"
                                                                            ]
                                                               },
-                                                      "description":  "BE-23. Returns uploadId + a 10-minute presigned PUT URL. Then PUT the file to putUrl with the returned Content-Type header and exactly sizeBytes of body. purpose: GOODS_RECEIPT_PHOTO | EXPENSE_RECEIPT | PURCHASE_RECEIPT. Types: image/jpeg, image/png, image/webp, application/pdf. Max 5 MB. 503 if R2 isn\u0027t configured."
+                                                      "description":  "BE-23/30. Returns uploadId + a 10-minute signed PUT URL. Then PUT the file to putUrl with the returned Content-Type header, no Authorization, at most sizeBytes of body. purpose: GOODS_RECEIPT_PHOTO | EXPENSE_RECEIPT | PURCHASE_RECEIPT. Types: image/jpeg, image/png, image/webp, application/pdf. Max 5 MB. With UPLOAD_STORAGE=local (default) putUrl points back at this server (/uploads-local) and the file is saved under local-uploads/; with UPLOAD_STORAGE=r2 it points at Cloudflare R2 (503 if R2 isn\u0027t configured)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "upload-put-file",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/uploads-local",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "uploads-local"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-30, local mode. Don\u0027t build this URL by hand: paste the whole putUrl from upload-create (it carries key, ct, size, expires, sig), set Body → binary → pick the file, header Content-Type = the declared type, and remove the Authorization header. 200 when saved; 403 if the link was changed or expired; 400 if the type differs, the file is larger than declared, or empty."
                                                   },
                                       "response":  [
 
@@ -3722,7 +3752,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "BE-23. A 5-minute presigned GET URL. Unattached uploads: only the uploader. Attached: anyone in the tenant tree (own + descendants)."
+                                                      "description":  "BE-23/30. A 5-minute signed GET URL (opens in a browser, no login). Unattached uploads: only the uploader. Attached: anyone in the tenant tree (own + descendants)."
                                                   },
                                       "response":  [
 

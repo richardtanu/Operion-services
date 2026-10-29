@@ -2,9 +2,9 @@ package com.example.operion.module.upload.service;
 
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,7 +39,8 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
  * still boots, so local development doesn't need an R2 account.
  */
 @Component
-public class R2Storage {
+@ConditionalOnProperty(name = "uploads.storage", havingValue = "r2")
+public class R2Storage implements ObjectStorage {
 
     private final String bucket;
 
@@ -91,6 +92,7 @@ public class R2Storage {
                 .build();
     }
 
+    @Override
     public boolean isConfigured() {
         return presigner != null;
     }
@@ -100,6 +102,7 @@ public class R2Storage {
      * of the signature, so the upload must match what was declared: a bigger
      * file, or a different type, is rejected by R2 itself.
      */
+    @Override
     public Presigned presignPut(String key, String contentType, long sizeBytes, Duration ttl) {
 
         requireConfigured();
@@ -119,6 +122,7 @@ public class R2Storage {
         return new Presigned(presigned.url().toString(), presigned.expiration());
     }
 
+    @Override
     public Presigned presignGet(String key, Duration ttl) {
 
         requireConfigured();
@@ -132,6 +136,7 @@ public class R2Storage {
     }
 
     /** True if the object was actually uploaded. Used before attaching. */
+    @Override
     public boolean exists(String key) {
 
         requireConfigured();
@@ -150,6 +155,7 @@ public class R2Storage {
     }
 
     /** Deleting a key that doesn't exist is not an error in S3/R2. */
+    @Override
     public void delete(String key) {
 
         requireConfigured();
@@ -158,14 +164,12 @@ public class R2Storage {
     }
 
     /** 503 "File uploads are not configured on this server" when R2 env vars are missing. */
+    @Override
     public void requireConfigured() {
 
         if (!isConfigured()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "File uploads are not configured on this server");
         }
-    }
-
-    public record Presigned(String url, Instant expiresAt) {
     }
 }
