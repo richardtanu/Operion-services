@@ -37,8 +37,9 @@ import lombok.RequiredArgsConstructor;
  * <li>The server only hands out short-lived presigned URLs; the phone moves
  *     the bytes to and from R2 directly.</li>
  * <li>An upload is attached once, only by its uploader, only within its own
- *     tenant ({@link #attach}). Every refusal answers like a missing id, so a
- *     caller can't probe other people's upload ids.</li>
+ *     tenant ({@link #attach}); a record saved on a store below the uploader's
+ *     takes the upload with it (BE-40). Every refusal answers like a missing id,
+ *     so a caller can't probe other people's upload ids.</li>
  * <li>Unattached uploads older than 24 h are deleted ({@link #sweepAbandoned}).</li>
  * </ul>
  */
@@ -153,7 +154,25 @@ public class UploadService {
     @Transactional
     public Upload attach(UUID uploadId, UploadPurpose expectedPurpose, String attachedType, UUID attachedId) {
 
+        return attach(uploadId, expectedPurpose, attachedType, attachedId, null);
+    }
+
+    /**
+     * BE-40: as above, for a record saved on a store below the caller's own (HQ
+     * logging a store's purchase, BE-17). The upload moves to that store, so the
+     * store can open it too; the uploader still can, from above. Null = the
+     * caller's own store, as above.
+     */
+    @Transactional
+    public Upload attach(UUID uploadId, UploadPurpose expectedPurpose, String attachedType, UUID attachedId,
+            UUID recordTenantId) {
+
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
+
+        if (recordTenantId != null
+                && !tenantHierarchyService.getEffectiveTenantIds(tenantId).contains(recordTenantId)) {
+            throw new RuntimeException(NOT_FOUND);
+        }
 
         Upload upload = repository.findById(uploadId)
                 .filter(u -> u.getTenant().getId().equals(tenantId))
@@ -169,7 +188,9 @@ public class UploadService {
             throw new RuntimeException(NOT_FOUND);
         }
 
-        int changed = repository.attachIfUnattached(uploadId, attachedType, attachedId, LocalDateTime.now());
+        int changed = repository.attachIfUnattached(uploadId, attachedType, attachedId,
+                tenantRepository.getReferenceById(recordTenantId != null ? recordTenantId : tenantId),
+                LocalDateTime.now());
 
         if (changed == 0) {
             throw new RuntimeException("Upload is already attached");
