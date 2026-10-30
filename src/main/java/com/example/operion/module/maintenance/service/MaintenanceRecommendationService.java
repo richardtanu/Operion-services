@@ -1,5 +1,7 @@
 package com.example.operion.module.maintenance.service;
 
+import com.example.operion.common.security.MaintenanceAccess;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -78,6 +80,8 @@ public class MaintenanceRecommendationService {
         @Transactional
         public MaintenanceScheduleResponse create(
                         CreateMaintenanceScheduleRequest request) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -171,6 +175,8 @@ public class MaintenanceRecommendationService {
 
         @Transactional
         public int processDueSchedules() {
+
+                MaintenanceAccess.require();
 
                 LocalDate today = LocalDate.now();
 

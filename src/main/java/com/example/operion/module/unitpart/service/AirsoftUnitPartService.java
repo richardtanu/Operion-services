@@ -1,5 +1,7 @@
 package com.example.operion.module.unitpart.service;
 
+import com.example.operion.common.security.MaintenanceAccess;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -80,6 +82,8 @@ public class AirsoftUnitPartService {
         public AirsoftUnitPartResponse installPart(
                         InstallPartRequest request) {
 
+                MaintenanceAccess.require();
+
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
@@ -159,6 +163,8 @@ public class AirsoftUnitPartService {
         public AirsoftUnitPartResponse replacePart(
                         UUID installedPartId,
                         ReplacePartRequest request) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -444,6 +450,8 @@ public class AirsoftUnitPartService {
         public AirsoftUnitPartResponse updateCondition(
                         UUID unitPartId,
                         UpdatePartConditionRequest request) {
+
+                MaintenanceAccess.require();
 
                 // AirsoftUnitPart item = repository.findById(unitPartId)
                 // .orElseThrow();

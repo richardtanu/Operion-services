@@ -1,6 +1,7 @@
 package com.example.operion.config;
 
 import com.example.operion.module.auth.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +37,14 @@ public class SecurityConfig {
                         .requestMatchers("/uploads-local")
                         .permitAll()
                         .anyRequest().authenticated())
+
+                // BE-37: no token answers 401 (was Spring's default 403), so the app
+                // can tell "not signed in" from "not allowed"
+                .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Sign in first\"}");
+                }))
 
                 .addFilterBefore(
                         jwtAuthenticationFilter,

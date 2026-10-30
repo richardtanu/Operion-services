@@ -90,12 +90,11 @@ class AuthHardeningTest {
     @Test
     void register_withoutToken_isRejected() throws Exception {
 
-        // Spring Security's default entry point (no httpBasic/formLogin
-        // configured) answers 403 for an unauthenticated request, not 401
+        // BE-37: no token answers 401 (Spring's default entry point gave 403)
         mvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(registerBody("anon-" + UUID.randomUUID() + "@test.com", null, true)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

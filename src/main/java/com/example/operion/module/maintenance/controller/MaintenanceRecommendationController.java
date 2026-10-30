@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.common.security.MaintenanceAccess;
 import com.example.operion.module.maintenance.dto.CreateMaintenanceScheduleRequest;
 import com.example.operion.module.maintenance.dto.MaintenanceEvaluationResult;
 import com.example.operion.module.maintenance.dto.MaintenanceRecommendationResponse;
@@ -78,6 +79,9 @@ public class MaintenanceRecommendationController {
   @PostMapping("/evaluate/{unitId}")
   public ApiResponse<MaintenanceEvaluationResult> evaluateUnit(
       @PathVariable UUID unitId) {
+
+    // BE-37: checked here, not in evaluateUnit, which the nightly job also runs with nobody signed in
+    MaintenanceAccess.require();
 
     return ApiResponse
         .<MaintenanceEvaluationResult>builder()

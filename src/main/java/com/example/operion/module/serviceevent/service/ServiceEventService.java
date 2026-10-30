@@ -1,5 +1,7 @@
 package com.example.operion.module.serviceevent.service;
 
+import com.example.operion.common.security.MaintenanceAccess;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -43,6 +45,8 @@ public class ServiceEventService {
 
     public ServiceEventResponse create(
             CreateServiceEventRequest request) {
+
+            MaintenanceAccess.require();
 
         UUID tenantId = UUID.fromString(TenantContext.getTenantId());
 
