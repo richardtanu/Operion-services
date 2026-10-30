@@ -23,6 +23,13 @@ public class UserService {
 
     private final TenantHierarchyService tenantHierarchyService;
 
+    /**
+     * BE-31: a scope is granted only up to the granter's own, never to
+     * themself, and never over someone already above them. The granter's
+     * scope is read from their stored row, not the token: a token lives 24
+     * hours, and an Admin demoted since must not keep granting with the old
+     * scope. An ADMIN with no scope can grant none.
+     */
     public UserProfileResponse updateScope(UUID userId, Scope scope) {
 
         User user = userRepository.findById(userId)
@@ -30,10 +37,32 @@ public class UserService {
 
         tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
 
+        User caller = userRepository.findById(UUID.fromString(
+                SecurityContextHolder.getContext().getAuthentication().getName()))
+                .orElseThrow(() -> new AccessDeniedException("Signed-in user not found"));
+
+        if (user.getId().equals(caller.getId())) {
+            throw new AccessDeniedException("You cannot change your own scope");
+        }
+
+        if (!atOrBelow(scope, caller.getScope())) {
+            throw new AccessDeniedException("You can only grant a scope up to your own");
+        }
+
+        if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
+            throw new AccessDeniedException("You cannot change the scope of someone above you");
+        }
+
         user.setScope(scope);
         userRepository.save(user);
 
         return map(user);
+    }
+
+    /** BE-31: no ceiling (no scope) means nothing can be granted. */
+    private static boolean atOrBelow(Scope scope, Scope ceiling) {
+
+        return ceiling != null && scope.ordinal() <= ceiling.ordinal();
     }
 
     /**

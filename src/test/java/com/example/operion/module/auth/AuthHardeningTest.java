@@ -166,7 +166,10 @@ class AuthHardeningTest {
     @Test
     void updateScope_asHqAdmin_onOwnTenantUser_isAllowed() throws Exception {
 
-        mvc.perform(as(hqAdmin, patch("/users/" + hqOperator.getId() + "/scope"))
+        // BE-31: granting needs a scope at least as high as the one granted
+        User hqOwnerAdmin = user("be12-hq-owner-admin-" + UUID.randomUUID(), Role.ADMIN, Scope.OWNER, hq);
+
+        mvc.perform(as(hqOwnerAdmin, patch("/users/" + hqOperator.getId() + "/scope"))
                 .content("{\"scope\":\"OWNER\"}"))
                 .andExpect(status().isOk());
 
