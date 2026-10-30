@@ -183,7 +183,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "ADMIN only. Target user must be in your tenant tree. scope: SUPERVISOR | MANAGER | OWNER | PRINCIPAL | null"
+                                                      "description":  "ADMIN only (BE-12), inside your tenant tree. BE-31: you can grant a scope only up to your own stored scope (an ADMIN with no scope can grant none), never your own, and never to someone already above you; all 403. Locally, grant with the HQ super admin."
                                                   },
                                       "response":  [
 

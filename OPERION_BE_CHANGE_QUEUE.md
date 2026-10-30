@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done.
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself).
 
 ---
 
@@ -2600,6 +2600,69 @@ link carries that port). `R2ModeTest` (1): `UPLOAD_STORAGE=r2` uses R2 (503 with
 variables) and `/uploads-local` is 404. Tests that mocked `R2Storage` now mock `ObjectStorage`.
 Mutation: with the signature check disabled, the two tamper tests fail. Full suite 174/174.
 Postman: `upload-create` / `upload-view` descriptions, new `upload-put-file`.
+
+---
+
+## BE-31 — An Admin can't grant scope above their own
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "execute 1": stop an Admin granting scope
+above their own. Left out of BE-12 on purpose ("would lock out today's null-scope admins");
+since BE-21 a real HQ super admin (ADMIN + PRINCIPAL) exists to grant scopes, so the reason
+is gone. Before go-live.
+
+### Why
+
+`[C]` `UserService.updateScope` checks only that the target is inside the caller's tree
+(`requireWithinCallerTenantTree`). So any ADMIN, a store's included and with no scope at
+all, can make anyone in their store a PRINCIPAL, **themself included** (their own tenant is
+in their tree), then pass every Owner+ and Principal check in the app.
+
+### Task
+
+In `UserService.updateScope`, after the tree check, all 403 (`AccessDeniedException`):
+
+1. **Never your own scope** ("You cannot change your own scope"), like `updateRole`.
+2. **Up to your own, not above**: the new scope must be at or below the caller's own
+   ("You can only grant a scope up to your own"). An ADMIN with no scope can grant none.
+3. **Not over someone above you**: when the target already has a scope above the caller's,
+   refused ("You cannot change the scope of someone above you"), so an Owner can't demote a
+   Principal in their store.
+
+The caller's scope is read from the `users` row, not the token: a token lives 24 hours, so
+an Admin demoted this morning must not keep granting with yesterday's scope (the same
+reasoning as the segregation rule's stored scope).
+
+### Tests
+
+Store ADMIN with no scope → MANAGER refused, and grants itself PRINCIPAL refused; ADMIN +
+OWNER → MANAGER and OWNER allowed, PRINCIPAL refused; own scope refused even for the
+super admin; an OWNER-admin over a PRINCIPAL in the store refused; ADMIN + PRINCIPAL at HQ →
+PRINCIPAL to a store user allowed; a token claiming PRINCIPAL whose stored scope is OWNER
+can't grant PRINCIPAL. Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+The scope picker shows only scopes up to the signed-in user's own, and hides itself on
+their own profile; a 403 explains why.
+
+### What was done
+
+All three rules, as written, in `UserService.updateScope` (after the tree check, so a user
+outside the caller's tree is still refused first). The caller is loaded from `users` by the
+token's subject; `atOrBelow(scope, ceiling)` is false when the caller has no scope. Messages:
+"You cannot change your own scope", "You can only grant a scope up to your own", "You
+cannot change the scope of someone above you". No migration.
+
+Tests: `ScopeGrantCeilingTest` (5): an ADMIN with no scope can't grant MANAGER or give
+itself PRINCIPAL; ADMIN + OWNER grants MANAGER and OWNER, not PRINCIPAL; nobody changes
+their own scope, the super admin included; an OWNER-admin can't touch a PRINCIPAL in the
+store, while HQ's PRINCIPAL can and can grant PRINCIPAL; a token claiming PRINCIPAL for a
+user stored as OWNER can't grant PRINCIPAL. All 5 fail against the old code. Changed by
+design: `AuthHardeningTest.updateScope_asHqAdmin_onOwnTenantUser_isAllowed` now grants with
+an ADMIN + OWNER (its scope-less ADMIN is refused). Full suite 186/186.
+
+**Local test setup changed:** `admin@test.com` (ADMIN, no scope) can no longer grant scope.
+Grant with the HQ super admin (set its first password with `BOOTSTRAP_ADMIN_*`).
 
 ---
 
