@@ -1,6 +1,7 @@
 package com.example.operion.module.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -8,7 +9,9 @@ public class RegisterRequest {
     @NotBlank(message = "Email is required")
     private String email;
 
+    // BE-36: the same rule as every new password (BCrypt reads at most 72 bytes)
     @NotBlank(message = "Password is required")
+    @Size(min = 8, max = 72, message = "Password must be 8 to 72 characters")
     private String password;
 
     @NotBlank(message = "Full name is required")

@@ -24,10 +24,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /** BE-33: the same, switched-off users left out (who counts as the store's Owners). */
     List<User> findByTenantIdAndScopeInAndActiveTrue(UUID tenantId, Collection<Scope> scopes);
-
-    /** BE-33: the request filter's check, once per request with a token. */
-    boolean existsByIdAndActiveTrue(UUID id);
-
+
     /** BE-33: {@code GET /users}. */
     @Query("select u from User u where u.tenant.id in :tenantIds and (:active is null or u.active = :active)"
             + " order by u.fullName")

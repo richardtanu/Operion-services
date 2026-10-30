@@ -27,7 +27,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n  \"email\": \"new.user@test.com\",\r\n  \"password\": \"123456\",\r\n  \"fullName\": \"New User\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
+                                                                   "raw":  "{\r\n  \"email\": \"new.user@test.com\",\r\n  \"password\": \"Start-1234\",\r\n  \"fullName\": \"New User\",\r\n  \"tenantCode\": \"BLITZ_BDG\"\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -48,7 +48,7 @@
                                                                                "register"
                                                                            ]
                                                               },
-                                                      "description":  "An ADMIN, inside your tenant tree (BE-12); or (BE-34) a store\u0027s Owner, into their own store only. New users start as OPERATOR with no scope. tenantCode is optional (defaults to your own tenant). HQ creates a new store\u0027s Owner: register with the store\u0027s tenantCode, then user-update-scope OWNER."
+                                                      "description":  "An ADMIN, inside your tenant tree (BE-12); or (BE-34) a store\u0027s Owner, into their own store only. New users start as OPERATOR with no scope. tenantCode is optional (defaults to your own tenant). Password 8 to 72 characters (BE-36); the new user must change it at their first sign-in (mustChangePassword: true). HQ creates a new store\u0027s Owner: register with the store\u0027s tenantCode, then user-update-scope OWNER."
                                                   },
                                       "response":  [
 
@@ -101,7 +101,8 @@
                                                                                "auth",
                                                                                "login"
                                                                            ]
-                                                              }
+                                                              },
+                                                      "description":  "Returns a token, plus mustChangePassword (BE-36): true when someone else chose this password (a new account or a reset), so the app opens Change password first. A switched-off account gets 403 (BE-33)."
                                                   },
                                       "response":  [
 
@@ -377,6 +378,58 @@
                                                                             ]
                                                               },
                                                       "description":  "BE-33. An ADMIN: users in their tenant tree (?tenantId= one store in it). BE-34: a store\u0027s Owner: their own store only (another tenantId 403). ?active=false lists the switched-off ones."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "user-reset-password",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n    \"newPassword\": \"Temporary-123\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/users/:id/password",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "users",
+                                                                               ":id",
+                                                                               "password"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-36. A temporary password for someone who forgot theirs: an ADMIN inside their tree (never someone above them), or the store\u0027s Owner for their own store\u0027s people below Owner. Never yourself (use auth-change-password). 8 to 72 characters. The person signs in with mustChangePassword: true and changes it; every session they had before the reset stops working (401 \"Your password was changed; sign in again\")."
                                                   },
                                       "response":  [
 

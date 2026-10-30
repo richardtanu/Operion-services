@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
+import com.example.operion.module.auth.dto.ResetPasswordRequest;
 import com.example.operion.module.auth.dto.UpdateUserActiveRequest;
 import com.example.operion.module.auth.dto.UpdateUserRoleRequest;
 import com.example.operion.module.auth.dto.UpdateUserScopeRequest;
@@ -59,6 +60,19 @@ public class UserController {
                 .success(true)
                 .message(request.getActive() ? "User switched on" : "User switched off")
                 .data(service.setActive(id, request.getActive(), request.getReason()))
+                .build();
+    }
+
+    // BE-36: a temporary password for someone who forgot theirs; checked in the service
+    @PatchMapping("/{id}/password")
+    public ApiResponse<UserProfileResponse> resetPassword(
+            @PathVariable UUID id,
+            @Valid @RequestBody ResetPasswordRequest request) {
+
+        return ApiResponse.<UserProfileResponse>builder()
+                .success(true)
+                .message("Password reset; they must change it at their next sign-in")
+                .data(service.resetPassword(id, request.getNewPassword()))
                 .build();
     }
 
