@@ -87,7 +87,8 @@ public class PurchaseRequestService {
         User requestedBy = userRepository
                 .findById(request.getRequestedBy())
                 .filter(u -> u.getId().equals(caller.getId()) || u.getTenant().getId().equals(tenantId))
-                .orElseThrow(() -> new RuntimeException("Requesting user not found in your branch"));
+                .orElseThrow(() -> new RuntimeException("Requesting user not found in your branch"))
+                .requireActive();
 
         PurchaseRequest pr = PurchaseRequest.builder()
                 .tenant(tenant)

@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`).
 
 ---
 
@@ -2722,6 +2722,98 @@ one 200, and the returned token opens `/auth/me`; a wrong current password → 4
 stored hash still matches the old one; 7 characters, 73 characters, 40 × "é" (80 bytes),
 the same password, and a missing new password → 400, nothing changed. All 3 fail against
 the old code. Full suite 189/189. Postman: new `auth-change-password` in USER AUTHENTICATION.
+
+---
+
+## BE-33 — Switch off a user who has left
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "user status looks good to implement now".
+Before go-live.
+
+### Why
+
+`[C]` Users can't be switched off or deleted. Someone who leaves keeps signing in, and the
+filter (`JwtAuthenticationFilter`) trusts a token's claims without reading `users`, so even
+a changed password leaves their token working for up to 24 hours. They also still count as
+"the store's only Owner" (BE-25's self-approval rule, `StockAdjustmentService.ownersOf`) and
+keep receiving alerts. There is also no way to list users, so an Admin can't find whom to
+switch off except by id.
+
+### Task
+
+1. **Migration V17**: `users.active` (boolean, not null, default true: every existing user
+   stays on) plus `deactivated_at`, `deactivated_by` (FK `users`), `deactivation_reason`.
+   No CHECK or UNIQUE changes (rule 3).
+2. **`PATCH /users/{id}/active`** `{ "active": false, "reason": "…" }`: ADMIN, inside the
+   caller's tree, like the scope and role grants. Never yourself; never someone whose scope
+   is above yours (BE-31's rule, read from `users`). A reason is required to switch off (400
+   without); switching back on clears the who/when/why.
+3. **A switched-off user is out at once**:
+   - login with the right password → 403 "This account is switched off" (the password is
+     checked first, so the message tells nobody without it);
+   - every request with their token → 401, same message: the filter now checks
+     `users.active` for the token's user on each request (one indexed read), so the app signs
+     them out;
+   - not counted as one of the store's Owners (`ownersOf`);
+   - no new notifications (the one place they're saved, `NotificationService.create`);
+   - can't be named on a new record: a request's requester, a work order's or service
+     event's technician, who took a part → 400 "<name> is switched off".
+   History keeps their name; what's owed to them stays owed and can still be paid back.
+4. **`GET /users`**: ADMIN, the caller's tree (`?tenantId=` narrows it through `readScope`,
+   `?active=` filters), each with role, scope, store and `active`. Profiles
+   (`/auth/me`, the grant responses) gain `active`.
+
+### Tests
+
+Switched off: login 403, an existing token 401, back on: both work; reason required; never
+yourself; a store's Admin can't switch off its Owner, HQ's Principal can; a switched-off
+Owner no longer counts, so the other Owner's own adjustment is saved self-approved; no
+notification reaches a switched-off user; naming a switched-off requester, technician or
+taker → 400; `GET /users` lists only the caller's tree and filters by `active`. Every new
+test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+A Users screen for Admins (from `GET /users`) with a "Switch off" action asking for a reason,
+and "Switch on". A 401 with "This account is switched off" signs the user out with that
+message.
+
+### What was done
+
+All four items, as written.
+
+- `V17__user_active.sql`: `active` (not null, default true), `deactivated_at`,
+  `deactivated_by` (FK `users`), `deactivation_reason` (500). Applied by Flyway to the local
+  DB after a `pg_dump -Fc`; every existing user is on.
+- `User`: the fields (`active` defaults to true in Java too, so `new User()` is on) and
+  `requireActive()` → 400 "<full name> is switched off".
+- `UserService.setActive` (tree check, never yourself, not above you, reason to switch off;
+  switching off someone already off keeps the original who/when/why; switching on clears
+  them) and `list` (`readScope` for `?tenantId=`, `findInTenants` with an optional `active`).
+  `UserController`: `PATCH /users/{id}/active`, `GET /users`, both ADMIN. Profiles
+  (`UserService.map`, now also `/auth/me`) carry `tenantName`, `active`, `deactivatedAt`,
+  `deactivatedByName`, `deactivationReason`.
+- `AuthService.login`: after the password check, switched off → 403.
+  `JwtAuthenticationFilter`: `existsByIdAndActiveTrue` per request with a token; a missing or
+  switched-off user → 401 `{"error":"This account is switched off"}`.
+- `StockAdjustmentService.ownersOf` → `findByTenantIdAndScopeInAndActiveTrue`.
+  `NotificationService.create` returns without saving for a switched-off recipient.
+- `requireActive()` on the named user in `PurchaseRequestService.create` (requester),
+  `PartInstanceService.take` (taker), `ServiceEventService.create` and
+  `WorkOrderService.create` / `assign` (technician).
+
+Tests: `SwitchOffUserTest` (6): switched off → login 403 (a wrong password still 401), an
+existing token 401, switched back on → both work and the reason is cleared; reason required,
+never yourself, a store's no-scope Admin can't switch off an Owner but can switch off staff,
+HQ's Principal can switch off an Owner, a non-Admin 403; the other Owner's own adjustment is
+refused while a second Owner is on and saved self-approved once they're off; a new request
+alerts the Owner who's on, not the one switched off; a switched-off requester or taker → 400
+and no stock moves; `GET /users` for HQ shows the whole tree, `?active=false` only the one
+switched off, `?tenantId=` one store, a store's Admin never sees HQ, a Manager 403. All 6 fail
+against the old code. Full suite 195/195. Postman: `user-update-active`, `user-list`.
+
+Not covered by a test: the work-order and service-event technician checks (same one-line
+`requireActive()` call as the requester and taker).
 
 ---
 

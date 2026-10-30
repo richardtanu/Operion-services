@@ -157,7 +157,8 @@ public class PartInstanceService {
 
         User takenBy = userRepository
                 .findById(request.getTakenBy())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .requireActive();
 
         instance.setStatus(PartInstanceStatus.TAKEN);
         instance.setTakenAt(LocalDateTime.now());

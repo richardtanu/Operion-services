@@ -3,6 +3,7 @@ package com.example.operion.module.auth.service;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -87,6 +88,11 @@ public class AuthService {
             throw new BadCredentialsException("Invalid credentials");
         }
 
+        // BE-33: checked after the password, so only someone who knows it learns this
+        if (!user.isActive()) {
+            throw new AccessDeniedException("This account is switched off");
+        }
+
         // 3. Return JWT
         return jwtUtil.generateToken(
                 user.getId().toString(),
@@ -136,14 +142,7 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return UserProfileResponse.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .role(user.getRole())
-                .scope(user.getScope())
-                .tenantCode(user.getTenant().getCode())
-                .build();
+        return UserService.map(user);
     }
 }
 

@@ -59,7 +59,8 @@ public class ServiceEventService {
 
             technician = userRepository
                     .findById(request.getTechnicianId())
-                    .orElseThrow();
+                    .orElseThrow()
+                    .requireActive();
         }
 
         WorkOrder workOrder = null;

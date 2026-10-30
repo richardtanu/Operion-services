@@ -405,6 +405,11 @@ public class NotificationService {
             NotificationReferenceType referenceType,
             UUID referenceId) {
 
+        // BE-33: nobody who's switched off gets new notifications
+        if (recipient != null && !recipient.isActive()) {
+            return;
+        }
+
         repository.save(
                 Notification.builder()
                         .tenant(tenant)
