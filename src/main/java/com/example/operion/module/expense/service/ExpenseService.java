@@ -13,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
@@ -307,8 +308,8 @@ public class ExpenseService {
 
         String callerId = SecurityContextHolder.getContext().getAuthentication().getName();
 
-        // money: OWNER+, plus the claimant for their own personal expense (BE-18's exception)
-        boolean canSeeAmount = ScopeContext.hasAtLeast(Scope.OWNER)
+        // money: OWNER+ and Accounting (BE-41), plus the claimant for their own personal expense (BE-18's exception)
+        boolean canSeeAmount = MoneyAccess.canSee()
                 || (e.getPaidBy() == ExpensePaidBy.PERSONAL && e.getCreatedBy().getId().toString().equals(callerId));
 
         return ExpenseResponse.builder()

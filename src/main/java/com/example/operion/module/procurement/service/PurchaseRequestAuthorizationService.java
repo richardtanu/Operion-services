@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
@@ -361,7 +362,8 @@ public class PurchaseRequestAuthorizationService {
         // maxValue − remainingValue would give purchasedValue straight back.
         // Over-ceiling buys are still caught server-side (escalation), so the
         // buyer doesn't need the remaining value to stay within the limit.
-        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+        // BE-41: Accounting sees it too.
+        boolean canSeeCost = MoneyAccess.canSee();
 
         List<PurchaseRequestAuthorizationItemResponse> items = itemRepository
                 .findByPurchaseRequestAuthorizationId(pra.getId())

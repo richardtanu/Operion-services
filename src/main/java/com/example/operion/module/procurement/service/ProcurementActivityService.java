@@ -50,7 +50,8 @@ public class ProcurementActivityService {
 
     static final int MAX_LIMIT = 500;
 
-    private static final Set<String> ALLOWED_ROLES = Set.of("ROLE_ADMIN", "ROLE_PROCUREMENT");
+    // BE-41: Accounting reads the log too
+    private static final Set<String> ALLOWED_ROLES = Set.of("ROLE_ADMIN", "ROLE_PROCUREMENT", "ROLE_ACCOUNTING");
 
     private final PurchaseRequestStatusHistoryRepository purchaseRequestHistory;
 
@@ -168,7 +169,7 @@ public class ProcurementActivityService {
 
         if (!allowedRole && !ScopeContext.hasAtLeast(Scope.OWNER)) {
             throw new AccessDeniedException(
-                    "The procurement log is limited to ADMIN, PROCUREMENT, or Owner-level users");
+                    "The procurement log is limited to ADMIN, PROCUREMENT, ACCOUNTING, or Owner-level users");
         }
     }
 

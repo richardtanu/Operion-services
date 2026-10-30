@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.CallerRoles;
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
@@ -663,7 +664,8 @@ public class RealisasiService {
         // BE-06: cost fields redacted below OWNER scope — see
         // OPERION_BE_CHANGE_QUEUE.md BE-06. Redacted (null), not omitted; a
         // sub-OWNER caller sees every other field on this response normally.
-        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+        // BE-41: Accounting sees them too.
+        boolean canSeeCost = MoneyAccess.canSee();
 
         // BE-18: the one exception — the person owed always sees the total of a
         // purchase they paid for with their own money. Only totalCost; every

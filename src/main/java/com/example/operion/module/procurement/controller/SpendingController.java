@@ -17,8 +17,8 @@ import com.example.operion.module.procurement.service.SpendingService;
 import lombok.RequiredArgsConstructor;
 
 /**
- * BE-16: store spending summary. OWNER+ only (checked in the service, since
- * scope isn't a granted authority). {@code month} defaults to this month;
+ * BE-16: store spending summary. OWNER+ or Accounting (BE-41; checked in the
+ * service, since scope isn't a granted authority). {@code month} defaults to this month;
  * {@code tenantId} narrows HQ's one-row-per-store answer to one store.
  */
 @RestController

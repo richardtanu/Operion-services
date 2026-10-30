@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults). **BE-39 done, 30 Oct 2026** (a purchase's receipt as photos, seen by Owner+ and the buyer). BE-37's rule confirmed 30 Oct. **BE-40 done, 30 Oct 2026** (a purchase paid with your own money needs a receipt photo; a store can open a photo HQ attached for it).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults). **BE-39 done, 30 Oct 2026** (a purchase's receipt as photos, seen by Owner+ and the buyer). BE-37's rule confirmed 30 Oct. **BE-40 done, 30 Oct 2026** (a purchase paid with your own money needs a receipt photo; a store can open a photo HQ attached for it). **BE-41 done, 30 Oct 2026** (Accounting reads every amount the Owner reads and acts on none; `GET /procurement/cashflow` lists money out by the day it moved).
 
 ---
 
@@ -3279,6 +3279,90 @@ company-money purchase with none is refused; HQ Procurement's photo for a store 
 store and its Owner opens it, HQ still can) and BE-39's correction test now expects its
 own photo then the original's. All 4 fail against the old code. Full suite 217/217.
 Postman: `realisasi-create` description.
+
+---
+
+## BE-41 — Accounting: read the money, and a cashflow list
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: Accounting does "just accounting things, and
+a list of events when there is a cashflow (in/out)". Asked the same day, the product owner
+chose: Accounting reads every amount the Owner reads and acts on none; the list is money
+**out only** for now (the app records no income); an order to HQ counts **when the Owner
+sends it**; an own-money purchase or expense leaves the store's cash **when it's paid
+back**.
+
+### Why
+
+`[C]` The ACCOUNTING role is only ever refused (BE-14, BE-17, BE-37): every money amount is
+null below OWNER scope (BE-06, BE-11, BE-13, BE-16, BE-19), the spending summary is OWNER+
+only, and the activity log is ADMIN, PROCUREMENT or OWNER+. Nothing lists money movements
+by date: the spending summary (BE-16) totals a month by the purchase's date, which isn't
+when an own-money purchase costs the store anything.
+
+### Task
+
+1. **Accounting reads the money.** One rule, `MoneyAccess.canSee()` = OWNER+ or the
+   ACCOUNTING role, replaces the OWNER+ check wherever an amount is redacted: purchases,
+   part instances, orders, PRA spent/remaining, service-event cost, expenses, the store
+   budget, HQ's catalog price. The spending summary and the activity log let Accounting in.
+   Every action keeps its own check: Accounting approves, rejects, pays back and records
+   nothing it couldn't before.
+2. **`GET /procurement/cashflow?from=&to=[&tenantId=]`**, OWNER+ or Accounting, dates
+   inclusive (default this month, at most a year, `from` after `to` → 400). The caller's
+   tree, or one store in it (outside → 400 "Store not found"). One row per money movement,
+   newest first: `date`, `direction` (OUT), `kind`, `amount`, `reference`, `counterparty`,
+   `method`, the record (`recordType`, `recordId`, `recordStatus`) and its store; plus
+   `totalIn`, `totalOut`, `net`. The rows:
+   - **PURCHASE**: a purchase not paid with someone's own money, on its purchase date. A
+     purchase records a buy that already happened (DL-08), so one waiting for the Owner, or
+     rejected, is listed too, with its status; a superseded one isn't (its correction is).
+   - **PURCHASE_PAYBACK** / **EXPENSE_PAYBACK**: an own-money purchase or expense, on the
+     day the Owner paid the person back, to that person, cash or transfer. Owed and not yet
+     paid back: not listed.
+   - **EXPENSE**: an expense paid by the store, on its date; a voided one isn't.
+   - **ORDER_TO_HQ**: an order sent to HQ (ORDERED, PARTIALLY_RECEIVED, RECEIVED), on its
+     order date, to HQ's franchise centre; a draft or cancelled one isn't.
+   No money IN rows yet; `direction` and `totalIn` are there so income can be added later
+   without changing the app.
+
+### Tests
+
+October, with distinct amounts: six movements in the store (an approved and a pending
+purchase, a paid-back purchase dated on its pay-back day, a store expense, a paid-back
+expense, an order sent to HQ) plus one at 23:30 on the 31st; not listed: a superseded
+purchase, September and 1 November 00:00 purchases, an owed purchase and expense, a voided
+expense, a draft and a cancelled order. Totals, dates, kinds and order checked; HQ sees both
+stores or one; a store's Accountant asking for a sibling → 400; Owner and Accounting 200, a
+Store Manager and an Operator 403. Accounting sees a purchase's total (a Store Manager
+doesn't), the spending summary, the activity log and expense amounts, and gets 403 marking
+a pay-back or rejecting a purchase.
+
+### Client follow-up (mobile repo)
+
+The Accounting role sees amounts where it used to see blanks. A Cashflow screen (Accounting
+and Owner+; HQ picks the store): a date range, the total out, and the rows newest first,
+each opening its record.
+
+### What was done
+
+Both items, as written. `common/security/MoneyAccess.canSee()`; the eight OWNER+ money
+checks now call it (`RealisasiService` — which also shows Accounting a purchase's receipt
+photos, since BE-39 shows them with the money — `PurchaseOrderService`,
+`PurchaseRequestAuthorizationService`, `PartInstanceService`, `ServiceEventService`,
+`ExpenseService`, `TenantService`'s budget, `HqCatalogService.canSeeHqPrice`);
+`SpendingService` and `ProcurementActivityService` let ACCOUNTING in. `CashflowService` + `CashflowController` (`/procurement/cashflow`), enums
+`CashflowKind`, `CashflowDirection`, DTOs `CashflowResponse`, `CashflowEventResponse`;
+new queries `RealisasiRepository.findCompanyPaidBetween` / `findPaidBackBetween`,
+`ExpenseRepository.findPaidBackBetween`; orders reuse BE-16's `findOrderedBetween` and its
+SENT statuses. No migration.
+
+Tests: `AccountingCashflowTest` (4): October's store total Rp 2,321,810 over 7 rows, newest
+first, with the dates and kinds above and everything excluded staying out; HQ sees both
+stores (Rp 2,377,310, 8 rows) or one; a store's Accountant asking for a sibling → 400, `from`
+after `to` → 400; Owner and Accounting 200, Store Manager and Operator 403; Accounting reads
+a purchase's total, spending, the activity log and expense amounts, and gets 403 marking a
+pay-back or rejecting. All 4 fail against the old code. Full suite 221/221. Postman:
+`procurement-cashflow` (folder SPENDING).
 
 ---
 

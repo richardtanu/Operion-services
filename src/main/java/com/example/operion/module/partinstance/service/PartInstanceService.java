@@ -8,9 +8,8 @@ import java.util.UUID;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-import com.example.operion.common.security.ScopeContext;
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.TenantContext;
-import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.auth.entity.User;
 import com.example.operion.module.auth.repository.UserRepository;
 import com.example.operion.module.inventory.enums.StockMovementType;
@@ -283,7 +282,8 @@ public class PartInstanceService {
 
         // BE-06: landed cost redacted below OWNER scope — see
         // OPERION_BE_CHANGE_QUEUE.md BE-06. Redacted (null), not omitted.
-        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+        // BE-41: Accounting sees it too.
+        boolean canSeeCost = MoneyAccess.canSee();
 
         return PartInstanceResponse.builder()
                 .id(instance.getId())

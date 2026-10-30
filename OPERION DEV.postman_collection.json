@@ -4109,6 +4109,55 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "procurement-cashflow",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/procurement/cashflow",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "procurement",
+                                                                               "cashflow"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "from",
+                                                                                    "value":  "2026-10-01",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "yyyy-MM-dd, inclusive; default the 1st of this month"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "to",
+                                                                                    "value":  "2026-10-31",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "yyyy-MM-dd, inclusive; default the end of from\u0027s month; at most a year after from"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "optional: one store in your tree (HQ); outside it, 400 Store not found"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-41. Owner+ or the ACCOUNTING role. Every money movement out of the store, newest first, dated when the store\u0027s money moved: PURCHASE (not own money; on the purchase date, also pending or rejected, with recordStatus), PURCHASE_PAYBACK and EXPENSE_PAYBACK (own money, on the pay-back date), EXPENSE (paid by the store, not voided), ORDER_TO_HQ (sent orders, on the order date). totalOut, totalIn (0 for now: the app records no income), net."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
