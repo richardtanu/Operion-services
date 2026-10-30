@@ -3761,6 +3761,96 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "tenant-settings",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/tenants/:id/settings",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "tenants",
+                                                                               ":id",
+                                                                               "settings"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-38. A store\u0027s settings, defaults filled in: target days of cover, burn-rate window and thresholds, maintenance thresholds. customised: false means the store never saved any. Anyone signed in at the store or above it."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "tenant-settings-update",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n    \"daysOfCoverTarget\": 20,\n    \"burnRateWindowDays\": 30,\n    \"autoCreateWorkOrder\": true\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "https://operion-services-production.up.railway.app/tenants/:id/settings",
+                                                                  "protocol":  "https",
+                                                                  "host":  [
+                                                                               "operion-services-production",
+                                                                               "up",
+                                                                               "railway",
+                                                                               "app"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "tenants",
+                                                                               ":id",
+                                                                               "settings"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-38. The store\u0027s own Owner+ only (HQ reads, can\u0027t set). Send only what changes. Ranges: daysOfCoverTarget 1-365, burnRateWindowDays 7-365, burnRateMinObservationDays 1-365 and not above the window, burnRateMinEvents 1-1000, healthThreshold and minimumHealthForOperation 0-100, maintenanceIntervalDays 1-3650, partEndOfLifeWarningDays 0-365, maxWornParts/maxRefurbishedParts/maxRemovedParts 0-100, autoCreateWorkOrder true/false."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
