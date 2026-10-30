@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults). **BE-39 done, 30 Oct 2026** (a purchase's receipt as photos, seen by Owner+ and the buyer).
 
 ---
 
@@ -3153,6 +3153,70 @@ target days and a 45-day interval, the store reads 20 and burn rate reports `tar
 0 target days and a 21-day minimum against a 14-day window → 400, and nothing was saved; a
 unit in a store with no row is evaluated (was 400 "Maintenance Policy not configured.").
 All 3 fail against the old code. Full suite 210/210. Postman: `tenant-settings`, `tenant-settings-update`.
+
+---
+
+## BE-39 — A purchase's receipt as a photo
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "the plan looks good, execute" (BE-39: purchase
+receipts as photo uploads; the free-text receipt link works for now).
+
+### Why
+
+`[C]` A logged purchase (Realisasi) keeps its receipt only as free text (`attachments`, a
+link or a note). Uploads exist since BE-23 and `UploadPurpose.PURCHASE_RECEIPT` was reserved
+for this; expenses (BE-19) and goods receipts (BE-20) already take photos.
+
+### Task
+
+1. `CreateRealisasiRequest.receiptUploadIds` (optional): each upload (purpose
+   PURCHASE_RECEIPT, uploaded by the person logging) is attached to the purchase in the same
+   transaction (`UploadService.attach`, type `REALISASI`); a wrong purpose, someone else's or
+   an already-attached upload → 400 and nothing is saved. A correction (`supersede`) goes
+   through the same create, so it takes its own photos; the original keeps its own.
+2. `RealisasiResponse.receiptUploadIds`: shown to Owner+ and to whoever logged the purchase,
+   `null` for anyone else, because a receipt shows what was paid (the money rule since BE-06).
+3. `attachments` stays, optional, for a marketplace link.
+
+Not decided, left as is: whether a purchase paid with your own money must have a receipt
+photo, as an own-money expense must (BE-19). Today it's optional.
+
+### Tests
+
+A purchase is logged with two receipt photos, they're attached to it and listed for the
+Owner and the buyer, `null` for another Manager; an upload with another purpose, someone
+else's photo or one already used → 400 and no purchase saved. The new test fails against
+the unfixed code.
+
+### Client follow-up (mobile repo)
+
+Buy elsewhere (PROC-04): a "Receipt photos" field like Expenses', uploaded with purpose
+PURCHASE_RECEIPT; the purchase detail shows them.
+
+### What was done
+
+All three items, as written. `CreateRealisasiRequest.receiptUploadIds` and
+`RealisasiResponse.receiptUploadIds`; `RealisasiService.create` attaches each distinct id
+right after the lines are saved (type `REALISASI`, `RealisasiService.ATTACHED_TYPE`), so a
+refused photo rolls the purchase back; `map` lists them when the caller is Owner+ or logged
+the purchase, `null` otherwise (null, not omitted). `[V]` no DB CHECK on `uploads.purpose` or
+`attached_type`, so no migration (rule 3 pre-flight).
+
+Known limit, not fixed: an upload belongs to the uploader's own tenant (BE-23). When HQ
+logs a purchase for a store (BE-17) with a photo, the store's Owner sees the id but
+`GET /uploads/{id}` answers "Upload not found" for them, because the store's tree doesn't
+include HQ. The same holds for anything HQ attaches for a store; fix it in `UploadService`
+(an attached upload visible from the record's tenant) if HQ buying for stores with photos
+becomes common.
+
+Tests: `PurchaseReceiptUploadTest` (4): the Store Manager logs a purchase with two photos
+(one sent twice), both are attached to it and listed for the Owner and the buyer, `null`
+(key present) for another Manager; a purchase with no photos saves and lists none; an
+expense receipt, a colleague's photo, a made-up id → 400 "Upload not found", an already
+used photo → 400 "Upload is already attached"; a correction carries its own photo and the
+original keeps its own. All 4 fail against the old code. Full suite 214/214. Postman:
+`realisasi-create` description (the example body leaves `receiptUploadIds` out: a
+placeholder id would answer 400).
 
 ---
 

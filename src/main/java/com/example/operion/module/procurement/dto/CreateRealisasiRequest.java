@@ -58,6 +58,9 @@ public class CreateRealisasiRequest {
 
     private BigDecimal serviceFee;
 
+    // BE-39: receipt photos (uploads with purpose PURCHASE_RECEIPT), attached on save
+    private List<UUID> receiptUploadIds;
+
     private String attachments;
 
     private Boolean retroPurchaseFlag;

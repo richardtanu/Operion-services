@@ -50,6 +50,8 @@ import com.example.operion.module.procurement.repository.SupplierRepository;
 import com.example.operion.module.tenant.entity.Tenant;
 import com.example.operion.module.tenant.repository.TenantRepository;
 import com.example.operion.module.tenant.service.TenantHierarchyService;
+import com.example.operion.module.upload.enums.UploadPurpose;
+import com.example.operion.module.upload.service.UploadService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -83,6 +85,11 @@ public class RealisasiService {
     private final TenantHierarchyService tenantHierarchyService;
 
     private final NotificationService notificationService;
+
+    private final UploadService uploadService;
+
+    /** BE-39: receipt photos are attached to a purchase under this type. */
+    static final String ATTACHED_TYPE = "REALISASI";
 
     @Transactional
     public RealisasiResponse create(CreateRealisasiRequest request) {
@@ -235,6 +242,13 @@ public class RealisasiService {
         realisasi = repository.save(realisasi);
 
         saveItems(realisasi, request, tenantId, subtotal, totalCost);
+
+        // BE-39: in this transaction, so a refused photo saves no purchase
+        if (request.getReceiptUploadIds() != null) {
+            for (UUID uploadId : request.getReceiptUploadIds().stream().distinct().toList()) {
+                uploadService.attach(uploadId, UploadPurpose.PURCHASE_RECEIPT, ATTACHED_TYPE, realisasi.getId());
+            }
+        }
 
         writeHistory(realisasi, null, status, createdBy,
                 escalate ? "Exceeds PRA ceiling, escalated for Owner approval" : null);
@@ -621,6 +635,13 @@ public class RealisasiService {
                 && realisasi.getCreatedBy().getId().toString().equals(
                         SecurityContextHolder.getContext().getAuthentication().getName());
 
+        // BE-39: a receipt shows what was paid, so its photos follow the money
+        // rule, plus whoever logged the purchase (they took the photo)
+        boolean loggedByCaller = realisasi.getCreatedBy() != null
+                && SecurityContextHolder.getContext().getAuthentication() != null
+                && realisasi.getCreatedBy().getId().toString().equals(
+                        SecurityContextHolder.getContext().getAuthentication().getName());
+
         List<RealisasiItemResponse> items = itemRepository
                 .findByRealisasiId(realisasi.getId())
                 .stream()
@@ -666,6 +687,8 @@ public class RealisasiService {
                 .serviceFee(canSeeCost ? realisasi.getServiceFee() : null)
                 .totalCost(canSeeCost || isOwedToCaller ? realisasi.getTotalCost() : null)
                 .attachments(realisasi.getAttachments())
+                .receiptUploadIds(canSeeCost || loggedByCaller
+                        ? uploadService.attachedIds(ATTACHED_TYPE, realisasi.getId()) : null)
                 .retroPurchaseFlag(realisasi.getRetroPurchaseFlag())
                 .createdById(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getId() : null)
                 .createdByName(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getFullName() : null)
