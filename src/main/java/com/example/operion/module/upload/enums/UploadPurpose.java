@@ -13,6 +13,6 @@ public enum UploadPurpose {
     GOODS_RECEIPT_PHOTO,
     /** BE-19: receipt for a non-stock expense claim. */
     EXPENSE_RECEIPT,
-    /** Marketplace receipt for a Realisasi (later; replaces the free-text attachments field). */
+    /** BE-39: marketplace receipt for a Realisasi (the free-text attachments field stays, for links). */
     PURCHASE_RECEIPT
 }

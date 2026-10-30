@@ -64,6 +64,9 @@ public class RealisasiResponse {
 
     private BigDecimal totalCost;
 
+    // BE-39: Owner+ and whoever logged it; null for anyone else (a receipt shows what was paid)
+    private List<UUID> receiptUploadIds;
+
     private String attachments;
 
     private Boolean retroPurchaseFlag;
