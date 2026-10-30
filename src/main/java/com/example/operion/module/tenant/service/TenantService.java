@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.config.MasterDataInitializer;
@@ -145,8 +146,8 @@ public class TenantService {
                 .active(tenant.getActive())
                 .parentId(tenant.getParent() != null ? tenant.getParent().getId() : null)
                 .parentName(tenant.getParent() != null ? tenant.getParent().getName() : null)
-                // BE-16: money, so null below OWNER like every other money field
-                .monthlyPurchaseBudget(ScopeContext.hasAtLeast(Scope.OWNER) ? tenant.getMonthlyPurchaseBudget() : null)
+                // BE-16: money, so null below OWNER like every other money field (BE-41: and Accounting sees it)
+                .monthlyPurchaseBudget(MoneyAccess.canSee() ? tenant.getMonthlyPurchaseBudget() : null)
                 .build();
     }
 }

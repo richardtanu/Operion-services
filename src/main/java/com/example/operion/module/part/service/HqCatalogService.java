@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.CallerRoles;
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.enums.Role;
@@ -77,10 +78,10 @@ public class HqCatalogService {
         return entry != null ? entry.getHqPrice() : null;
     }
 
-    /** BE-28: a price, so Owner+ (BE-11's rule), plus HQ admins on their own catalog. */
+    /** BE-28: a price, so Owner+ (BE-11's rule) and Accounting (BE-41), plus HQ admins on their own catalog. */
     public boolean canSeeHqPrice() {
 
-        return ScopeContext.hasAtLeast(Scope.OWNER) || isHqCatalogAdmin();
+        return MoneyAccess.canSee() || isHqCatalogAdmin();
     }
 
     /**

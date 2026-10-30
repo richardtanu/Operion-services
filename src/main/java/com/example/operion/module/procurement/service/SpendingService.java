@@ -17,9 +17,8 @@ import java.util.stream.Collectors;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
-import com.example.operion.common.security.ScopeContext;
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.TenantContext;
-import com.example.operion.module.auth.enums.Scope;
 import com.example.operion.module.expense.entity.Expense;
 import com.example.operion.module.expense.enums.ExpenseCategory;
 import com.example.operion.module.expense.enums.ExpenseStatus;
@@ -103,14 +102,14 @@ public class SpendingService {
     private final ExpenseRepository expenseRepository;
 
     /**
-     * OWNER+ only. A store Owner gets their own store (and any below it); HQ
-     * gets one row per store in its tree, or the one {@code tenantId} names
-     * (outside the tree → 400 "Store not found").
+     * OWNER+, or Accounting (BE-41). A store Owner gets their own store (and
+     * any below it); HQ gets one row per store in its tree, or the one
+     * {@code tenantId} names (outside the tree → 400 "Store not found").
      */
     public List<StoreSpendingResponse> getSpending(YearMonth month, UUID tenantId) {
 
-        if (!ScopeContext.hasAtLeast(Scope.OWNER)) {
-            throw new AccessDeniedException("Only Owner-level users or higher can see spending");
+        if (!MoneyAccess.canSee()) {
+            throw new AccessDeniedException("Only Owner-level users or higher, or Accounting, can see spending");
         }
 
         YearMonth m = month != null ? month : YearMonth.now();

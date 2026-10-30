@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.CallerRoles;
+import com.example.operion.common.security.MoneyAccess;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
 import com.example.operion.module.auth.entity.User;
@@ -410,7 +411,8 @@ public class PurchaseOrderService {
         // BE-11: same rule as BE-06 on Realisasi/PartInstance — cost fields
         // (header totalAmount, per-item price) redacted to null below OWNER
         // scope. Redacted, not omitted; every other field is unchanged.
-        boolean canSeeCost = ScopeContext.hasAtLeast(Scope.OWNER);
+        // BE-41: Accounting sees them too.
+        boolean canSeeCost = MoneyAccess.canSee();
 
         List<PurchaseOrderItemResponse> items = itemRepository
                 .findByPurchaseOrderId(po.getId())
