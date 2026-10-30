@@ -29,5 +29,7 @@ public class UserProfileResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
     private String deactivationReason;
+    /** BE-36: someone else chose the current password; the app opens Change password first. */
+    private boolean mustChangePassword;
 }
 

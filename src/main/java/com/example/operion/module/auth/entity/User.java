@@ -68,6 +68,26 @@ public class User extends BaseEntity {
   @Column(name = "deactivation_reason", length = 500)
   private String deactivationReason;
 
+  /** BE-36: someone else chose the current password (a reset, or a new user). */
+  @Column(name = "must_change_password", nullable = false)
+  private boolean mustChangePassword = false;
+
+  /** BE-36: last change or reset through the app, whole seconds; older tokens are refused. */
+  @Column(name = "password_changed_at")
+  private LocalDateTime passwordChangedAt;
+
+  /**
+   * BE-36: the one place a password is set through the app (change, reset,
+   * register). Older tokens stop working; {@code chosenByThemself} false
+   * means the person must change it at their next sign-in.
+   */
+  public void setNewPassword(String hash, boolean chosenByThemself) {
+
+    this.passwordHash = hash;
+    this.mustChangePassword = !chosenByThemself;
+    this.passwordChangedAt = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+  }
+
   /** BE-33: for anyone named on a new record (requester, technician, taker). 400 when switched off. */
   public User requireActive() {
 

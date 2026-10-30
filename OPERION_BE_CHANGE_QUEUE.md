@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand.
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users).
 
 ---
 
@@ -787,6 +787,14 @@ live the moment anything calls `BurnRateService` from a scheduled job or event l
 (e.g. a future proactive reorder-suggestion job), so the fix (give `BurnRateService` its
 own `@Transactional`) is still worth doing before such a caller is added, but it is not
 blocking today.
+
+**Correction, 30 Oct 2026 (`[C]`):** the trace above is out of date since BE-27. Every stock
+movement (`PartStockService.adjustStock`) now asks `BurnRateService` whether the item has
+just become low (`LowStockRule`), so `BurnRateService` runs on every stock change, not only
+on burn-rate reads. It still has no `@Transactional` of its own. Still latent, for the same
+reason: nothing moves stock outside a web request (the nightly `MaintenanceScheduleJob`
+evaluates units and opens work orders, but never moves stock). The fix stays the same, and
+becomes urgent the day a scheduled job or event listener moves stock.
 
 ### Done when
 
@@ -2935,6 +2943,88 @@ LOW_STOCK once to the Manager and the Owner, no second alert at 4. Changed by de
 `lowBecause_runsOutSoon_…`'s "40 days of cover, at its minimum" item is now low
 (`BELOW_MINIMUM`), so the list and the dashboard count 3. Mutation: with BE-27's rule back,
 both fail. Full suite 201/201.
+
+---
+
+## BE-36 — Reset a forgotten password; a password change signs out older sessions
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "the plan looks good, execute" (BE-36 as
+proposed: reset, must-change flag, older sessions end, the same length rule for new users).
+Before go-live.
+
+### Why
+
+`[C]` Someone who forgets their password can only be fixed by editing `users` in the
+database. BE-32 left a gap on purpose: after a password change, tokens issued before it keep
+working for up to 24 hours. And `register` accepts any password, even "123456".
+
+### Task
+
+1. **Migration V18**: `users.must_change_password` (boolean, not null, default false) and
+   `users.password_changed_at` (timestamp, null = never changed through the app).
+2. **`PATCH /users/{id}/password`** `{ "newPassword": "…" }`: an ADMIN inside their tree,
+   never someone above them (BE-31's rule), or the store's Owner for their store's people
+   below Owner (BE-34's rule); never yourself (403: "Use Change password for your own"). Sets
+   the password and `must_change_password = true`.
+3. **Must change**: `register` also sets it (someone else chose the first password). Login
+   and `/auth/me` return `mustChangePassword`; the app sends the person to the change screen.
+   The server does not block other calls. `PATCH /auth/password` (BE-32) clears it.
+4. **Older sessions end**: a reset and a change set `password_changed_at` (whole seconds).
+   The request filter (which reads the user on every request since BE-33) refuses a token
+   issued before that moment: 401 "Your password was changed; sign in again". The token a
+   change returns, and any later sign-in, still work.
+5. **One rule for every new password** (change, reset, register): 8 to 72 characters and at
+   most 72 bytes, so BCrypt reads all of it.
+
+### Tests
+
+HQ resets a Store Manager: the old password fails, the temporary one signs in with
+`mustChangePassword: true`, the old token is refused, and after the person changes it the
+flag is false; the store's Owner resets their own staff but not another Owner, the Admin,
+another store or themself; a Manager can't reset anyone; a short reset password → 400; a
+change signs out an older token but not the returned one; `register` refuses a 6-character
+password and its new user signs in with `mustChangePassword: true`. Every new test fails
+against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+After sign-in, `mustChangePassword: true` opens Change password before anything else. A
+401 "Your password was changed; sign in again" signs out with that message. On the Users
+screen: "Reset password" (types a temporary one to tell the person). New users' passwords
+need 8 characters.
+
+### What was done
+
+All five items, as written.
+
+- `V18__password_reset.sql`; `User.mustChangePassword`, `User.passwordChangedAt` and
+  `User.setNewPassword(hash, chosenByThemself)`, the one place a password is set through the
+  app (it stamps the change time in whole seconds and sets or clears the flag).
+- `PasswordRules.check` (8–72 characters, at most 72 bytes) for register, change and reset;
+  `@Size(min = 8, max = 72)` on `RegisterRequest.password` and `ResetPasswordRequest`.
+- `UserService.resetPassword` + `PATCH /users/{id}/password`: Admin branch (tree, "You cannot
+  reset the password of someone above you") or Owner branch (`requireOwnerMayManage`), never
+  yourself ("Use Change password for your own").
+- `AuthService`: `register`, `login` and `changePassword` now return `AuthResponse(token,
+  mustChangePassword)`; register sets the flag, a change clears it. `/auth/me` and every
+  user profile carry `mustChangePassword`.
+- `JwtAuthenticationFilter`: loads the user (was `existsByIdAndActiveTrue`, now removed) and,
+  after the switched-off check, refuses a token whose `iat` is before `passwordChangedAt`:
+  401 `{"error":"Your password was changed; sign in again"}`.
+- Also in this branch: the correction to BE-10.2's note (since BE-27 every stock change
+  calls `BurnRateService`; still latent).
+
+Tests: `PasswordResetTest` (4): HQ resets a Store Manager: the old password 401, the
+temporary one signs in with `mustChangePassword: true`, a token from before the reset 401
+with the message, the temporary token works, and after their own change the flag is false;
+the store's Owner resets their staff but not a co-Owner, the Admin, a sibling store's staff
+or themself, a Manager resets nobody, a 5-character reset 400, the co-Owner untouched; a
+change ends an older token but not the returned one; register refuses "123456" and the new
+user signs in with `mustChangePassword: true`. All 4 fail against the old code; full suite 205/205. (Tokens carry
+whole seconds, so two tests wait 1.1 s after minting the "older" token.) Changed by design:
+`AuthHardeningTest`'s register body used "123456"; it now uses an 8-character password.
+Postman: new `user-reset-password`; `register`'s example password is 8+ characters and its
+description and `login`'s mention `mustChangePassword`.
 
 ---
 

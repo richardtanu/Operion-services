@@ -1,6 +1,5 @@
 package com.example.operion.module.auth.service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -11,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.auth.dto.AuthResponse;
 import com.example.operion.module.auth.dto.ChangePasswordRequest;
 import com.example.operion.module.auth.dto.LoginRequest;
 import com.example.operion.module.auth.dto.RegisterRequest;
@@ -42,7 +42,7 @@ public class AuthService {
      * {@code PATCH /users/{id}/scope}, so nobody can register themselves into
      * privilege.
      */
-    public String register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request) {
 
         User caller = userRepository.findById(UUID.fromString(
                 SecurityContextHolder.getContext().getAuthentication().getName()))
@@ -73,24 +73,23 @@ public class AuthService {
             throw new AccessDeniedException("Owners add people to their own store only");
         }
 
-        // 3. Create user
+        // 3. Create user. BE-36: someone else chose this first password, so the
+        // new person changes it at their first sign-in
+        PasswordRules.check(request.getPassword(), "Password");
+
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setNewPassword(passwordEncoder.encode(request.getPassword()), false);
         user.setFullName(request.getFullName());
         user.setRole(Role.OPERATOR);
         user.setTenant(tenant);
         userRepository.save(user);
 
         // 4. Generate token
-        return jwtUtil.generateToken(
-                user.getId().toString(),
-                user.getRole().name(),
-                user.getTenant().getId().toString(),
-                user.getScope() != null ? user.getScope().name() : null);
+        return tokenFor(user);
     }
 
-    public String login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
 
         // 1. Find user
         User user = userRepository.findByEmail(request.getEmail())
@@ -108,20 +107,17 @@ public class AuthService {
         }
 
         // 3. Return JWT
-        return jwtUtil.generateToken(
-                user.getId().toString(),
-                user.getRole().name(),
-                user.getTenant().getId().toString(),
-                user.getScope() != null ? user.getScope().name() : null);
+        return tokenFor(user);
     }
 
     /**
      * BE-32: the signed-in user changes their own password, proving the
      * current one first. A wrong current password is 400, not 401: the app
-     * reads 401 as "signed out". Returns a fresh token, like login. Tokens
-     * issued before the change stay valid until they expire (at most 24 hours).
+     * reads 401 as "signed out". Returns a fresh token, like login. BE-36:
+     * tokens issued before the change stop working, and a "must change" flag
+     * from a reset or a new account is cleared.
      */
-    public String changePassword(Authentication authentication, ChangePasswordRequest request) {
+    public AuthResponse changePassword(Authentication authentication, ChangePasswordRequest request) {
 
         User user = userRepository.findById(UUID.fromString(authentication.getName()))
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -135,18 +131,23 @@ public class AuthService {
         }
 
         // @Size counts characters; BCrypt counts bytes (an accented letter is two)
-        if (request.getNewPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
-            throw new RuntimeException("New password must be 8 to 72 characters");
-        }
+        PasswordRules.check(request.getNewPassword(), "New password");
 
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setNewPassword(passwordEncoder.encode(request.getNewPassword()), true);
         userRepository.save(user);
 
-        return jwtUtil.generateToken(
-                user.getId().toString(),
-                user.getRole().name(),
-                user.getTenant().getId().toString(),
-                user.getScope() != null ? user.getScope().name() : null);
+        return tokenFor(user);
+    }
+
+    private AuthResponse tokenFor(User user) {
+
+        return new AuthResponse(
+                jwtUtil.generateToken(
+                        user.getId().toString(),
+                        user.getRole().name(),
+                        user.getTenant().getId().toString(),
+                        user.getScope() != null ? user.getScope().name() : null),
+                user.isMustChangePassword());
     }
 
     public UserProfileResponse getCurrentUser(Authentication authentication) {

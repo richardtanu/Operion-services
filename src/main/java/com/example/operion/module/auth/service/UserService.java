@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
@@ -25,6 +26,8 @@ public class UserService {
     private final UserRepository userRepository;
 
     private final TenantHierarchyService tenantHierarchyService;
+
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * BE-31: a scope is granted only up to the granter's own, never to
@@ -173,6 +176,45 @@ public class UserService {
     }
 
     /**
+     * BE-36: a temporary password for someone who forgot theirs. The same
+     * people rules as a switch-off: an ADMIN inside their tree, never someone
+     * above them; or the store's Owner for their store's people below Owner.
+     * Never yourself (that's {@code PATCH /auth/password}). The person must
+     * change it at their next sign-in, and their older sessions end.
+     */
+    public UserProfileResponse resetPassword(UUID userId, String newPassword) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        User caller = currentUser();
+
+        if (user.getId().equals(caller.getId())) {
+            throw new AccessDeniedException("Use Change password for your own");
+        }
+
+        if (isAdmin(caller)) {
+
+            tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
+
+            if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
+                throw new AccessDeniedException("You cannot reset the password of someone above you");
+            }
+
+        } else {
+
+            requireOwnerMayManage(caller, user);
+        }
+
+        PasswordRules.check(newPassword, "New password");
+
+        user.setNewPassword(passwordEncoder.encode(newPassword), false);
+        userRepository.save(user);
+
+        return map(user);
+    }
+
+    /**
      * BE-33: {@code GET /users}: the caller's tree, or one store in it
      * ({@code tenantId}, through {@code readScope}), optionally only the
      * switched-on or switched-off ones.
@@ -265,6 +307,7 @@ public class UserService {
                 .deactivatedAt(user.getDeactivatedAt())
                 .deactivatedByName(user.getDeactivatedBy() != null ? user.getDeactivatedBy().getFullName() : null)
                 .deactivationReason(user.getDeactivationReason())
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 }

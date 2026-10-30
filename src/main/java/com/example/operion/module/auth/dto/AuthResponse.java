@@ -8,5 +8,8 @@ import lombok.Data;
 public class AuthResponse {
 
     private String token;
+
+    /** BE-36: someone else chose this password; the app opens Change password first. */
+    private boolean mustChangePassword;
 }
 

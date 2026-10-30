@@ -36,12 +36,12 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest request
     ) {
 
-        String token = authService.register(request);
+        AuthResponse result = authService.register(request);
 
         ApiResponse<AuthResponse> response = ApiResponse.<AuthResponse>builder()
                 .success(true)
                 .message("Register successful")
-                .data(new AuthResponse(token))
+                .data(result)
                 .build();
 
         return ResponseEntity.ok(response);
@@ -52,12 +52,12 @@ public class AuthController {
         @Valid @RequestBody LoginRequest request
     ) {
 
-        String token = authService.login(request);
+        AuthResponse result = authService.login(request);
 
         ApiResponse<AuthResponse> response = ApiResponse.<AuthResponse>builder()
                 .success(true)
                 .message("Login successful")
-                .data(new AuthResponse(token))
+                .data(result)
                 .build();
 
         return ResponseEntity.ok(response);
@@ -70,12 +70,12 @@ public class AuthController {
             @Valid @RequestBody ChangePasswordRequest request
     ) {
 
-        String token = authService.changePassword(authentication, request);
+        AuthResponse result = authService.changePassword(authentication, request);
 
         ApiResponse<AuthResponse> response = ApiResponse.<AuthResponse>builder()
                 .success(true)
                 .message("Password changed")
-                .data(new AuthResponse(token))
+                .data(result)
                 .build();
 
         return ResponseEntity.ok(response);

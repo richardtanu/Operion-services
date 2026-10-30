@@ -287,7 +287,7 @@ class AuthHardeningTest {
 
     private static String registerBody(String email, String tenantCode, boolean includePrincipalScope) {
 
-        return "{\"email\":\"" + email + "\",\"password\":\"123456\",\"fullName\":\"BE-12 Test\""
+        return "{\"email\":\"" + email + "\",\"password\":\"Start-123\",\"fullName\":\"BE-12 Test\""
                 + (tenantCode != null ? ",\"tenantCode\":\"" + tenantCode + "\"" : "")
                 + (includePrincipalScope ? ",\"scope\":\"PRINCIPAL\"" : "")
                 + "}";
