@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand.
 
 ---
 
@@ -2892,6 +2892,49 @@ off. All 5 fail against the old code. Changed by design: `SwitchOffUserTest`'s "
 ADMIN" refusal now uses the Store Manager (the store's Owner may switch staff off). Full
 suite 200/200. Postman: descriptions of `register`, `user-update-scope`, `user-update-role`,
 `user-update-active`, `user-list`.
+
+---
+
+## BE-35 — "Low" if either rule says so
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner's decision, 30 Oct 2026, changing BE-27's default: "low if
+either rule says so. What we develop here is to help everything get noticed; the price is
+more notifications and alerts."
+
+### Why
+
+`[C]` `LowStockRule.evaluate` (BE-27): with usage data an item is low only when its days of
+cover fall under the store's target; the minimum is used only without usage data. So 8 cans
+against a minimum of 10, used at 0.5 a day (16 days, target 14), is not low.
+
+### Task
+
+With usage data, low when days of cover < target (`RUNS_OUT_SOON`) **or** stock ≤ minimum
+(`BELOW_MINIMUM`); without usage data, the minimum alone, as before. When both hold, the
+row says `RUNS_OUT_SOON` (it carries the days of cover). Everything that reads "low" goes
+through this one method (lists, dashboard, the LOW_STOCK alert), so nothing else changes.
+
+### Tests
+
+An item with usage data and plenty of days becomes low when it reaches its minimum, and the
+LOW_STOCK alert fires once; BE-27's "not low even at its minimum" case is now low,
+`BELOW_MINIMUM`. The new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+None: the app already shows `lowBecause` from the server. More items will show as low.
+
+### What was done
+
+As written: `LowStockRule.evaluate` returns `RUNS_OUT_SOON` when the days-of-cover rule fires,
+and otherwise falls through to the minimum for every item. No other code, no migration.
+
+Tests: new `LowStockRuleTest.withUsageData_theMinimumStillCounts_andTheAlertFiresAtIt`: 0.1
+cans a day, minimum 5, so 70 days of cover: not low at 6, low at 5 (`BELOW_MINIMUM`, 50 days),
+LOW_STOCK once to the Manager and the Owner, no second alert at 4. Changed by design:
+`lowBecause_runsOutSoon_…`'s "40 days of cover, at its minimum" item is now low
+(`BELOW_MINIMUM`), so the list and the dashboard count 3. Mutation: with BE-27's rule back,
+both fail. Full suite 201/201.
 
 ---
 
