@@ -4228,7 +4228,7 @@
                                                                                "realisasi"
                                                                            ]
                                                               },
-                                                      "description":  "Buy elsewhere. MANAGER+ or PROCUREMENT (BE-17). BE-21: sellerName = where it was bought (free text). Items stores must buy from HQ are refused (400) unless supplierId is HQ\u0027s franchise-centre supplier (an urgent buy paid at HQ). BE-39: receipt photos go in receiptUploadIds (a list of upload ids, purpose PURCHASE_RECEIPT, uploaded by you via upload-create); a wrong one answers 400 and nothing is saved. The response lists them to Owner+ and to you; null for anyone else. attachments stays for a marketplace link."
+                                                      "description":  "Buy elsewhere. MANAGER+ or PROCUREMENT (BE-17). BE-21: sellerName = where it was bought (free text). Items stores must buy from HQ are refused (400) unless supplierId is HQ\u0027s franchise-centre supplier (an urgent buy paid at HQ). BE-39: receipt photos go in receiptUploadIds (a list of upload ids, purpose PURCHASE_RECEIPT, uploaded by you via upload-create); a wrong one answers 400 and nothing is saved. The response lists them to Owner+ and to you; null for anyone else. attachments stays for a marketplace link. BE-40: paymentMethod PERSONAL_REIMBURSABLE needs at least one receipt photo (400 otherwise); a correction may rely on the original\u0027s."
                                                   },
                                       "response":  [
 

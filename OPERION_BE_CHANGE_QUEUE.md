@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults). **BE-39 done, 30 Oct 2026** (a purchase's receipt as photos, seen by Owner+ and the buyer).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults). **BE-39 done, 30 Oct 2026** (a purchase's receipt as photos, seen by Owner+ and the buyer). BE-37's rule confirmed 30 Oct. **BE-40 done, 30 Oct 2026** (a purchase paid with your own money needs a receipt photo; a store can open a photo HQ attached for it).
 
 ---
 
@@ -3217,6 +3217,68 @@ used photo → 400 "Upload is already attached"; a correction carries its own ph
 original keeps its own. All 4 fail against the old code. Full suite 214/214. Postman:
 `realisasi-create` description (the example body leaves `receiptUploadIds` out: a
 placeholder id would answer 400).
+
+---
+
+## BE-40 — A purchase paid with your own money needs a receipt photo
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026, answering BE-39's open question: "align
+this. it is required for the Owner report." Same day, BE-37's rule (Manager+ or a
+Technician) confirmed as built: "Leave as is."
+
+### Why
+
+`[C]` Since BE-39 a purchase takes receipt photos, but they're optional; an own-money
+expense must have one (BE-19, "it's what you're paid back against"). The Owner pays the
+Store Manager back from the owed list (BE-18, `GET /realisasi?paymentMethod=PERSONAL_REIMBURSABLE`),
+so an own-money purchase without a photo leaves the Owner nothing to check. And BE-39's
+known limit hits exactly this case: when HQ Procurement buys for a store with its own
+money, the store's Owner pays it back but can't open the photo (the upload stays on HQ's
+tenant).
+
+### Task
+
+1. `POST /realisasi` with `paymentMethod` PERSONAL_REIMBURSABLE and no `receiptUploadIds`
+   → 400 "Add a photo of the receipt: it's what you're paid back against" (BE-19's words).
+   Company-account purchases stay optional.
+2. A correction (`supersede`) is the same receipt retyped: it may rely on the photos of the
+   purchase it corrects, or of anything further back in the chain. Its
+   `receiptUploadIds` lists its own photos first, then theirs; the original lists only its
+   own (this changes BE-39, where a correction listed only its own).
+3. A photo attached to a purchase moves to the purchase's store (`UploadService.attach`
+   with the record's tenant, which must be inside the caller's tree), so the store can open
+   it when HQ logged the purchase for the store. HQ, above, still can.
+
+### Tests
+
+Own money without a photo → 400, with one → 200 and PENDING; company money without → 200; a
+correction without a new photo keeps the original's, also two corrections deep; an
+own-money correction of a company-money purchase with no photo anywhere → 400; HQ
+Procurement logs an own-money purchase for the store with a photo, the store's Owner opens
+it. Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+Buy elsewhere (PROC-04): when "paid by me" is picked, Receipt photos is required (like
+Expenses). A correction needn't attach the photo again.
+
+### What was done
+
+All three items, as written. `RealisasiService.create` is now `create(request, corrects)`
+(the public one passes null, `supersede` passes the original); the photo check sits after
+the mandatory-item check; `receiptIdsOf` walks the `supersedes` chain by id, because the
+upload attach clears the persistence context and a detached lazy proxy can't be
+initialised. `UploadService.attach` gains a 5-argument form taking the record's tenant
+(refused as "Upload not found" outside the caller's tree); the 4-argument form, used by
+expenses and goods receipts, keeps the caller's own. `UploadRepository.attachIfUnattached`
+sets the tenant in the same conditional UPDATE. No migration.
+
+Tests: `PurchaseReceiptUploadTest` grows to 7: three new (own money needs a photo; a
+correction relies on the original's, two deep, and an own-money correction of a
+company-money purchase with none is refused; HQ Procurement's photo for a store is on the
+store and its Owner opens it, HQ still can) and BE-39's correction test now expects its
+own photo then the original's. All 4 fail against the old code. Full suite 217/217.
+Postman: `realisasi-create` description.
 
 ---
 

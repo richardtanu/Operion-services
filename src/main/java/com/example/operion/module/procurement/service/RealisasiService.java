@@ -3,6 +3,7 @@ package com.example.operion.module.procurement.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -94,6 +95,12 @@ public class RealisasiService {
     @Transactional
     public RealisasiResponse create(CreateRealisasiRequest request) {
 
+        return create(request, null);
+    }
+
+    /** {@code corrects}: the purchase this one corrects (supersede), else null. */
+    private RealisasiResponse create(CreateRealisasiRequest request, Realisasi corrects) {
+
         // BE-17: the Store Manager (MANAGER+) mostly logs purchases; HQ
         // PROCUREMENT staff sometimes buy for a store. TECHNICIAN, OPERATOR,
         // ACCOUNTING, and ADMIN without MANAGER+ are refused. DL-08 still applies.
@@ -154,6 +161,18 @@ public class RealisasiService {
             if (!boughtFromHq && hqCatalogService.isMandatoryFromHq(part)) {
                 throw new RuntimeException("This item must be bought from HQ: " + part.getName());
             }
+        }
+
+        // BE-40: paid with your own money needs a receipt photo, as an own-money
+        // expense does (BE-19): the Owner pays you back against it. A correction
+        // may rely on the photos of the purchase it corrects (the same receipt).
+        List<UUID> receipts = request.getReceiptUploadIds() != null
+                ? request.getReceiptUploadIds().stream().distinct().toList()
+                : List.of();
+
+        if (request.getPaymentMethod() == PaymentMethod.PERSONAL_REIMBURSABLE && receipts.isEmpty()
+                && (corrects == null || receiptIdsOf(corrects).isEmpty())) {
+            throw new RuntimeException("Add a photo of the receipt: it's what you're paid back against");
         }
 
         BigDecimal subtotal = nz(request.getSubtotal());
@@ -243,11 +262,11 @@ public class RealisasiService {
 
         saveItems(realisasi, request, tenantId, subtotal, totalCost);
 
-        // BE-39: in this transaction, so a refused photo saves no purchase
-        if (request.getReceiptUploadIds() != null) {
-            for (UUID uploadId : request.getReceiptUploadIds().stream().distinct().toList()) {
-                uploadService.attach(uploadId, UploadPurpose.PURCHASE_RECEIPT, ATTACHED_TYPE, realisasi.getId());
-            }
+        // BE-39: in this transaction, so a refused photo saves no purchase. BE-40:
+        // the photos go on the purchase's store, so its Owner can open them when
+        // HQ logged the purchase for the store.
+        for (UUID uploadId : receipts) {
+            uploadService.attach(uploadId, UploadPurpose.PURCHASE_RECEIPT, ATTACHED_TYPE, realisasi.getId(), tenantId);
         }
 
         writeHistory(realisasi, null, status, createdBy,
@@ -352,7 +371,7 @@ public class RealisasiService {
         praService.refreshStatus(original.getPurchaseRequestAuthorization().getId(), currentUser(),
                 original.getExternalOrderRef() + " corrected");
 
-        RealisasiResponse corrected = create(request.getCorrection());
+        RealisasiResponse corrected = create(request.getCorrection(), original);
 
         Realisasi correctedEntity = repository.findById(corrected.getId()).orElseThrow();
         correctedEntity.setSupersedes(original);
@@ -620,6 +639,25 @@ public class RealisasiService {
                         .build());
     }
 
+    /**
+     * BE-40: a purchase's receipt photos, followed by those of the purchases it
+     * corrects (a correction is the same receipt, retyped). The chain is walked
+     * by id, so a detached entity's lazy {@code supersedes} is never initialised.
+     */
+    private List<UUID> receiptIdsOf(Realisasi realisasi) {
+
+        List<UUID> ids = new ArrayList<>(uploadService.attachedIds(ATTACHED_TYPE, realisasi.getId()));
+
+        Realisasi older = realisasi.getSupersedes();
+
+        while (older != null) {
+            ids.addAll(uploadService.attachedIds(ATTACHED_TYPE, older.getId()));
+            older = repository.findById(older.getId()).map(Realisasi::getSupersedes).orElse(null);
+        }
+
+        return ids;
+    }
+
     private RealisasiResponse map(Realisasi realisasi) {
 
         // BE-06: cost fields redacted below OWNER scope — see
@@ -687,8 +725,7 @@ public class RealisasiService {
                 .serviceFee(canSeeCost ? realisasi.getServiceFee() : null)
                 .totalCost(canSeeCost || isOwedToCaller ? realisasi.getTotalCost() : null)
                 .attachments(realisasi.getAttachments())
-                .receiptUploadIds(canSeeCost || loggedByCaller
-                        ? uploadService.attachedIds(ATTACHED_TYPE, realisasi.getId()) : null)
+                .receiptUploadIds(canSeeCost || loggedByCaller ? receiptIdsOf(realisasi) : null)
                 .retroPurchaseFlag(realisasi.getRetroPurchaseFlag())
                 .createdById(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getId() : null)
                 .createdByName(realisasi.getCreatedBy() != null ? realisasi.getCreatedBy().getFullName() : null)
