@@ -12,17 +12,22 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import com.example.operion.common.security.ScopeContext;
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.auth.repository.UserRepository;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         private final JwtUtil jwtUtil;
 
-        public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+        private final UserRepository userRepository;
+
+        public JwtAuthenticationFilter(JwtUtil jwtUtil, UserRepository userRepository) {
                 this.jwtUtil = jwtUtil;
+                this.userRepository = userRepository;
         }
 
         @Override
@@ -56,6 +61,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         Claims claims = jwtUtil.extractAllClaims(token);
 
                         String userId = claims.getSubject();
+
+                        // BE-33: a switched-off user's token stops working at once,
+                        // not when it expires (one indexed read per request)
+                        if (!userRepository.existsByIdAndActiveTrue(UUID.fromString(userId))) {
+
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType("application/json");
+                                response.getWriter().write("{\"error\":\"This account is switched off\"}");
+                                return;
+                        }
 
                         String role = claims.get("role", String.class);
 

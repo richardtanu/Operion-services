@@ -91,7 +91,7 @@ public class WorkOrderService {
 
                 if (request.getTechnicianId() != null) {
 
-                        technician = userRepository.findById(request.getTechnicianId()).orElseThrow();
+                        technician = userRepository.findById(request.getTechnicianId()).orElseThrow().requireActive();
                 }
 
                 WorkOrder workOrder = WorkOrder.builder()
@@ -368,7 +368,8 @@ public class WorkOrderService {
                                 .findById(
                                                 request.getTechnicianId())
                                 .orElseThrow(() -> new RuntimeException(
-                                                "Technician not found"));
+                                                "Technician not found"))
+                                .requireActive();
 
                 workOrder.setAssignedTechnician(
                                 technician);

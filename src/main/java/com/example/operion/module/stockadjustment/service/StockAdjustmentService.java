@@ -221,10 +221,10 @@ public class StockAdjustmentService {
                 .orElseThrow(() -> new RuntimeException("Stock adjustment not found"));
     }
 
-    /** The store's own Owner+ users (HQ's don't count). Users have no "active" flag yet. */
+    /** The store's own Owner+ users (HQ's don't count), switched-off ones left out (BE-33). */
     private List<User> ownersOf(UUID storeId) {
 
-        return userRepository.findByTenantIdAndScopeIn(storeId, List.of(Scope.OWNER, Scope.PRINCIPAL));
+        return userRepository.findByTenantIdAndScopeInAndActiveTrue(storeId, List.of(Scope.OWNER, Scope.PRINCIPAL));
     }
 
     private StockAdjustment findInHierarchy(UUID id) {

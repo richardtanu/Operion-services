@@ -272,6 +272,98 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "user-update-active",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n    \"active\": false,\n    \"reason\": \"Left the business on 30 Oct\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/users/:id/active",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "users",
+                                                                               ":id",
+                                                                               "active"
+                                                                           ],
+                                                                  "variable":  [
+                                                                                   {
+                                                                                       "key":  "id",
+                                                                                       "value":  ""
+                                                                                   }
+                                                                               ]
+                                                              },
+                                                      "description":  "BE-33. ADMIN only, inside your tenant tree. Switch someone off (they left) or back on (\"active\": true, no reason needed). Never yourself; never someone whose scope is above yours (403). A reason is required to switch off (400). A switched-off user can\u0027t log in (403 \"This account is switched off\"), their token stops working at once (401), they no longer count as one of the store\u0027s Owners, get no new notifications, and can\u0027t be named on a new record."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "user-list",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/users",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "users"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "tenantId",
+                                                                                    "value":  "",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "One store in your tree (400 \"Store not found\" outside it)"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "active",
+                                                                                    "value":  "false",
+                                                                                    "disabled":  true,
+                                                                                    "description":  "true = switched on only, false = switched off only"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "description":  "BE-33. ADMIN only. Users in your tenant tree with role, scope, store and active (plus who switched them off, when and why)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
