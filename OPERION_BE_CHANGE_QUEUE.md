@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401).
 
 ---
 
@@ -3025,6 +3025,70 @@ whole seconds, so two tests wait 1.1 s after minting the "older" token.) Changed
 `AuthHardeningTest`'s register body used "123456"; it now uses an 8-character password.
 Postman: new `user-reset-password`; `register`'s example password is 8+ characters and its
 description and `login`'s mention `mustChangePassword`.
+
+---
+
+## BE-37 — Maintenance needs a Manager or a Technician; no sign-in answers 401
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "the plan looks good, execute", approving the
+proposed rule: maintenance actions need **Manager or above, or the Technician role**
+(the Store Manager records the technicians' work on the store phone); Operators and
+Accounting are refused. Before go-live.
+
+### Why
+
+`[C]` None of the maintenance writes checks role or scope: any signed-in user, an Operator
+included, can fit a part to a unit or replace one (each takes stock off the shelf, bypassing
+BE-25's controls on stock), mark a part failed (which opens a critical work order and can
+put the unit into maintenance), open, assign, start and complete work orders, log service
+events, create maintenance schedules and run the due ones. Separately, a request with no
+token answers 403, so the app can't tell "not signed in" from "not allowed".
+
+### Task
+
+1. `MaintenanceAccess.require()` (`common.security`): MANAGER scope or above, or the
+   TECHNICIAN role (`ScopeContext` + `CallerRoles`), else 403 "Maintenance needs a Store
+   Manager or above, or a Technician". Called first in: `AirsoftUnitPartService.installPart`,
+   `replacePart`, `updateCondition`; `WorkOrderService.create`, `updateStatus`, `complete`,
+   `assign`, `start`, `waitingParts`; `ServiceEventService.create`;
+   `MaintenanceRecommendationService.create`, `processDueSchedules`; and in the controller
+   for `POST /maintenance/evaluate/{unitId}`, because `evaluateUnit` also runs from the
+   nightly job with nobody signed in. Reads stay open; `POST /airsoft-units` stays ADMIN.
+2. `SecurityConfig`: an authentication entry point, so a request with no token (or an
+   unreadable one Spring rejects) answers **401** `{"error":"Sign in first"}` instead of 403.
+
+Not in this task: `PATCH /work-orders/{id}/status` still sets any status (it now needs the
+same people); tightening its transitions stays on the "Later" list.
+
+### Tests
+
+An Operator and an Accounting user are refused fitting a part, replacing one, marking a
+condition, opening a work order, logging a service event, creating a schedule, evaluating a
+unit and running due schedules, and stock doesn't move; a Technician fits a part (stock −1)
+and opens a work order; a Store Manager assigns and starts it; no token → 401. Every new test
+fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+Maintenance screens (not built yet) show their actions to Manager+ and Technicians only.
+A 401 with "Sign in first" is the same as any 401: back to sign-in.
+
+### What was done
+
+Both items, as written. `common.security.MaintenanceAccess.require()` is the first line of
+the eleven service methods listed, plus the evaluate endpoint's controller. Internal calls
+are untouched: the FAILED-part work order (`WorkOrderService.create` called from
+`updateCondition`) runs under the same, already-checked caller; the nightly job's
+`evaluateUnit` and its own work-order inserts don't pass through a check. `SecurityConfig`
+gains `exceptionHandling(...authenticationEntryPoint)`: 401 `{"error":"Sign in first"}`.
+
+Tests: `MaintenanceAccessTest` (2): an Operator and an Accounting user get 403 on fitting a
+part, replacing it, marking it FAILED, opening a work order, logging a service event,
+creating a schedule, evaluating the unit and running due schedules, with stock and work
+orders unchanged; a Technician fits a part (stock 5 → 4) and opens a work order, the Store
+Manager assigns, starts and completes it, an Operator can't start or complete it; no token
+→ 401 "Sign in first", a signed-in Operator → 403. Both fail against the old code. Changed by
+design: `AuthHardeningTest.register_withoutToken_isRejected` now expects 401. Full suite 207/207.
 
 ---
 

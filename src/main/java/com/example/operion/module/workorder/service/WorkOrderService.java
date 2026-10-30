@@ -1,5 +1,7 @@
 package com.example.operion.module.workorder.service;
 
+import com.example.operion.common.security.MaintenanceAccess;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -55,6 +57,8 @@ public class WorkOrderService {
 
         public WorkOrderResponse create(
                         CreateWorkOrderRequest request) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -141,6 +145,8 @@ public class WorkOrderService {
         public WorkOrderResponse updateStatus(
                         UUID workOrderId,
                         UpdateWorkOrderStatusRequest request) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -256,6 +262,8 @@ public class WorkOrderService {
         public WorkOrderResponse complete(
                         UUID id) {
 
+                MaintenanceAccess.require();
+
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
@@ -346,6 +354,8 @@ public class WorkOrderService {
                         UUID workOrderId,
                         AssignWorkOrderRequest request) {
 
+                MaintenanceAccess.require();
+
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
 
@@ -408,6 +418,8 @@ public class WorkOrderService {
         // }
         public WorkOrderResponse start(
                         UUID workOrderId) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
@@ -472,6 +484,8 @@ public class WorkOrderService {
         // }
         public WorkOrderResponse waitingParts(
                         UUID workOrderId) {
+
+                MaintenanceAccess.require();
 
                 UUID tenantId = UUID.fromString(
                                 TenantContext.getTenantId());
