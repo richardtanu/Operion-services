@@ -3316,6 +3316,12 @@ when an own-money purchase costs the store anything.
    - **PURCHASE**: a purchase not paid with someone's own money, on its purchase date. A
      purchase records a buy that already happened (DL-08), so one waiting for the Owner, or
      rejected, is listed too, with its status; a superseded one isn't (its correction is).
+     Confirmed by the product owner after the build, 30 Oct ("I'll follow your
+     suggestion"): the cashflow answers "what left the account", and a hidden row can't
+     be reconciled against the bank statement, while a listed "rejected" one prompts a
+     check for a refund. This is why it differs from Spent (BE-16, APPROVED only), which
+     answers "what did we agree to spend". The app records no refunds yet; a refund would
+     be money IN, with the open income question.
    - **PURCHASE_PAYBACK** / **EXPENSE_PAYBACK**: an own-money purchase or expense, on the
      day the Owner paid the person back, to that person, cash or transfer. Owed and not yet
      paid back: not listed.
