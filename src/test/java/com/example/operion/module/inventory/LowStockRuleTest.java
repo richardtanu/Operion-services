@@ -47,7 +47,8 @@ import com.example.operion.module.tenant.repository.TenantRepository;
 /**
  * BE-27: one definition of "low". The store's target is 20 days of cover (a
  * non-default policy value, rule 6). With usage data an item is low when it
- * runs out before 20 days; without, when it's at or below its minimum.
+ * runs out before 20 days; since BE-35 also, with or without usage data, when
+ * it's at or below its minimum.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -106,26 +107,25 @@ class LowStockRuleTest {
                 .currentStock(1).minimumStock(3).build());
         Part fine = partRepository.save(Part.builder().tenant(store).name("Spring, fine").category(hopUp)
                 .currentStock(9).minimumStock(3).build());
-        // usage data and 40 days of cover: not low even at its minimum
+        // usage data and 40 days of cover, but at its minimum: low since BE-35 (was "not low")
         Part covered = partRepository.save(Part.builder().tenant(store).name("Gas, slow").category(gasCategory)
                 .currentStock(4).minimumStock(4).manualDailyUsage(new BigDecimal("0.1")).build());
 
         mvc.perform(as(sm, get("/inventory/low-stock")))
-                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data.length()").value(3))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + soon.getId() + "')].lowBecause").value("RUNS_OUT_SOON"))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + soon.getId() + "')].targetDays").value(20))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + soon.getId() + "')].daysOfCover").value(2.0))
-                .andExpect(jsonPath("$.data[?(@.partId=='" + below.getId() + "')].lowBecause").value("BELOW_MINIMUM"));
+                .andExpect(jsonPath("$.data[?(@.partId=='" + below.getId() + "')].lowBecause").value("BELOW_MINIMUM"))
+                .andExpect(jsonPath("$.data[?(@.partId=='" + covered.getId() + "')].lowBecause").value("BELOW_MINIMUM"));
 
         mvc.perform(as(sm, get("/inventory/stock-summary")))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + soon.getId() + "')].status").value("LOW_STOCK"))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + fine.getId() + "')].status").value("NORMAL"))
-                .andExpect(jsonPath("$.data[?(@.partId=='" + covered.getId() + "')].status").value("NORMAL"))
-                .andExpect(jsonPath("$.data[?(@.partId=='" + covered.getId() + "')].lowBecause").value(
-                        org.hamcrest.Matchers.contains((Object) null)));
+                .andExpect(jsonPath("$.data[?(@.partId=='" + covered.getId() + "')].status").value("LOW_STOCK"));
 
         mvc.perform(as(sm, get("/inventory/dashboard")))
-                .andExpect(jsonPath("$.data.lowStock").value(2))
+                .andExpect(jsonPath("$.data.lowStock").value(3))
                 .andExpect(jsonPath("$.data.outOfStock").value(0));
     }
 
@@ -159,6 +159,28 @@ class LowStockRuleTest {
 
         mvc.perform(as(sm, get("/inventory/low-stock")))
                 .andExpect(jsonPath("$.data[?(@.partId=='" + gas.getId() + "')].lowBecause").value("RUNS_OUT_SOON"));
+    }
+
+    @Test
+    void withUsageData_theMinimumStillCounts_andTheAlertFiresAtIt() throws Exception {
+
+        // BE-35: 0.1 cans a day, so 7 cans = 70 days, far above the 20-day target; minimum 5
+        Part gas = partRepository.save(Part.builder().tenant(store).name("Green gas, slow").category(gasCategory)
+                .currentStock(7).minimumStock(5).manualDailyUsage(new BigDecimal("0.1")).build());
+
+        take(gas);   // 6 = 60 days, above the minimum: not low
+        assertEquals(0, lowAlerts(sm));
+
+        take(gas);   // 5 = 50 days, at the minimum: low
+        assertEquals(1, lowAlerts(sm));
+        assertEquals(1, lowAlerts(owner));
+
+        take(gas);   // 4: still low, no second alert
+        assertEquals(1, lowAlerts(sm));
+
+        mvc.perform(as(sm, get("/inventory/low-stock")))
+                .andExpect(jsonPath("$.data[?(@.partId=='" + gas.getId() + "')].lowBecause").value("BELOW_MINIMUM"))
+                .andExpect(jsonPath("$.data[?(@.partId=='" + gas.getId() + "')].daysOfCover").value(40.0));
     }
 
     // ---- helpers ----
