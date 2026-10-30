@@ -1277,6 +1277,11 @@ month (BE-19, both the "HQ" and "Branch specific" categories) > monthly budget.
    a server `LocalDate.now()`. Months are the calendar months of those stored values. So the
    server's zone decides server-stamped dates: **set `TZ=Asia/Jakarta` on Railway** (and
    locally the machine is already +07:00). No code change for zones.
+   Confirmed by the product owner, 30 Oct: every store is on Jakarta time (WIB) for now, so
+   one server zone is enough and there's no per-store zone. Revisit before a store opens
+   outside WIB (Bali and Makassar are WITA, +08:00): its server-stamped dates (an order's
+   date, a purchase logged without one) between 00:00 and 01:00 local time would land in
+   the previous day, and on the 1st in the previous month.
 4. `Supplier.franchiseCentre` came with BE-21.
 
 Tests: `SpendingTest` (8): spent split with FAILED/SUPERSEDED/DRAFT/CANCELLED excluded
@@ -3321,7 +3326,7 @@ when an own-money purchase costs the store anything.
      be reconciled against the bank statement, while a listed "rejected" one prompts a
      check for a refund. This is why it differs from Spent (BE-16, APPROVED only), which
      answers "what did we agree to spend". The app records no refunds yet; a refund would
-     be money IN, with the open income question.
+     be money IN, with the income question (deferred, below).
    - **PURCHASE_PAYBACK** / **EXPENSE_PAYBACK**: an own-money purchase or expense, on the
      day the Owner paid the person back, to that person, cash or transfer. Owed and not yet
      paid back: not listed.
@@ -3329,7 +3334,9 @@ when an own-money purchase costs the store anything.
    - **ORDER_TO_HQ**: an order sent to HQ (ORDERED, PARTIALLY_RECEIVED, RECEIVED), on its
      order date, to HQ's franchise centre; a draft or cancelled one isn't.
    No money IN rows yet; `direction` and `totalIn` are there so income can be added later
-   without changing the app.
+   without changing the app. **Deferred, not open** (product owner, 30 Oct): recording
+   income (range sessions sold, refunds) waits until the more essential modules are built;
+   it isn't a go-live item.
 
 ### Tests
 
