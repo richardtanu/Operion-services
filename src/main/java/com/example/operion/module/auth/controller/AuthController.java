@@ -1,7 +1,6 @@
 package com.example.operion.module.auth.controller;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,7 +31,7 @@ public class AuthController {
     // (and, until the same change, pick their own scope). Users are now
     // created by an ADMIN; the very first ADMIN is a direct DB insert.
     @PostMapping("/register")
-    @PreAuthorize("hasRole('ADMIN')")
+    // BE-34: an ADMIN or the store's Owner, checked in the service
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request
     ) {

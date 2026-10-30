@@ -3,7 +3,6 @@ package com.example.operion.module.auth.controller;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.operion.common.response.ApiResponse;
@@ -24,7 +23,7 @@ public class UserController {
     private final UserService service;
 
     @PatchMapping("/{id}/scope")
-    @PreAuthorize("hasRole('ADMIN')")
+    // BE-34: an ADMIN or the store's Owner, checked in the service
     public ApiResponse<UserProfileResponse> updateScope(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserScopeRequest request) {
@@ -37,7 +36,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN')")
+    // BE-34: an ADMIN or the store's Owner, checked in the service
     public ApiResponse<UserProfileResponse> updateRole(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserRoleRequest request) {
@@ -51,7 +50,7 @@ public class UserController {
 
     // BE-33: switch someone off (they left) or back on; a reason to switch off
     @PatchMapping("/{id}/active")
-    @PreAuthorize("hasRole('ADMIN')")
+    // BE-34: an ADMIN or the store's Owner, checked in the service
     public ApiResponse<UserProfileResponse> updateActive(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserActiveRequest request) {
@@ -65,7 +64,7 @@ public class UserController {
 
     // BE-33: the caller's tree, or one store in it; ?active= filters
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    // BE-34: an ADMIN or the store's Owner, checked in the service
     public ApiResponse<List<UserProfileResponse>> list(
             @RequestParam(required = false) UUID tenantId,
             @RequestParam(required = false) Boolean active) {
