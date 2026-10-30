@@ -229,6 +229,49 @@
                                       "response":  [
 
                                                    ]
+                                  },
+                                  {
+                                      "name":  "auth-change-password",
+                                      "request":  {
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     },
+                                                                     {
+                                                                         "key":  "Authorization",
+                                                                         "value":  "Bearer {{bearerToken}}",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n    \"currentPassword\": \"123456\",\n    \"newPassword\": \"choose-8-or-more\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "http://localhost:8080/auth/password",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8080",
+                                                                  "path":  [
+                                                                               "auth",
+                                                                               "password"
+                                                                           ]
+                                                              },
+                                                      "description":  "BE-32. Any signed-in user changes their own password (no user id: always yours). newPassword 8 to 72 characters and different from the current one. A wrong currentPassword is 400 (not 401, so the app keeps the session). Returns a fresh token; put it in bearerToken. Tokens issued before the change keep working until they expire (24 hours)."
+                                                  },
+                                      "response":  [
+
+                                                   ]
                                   }
                               ]
                  },
