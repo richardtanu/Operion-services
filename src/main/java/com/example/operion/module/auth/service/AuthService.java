@@ -1,5 +1,6 @@
 package com.example.operion.module.auth.service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import org.springframework.security.authentication.BadCredentialsException;
@@ -8,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.example.operion.common.security.TenantContext;
+import com.example.operion.module.auth.dto.ChangePasswordRequest;
 import com.example.operion.module.auth.dto.LoginRequest;
 import com.example.operion.module.auth.dto.RegisterRequest;
 import com.example.operion.module.auth.dto.UserProfileResponse;
@@ -86,6 +88,40 @@ public class AuthService {
         }
 
         // 3. Return JWT
+        return jwtUtil.generateToken(
+                user.getId().toString(),
+                user.getRole().name(),
+                user.getTenant().getId().toString(),
+                user.getScope() != null ? user.getScope().name() : null);
+    }
+
+    /**
+     * BE-32: the signed-in user changes their own password, proving the
+     * current one first. A wrong current password is 400, not 401: the app
+     * reads 401 as "signed out". Returns a fresh token, like login. Tokens
+     * issued before the change stay valid until they expire (at most 24 hours).
+     */
+    public String changePassword(Authentication authentication, ChangePasswordRequest request) {
+
+        User user = userRepository.findById(UUID.fromString(authentication.getName()))
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            throw new RuntimeException("Your current password is wrong");
+        }
+
+        if (request.getNewPassword().equals(request.getCurrentPassword())) {
+            throw new RuntimeException("Choose a password different from your current one");
+        }
+
+        // @Size counts characters; BCrypt counts bytes (an accented letter is two)
+        if (request.getNewPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new RuntimeException("New password must be 8 to 72 characters");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
         return jwtUtil.generateToken(
                 user.getId().toString(),
                 user.getRole().name(),

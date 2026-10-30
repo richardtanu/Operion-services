@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`).
 
 ---
 
@@ -2663,6 +2663,65 @@ an ADMIN + OWNER (its scope-less ADMIN is refused). Full suite 186/186.
 
 **Local test setup changed:** `admin@test.com` (ADMIN, no scope) can no longer grant scope.
 Grant with the HQ super admin (set its first password with `BOOTSTRAP_ADMIN_*`).
+
+---
+
+## BE-32 — Change your own password
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "execute 2". Before go-live: today nobody can
+change a password, the HQ super admin included (its first one comes from an environment
+variable, BE-21).
+
+### Why
+
+`[C]` A password is set only by `POST /auth/register` (an ADMIN types it for the new user)
+and by `InitialPasswordBootstrap` (the super admin's first one). There is no endpoint to
+change it, so every user keeps the password someone else chose.
+
+### Task
+
+`PATCH /auth/password`, any signed-in user, **own password only** (no user id in the
+path or body), body `{ "currentPassword", "newPassword" }`:
+
+1. `newPassword` 8 to 72 characters (BCrypt reads at most 72 bytes; longer would be
+   silently cut), both fields required → 400 with the field errors.
+2. Wrong `currentPassword` → **400** "Your current password is wrong". Not 401: the app
+   reads 401 as "signed out" and would drop the session.
+3. `newPassword` equal to the current one → 400 "Choose a password different from your
+   current one".
+4. Success: the new BCrypt hash is saved; the response is a fresh token, like login.
+
+Left out, on purpose: older tokens stay valid until they expire (at most 24 hours), because
+ending them needs a per-request check against a "changed at" time; an Admin reset for a
+forgotten password; a minimum length on `register`. Each can be its own task.
+
+### Tests
+
+The old password stops working and the new one works; wrong current → 400, hash
+unchanged; too short, too long, missing, or the same as now → 400; the returned token
+works. Every new test fails against the unfixed code.
+
+### Client follow-up (mobile repo)
+
+A "Change password" screen (current, new, repeat new; the repeat is checked on the
+phone). Keep the returned token. Show the 400's message.
+
+### What was done
+
+As written. `ChangePasswordRequest` (`currentPassword` required; `newPassword` required,
+`@Size(min = 8, max = 72)` → 400 with the field errors). `AuthService.changePassword` loads
+the user from the token's subject, then: wrong current → 400 "Your current password is
+wrong"; same as current → 400 "Choose a password different from your current one"; more
+than 72 bytes (`@Size` counts characters, an accented letter is two bytes) → 400 "New
+password must be 8 to 72 characters"; else saves the new BCrypt hash and returns a fresh
+token. `AuthController`: `PATCH /auth/password`, any signed-in user (no `@PreAuthorize`;
+`SecurityConfig` already requires a login for everything but `/auth/login`). No migration.
+
+Tests: `PasswordChangeTest` (3): after a change the old password gets 401 at login, the new
+one 200, and the returned token opens `/auth/me`; a wrong current password → 400 and the
+stored hash still matches the old one; 7 characters, 73 characters, 40 × "é" (80 bytes),
+the same password, and a missing new password → 400, nothing changed. All 3 fail against
+the old code. Full suite 189/189. Postman: new `auth-change-password` in USER AUTHENTICATION.
 
 ---
 

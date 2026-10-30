@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.operion.common.response.ApiResponse;
 import com.example.operion.module.auth.dto.AuthResponse;
+import com.example.operion.module.auth.dto.ChangePasswordRequest;
 import com.example.operion.module.auth.dto.LoginRequest;
 import com.example.operion.module.auth.dto.RegisterRequest;
 import com.example.operion.module.auth.dto.UserProfileResponse;
@@ -56,6 +58,24 @@ public class AuthController {
         ApiResponse<AuthResponse> response = ApiResponse.<AuthResponse>builder()
                 .success(true)
                 .message("Login successful")
+                .data(new AuthResponse(token))
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    // BE-32: any signed-in user, own password only; returns a fresh token
+    @PatchMapping("/password")
+    public ResponseEntity<ApiResponse<AuthResponse>> changePassword(
+            Authentication authentication,
+            @Valid @RequestBody ChangePasswordRequest request
+    ) {
+
+        String token = authService.changePassword(authentication, request);
+
+        ApiResponse<AuthResponse> response = ApiResponse.<AuthResponse>builder()
+                .success(true)
+                .message("Password changed")
                 .data(new AuthResponse(token))
                 .build();
 
