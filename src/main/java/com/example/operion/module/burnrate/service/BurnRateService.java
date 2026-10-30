@@ -32,13 +32,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class BurnRateService {
 
-    private static final int DEFAULT_WINDOW_DAYS = 30;
+    public static final int DEFAULT_WINDOW_DAYS = 30;
 
-    private static final int DEFAULT_MIN_OBSERVATION_DAYS = 21;
+    public static final int DEFAULT_MIN_OBSERVATION_DAYS = 21;
 
-    private static final int DEFAULT_MIN_EVENTS = 10;
+    public static final int DEFAULT_MIN_EVENTS = 10;
 
-    private static final int DEFAULT_TARGET_DAYS = 14;
+    public static final int DEFAULT_TARGET_DAYS = 14;
 
     private final PartRepository partRepository;
 

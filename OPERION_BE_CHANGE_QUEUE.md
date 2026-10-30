@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager). **BE-35 done, 30 Oct 2026** ("low" if either rule says so: the minimum counts with usage data too). Defaults confirmed 30 Oct: the PRA-created alert stays with the store's Procurement staff (HQ reads every store's limits), and BE-19's receipt rule and one "other expenses" line stand. **BE-36 done, 30 Oct 2026** (reset a forgotten password; the person must change it; a change or reset signs out older sessions; 8+ characters for new users). **BE-37 done, 30 Oct 2026** (maintenance needs a Manager or a Technician; no token answers 401). **BE-38 done, 30 Oct 2026** (store settings: the Owner sets target days and maintenance thresholds; a store without settings uses the defaults).
 
 ---
 
@@ -3089,6 +3089,70 @@ orders unchanged; a Technician fits a part (stock 5 → 4) and opens a work orde
 Manager assigns, starts and completes it, an Operator can't start or complete it; no token
 → 401 "Sign in first", a signed-in Operator → 403. Both fail against the old code. Changed by
 design: `AuthHardeningTest.register_withoutToken_isRejected` now expects 401. Full suite 207/207.
+
+---
+
+## BE-38 — Store settings: the Owner sets the store's targets
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner, 30 Oct 2026: "the plan looks good, execute" (BE-38: each
+store's Owner sets their own target days and burn-rate limits).
+
+### Why
+
+`[C]` A store's settings (`maintenance_rule`, entity `MaintenancePolicy`: target days of
+cover, the burn-rate window and thresholds, the maintenance thresholds) have no endpoint;
+they change only by editing the database. Worse, `[V]` on the local DB only BLITZ_BDG has a
+row: FRANCHISE_HQ, HQ_BANDUNG and OUTLET_2 have none, and nothing creates one for a new
+store, so `MaintenancePolicyService.getCurrentPolicy` throws "Maintenance Policy not
+configured." for their units: the nightly unit check fails for every unit there (logged
+and skipped) and `POST /maintenance/evaluate/{unitId}` answers 400. (Burn rate already falls
+back to defaults when the row is missing.)
+
+### Task
+
+1. **No row = the defaults**: `getCurrentPolicy` returns an unsaved policy with the
+   entity's defaults instead of throwing.
+2. **`GET /tenants/{id}/settings`**: anyone signed in at the store or above it (the tenant
+   tree check): the effective values, defaults filled in (burn rate's 30 / 21 / 10 / 14 from
+   `BurnRateService`), plus `customised` (whether the store has saved any).
+3. **`PATCH /tenants/{id}/settings`**: the store's own OWNER+ only, like the budget (HQ
+   reads, can't set; 403 "Only the store's own Owner can change its settings"). Any of:
+   `daysOfCoverTarget` 1–365, `burnRateWindowDays` 7–365, `burnRateMinObservationDays`
+   1–365 and not above the window, `burnRateMinEvents` 1–1000, `healthThreshold` and
+   `minimumHealthForOperation` 0–100, `maintenanceIntervalDays` 1–3650,
+   `partEndOfLifeWarningDays` 0–365, `maxWornParts` / `maxRefurbishedParts` /
+   `maxRemovedParts` 0–100, `autoCreateWorkOrder`. A field left out stays as it is; out of
+   range → 400. The first save creates the store's row.
+
+### Tests
+
+A store with no row reads the defaults; its Owner sets 20 target days, the store reads 20
+and burn rate uses 20; a Manager and HQ can't change it, HQ can read it, another store's
+Owner can't read it; 0 target days, or a minimum observation longer than the window → 400;
+a unit in a store with no row can be evaluated. Every new test fails against the unfixed
+code.
+
+### Client follow-up (mobile repo)
+
+A Store settings screen for the store's Owner (others read-only), grouped "Stock" (target
+days, burn-rate window and thresholds) and "Maintenance". Show the defaults as values.
+
+### What was done
+
+All three items, as written. `MaintenancePolicyService.getCurrentPolicy` falls back to
+`MaintenancePolicy.builder().build()`; `StoreSettingsService` (`get`, `update`) and
+`StoreSettingsController` (`/tenants/{id}/settings`, next to the budget); the request has
+`@Min`/`@Max` per field and the service refuses a minimum observation longer than the
+window; `BurnRateService`'s four defaults are now `public static final`, so the settings
+show the same numbers burn rate uses. `low_stock_multiplier` (used only by the maintenance
+recommendation's own low-stock note) is left out. No migration.
+
+Tests: `StoreSettingsTest` (3): a store with no row reads every default, its Owner saves 20
+target days and a 45-day interval, the store reads 20 and burn rate reports `targetDays`
+20; a Manager and HQ's Principal can't save, HQ can read, another store's Owner can't read,
+0 target days and a 21-day minimum against a 14-day window → 400, and nothing was saved; a
+unit in a store with no row is evaluated (was 400 "Maintenance Policy not configured.").
+All 3 fail against the old code. Full suite 210/210. Postman: `tenant-settings`, `tenant-settings-update`.
 
 ---
 
