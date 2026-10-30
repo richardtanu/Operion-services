@@ -24,7 +24,7 @@ for a store). **BE-15 open, 16 Oct 2026** (PR cancel: who, reason, notification)
 **BE-22 done, 22 Oct 2026** (automatic status changes name what triggered them).
 **BE-19 done, 23 Oct 2026** (expense claims, paid by store or me). **BE-23 open** (file uploads on Cloudflare R2). **BE-30 done, 29 Oct 2026** (uploads without R2: files on this server's disk for local testing). **BE-24 done, 22 Oct 2026** (store approval alerts stay in the store; HQ not told).
 **BE-19 ready to build, 23 Oct 2026** (screen record PROC-10 written). **Module 2 inventory complete, 23 Oct 2026** (`screens/02-inventory-stock.md`): **BE-25 open** (who changes stock and item data), **BE-26 done, 23 Oct 2026** (store on every inventory row, item history, consumables in "used today"), **BE-27 done, 23 Oct 2026** (one definition of "low"; tell the Store Manager).
-**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`).
+**BE-25 done, 23 Oct 2026** (who changes stock and item data). **BE-28 done, 23 Oct 2026** (HQ sets the price of what it sells; stores stop typing it). **BE-25 grows, 23 Oct 2026** (a Store Manager may link their own item to HQ's catalog; only HQ changes or removes a link). **BE-29 open, 23 Oct 2026** (one category list, owned by HQ; build before go-live). **BE-29 done, 30 Oct 2026** (one list at the root; only HQ admins change it; V16 moved every store item onto HQ's rows). Every queued task is now done. **BE-31 done, 30 Oct 2026** (an Admin grants scope only up to their own stored scope, never to themself). **BE-32 done, 30 Oct 2026** (anyone signed in changes their own password: `PATCH /auth/password`). **BE-33 done, 30 Oct 2026** (switch off a user who has left: out at once, not counted, no alerts; `GET /users`). **BE-34 done, 30 Oct 2026** (a store's Owner manages the store's own people, up to Manager).
 
 ---
 
@@ -2814,6 +2814,84 @@ against the old code. Full suite 195/195. Postman: `user-update-active`, `user-l
 
 Not covered by a test: the work-order and service-event technician checks (same one-line
 `requireActive()` call as the requester and taker).
+
+---
+
+## BE-34 — A store's Owner manages the store's own people
+
+**Status: DONE, 30 Oct 2026** (see end of entry). Product owner's decisions, 30 Oct 2026: "store Owners should manage their
+own people"; an Owner can add people to their own store, give them a scope, give them a role,
+switch them off or on, and list their store's users; they can't give the Admin role, can't
+touch HQ or other stores, can't act on themselves; and an Owner may **not** create or switch
+off another Owner: "in the store creation the HQ creates the login user with permission".
+A narrow right, not the ADMIN role, so the Owner doesn't also get the data-repair shortcuts
+(decision #17).
+
+### Why
+
+`[C]` Since BE-31 and BE-33 everything about people is ADMIN-only (`@PreAuthorize` on
+`register`, `scope`, `role`, `active`, `GET /users`) and a scope can be granted only up to the
+granter's own. A store Owner without the ADMIN role can't add or remove their own staff; HQ
+has to do it.
+
+### Task
+
+People managers are now an **ADMIN** (unchanged: their tree, BE-31 and BE-33 rules) **or a
+store's Owner**: stored scope OWNER or above, not ADMIN, acting only on their **own store**
+(their own tenant, not below it). For the Owner, in the services, all 403:
+
+1. `POST /auth/register`: only into their own store ("Owners add people to their own store
+   only"); the new person starts as OPERATOR with no scope, as for everyone.
+2. `PATCH /users/{id}/scope`: Supervisor or Manager only ("Owners give Supervisor or Manager
+   only; HQ gives Owner").
+3. `PATCH /users/{id}/role`: any role except ADMIN ("Only HQ gives the Admin role").
+4. `PATCH /users/{id}/active`: as BE-33 (reason to switch off).
+5. `GET /users`: their own store only (`?tenantId=` another store → "Owners see their own
+   store's people only").
+6. For 2–4 the person must be in the Owner's store ("Owners manage people in their own store
+   only") and below Owner and not an ADMIN ("Only HQ manages Owners and Admins"); never
+   themself.
+
+Anyone else (a Manager, an Operator) → 403 "Only an Admin or the store's Owner can manage
+people". The `@PreAuthorize("hasRole('ADMIN')")` on those five endpoints moves into the
+services (role-or-scope checks live there). HQ creates a new store's Owner as today:
+`register` with the store's `tenantCode`, then `user-update-scope` OWNER as the super admin.
+
+### Tests
+
+An Owner adds a person to their store (not to a sibling store or HQ); gives Supervisor and
+Manager (not Owner or Principal); gives Procurement (not Admin); switches staff off and on
+(not another Owner, not the store's Admin, not themself, not another store's staff); lists
+their store only; a Manager is refused everything. Every new test fails against the unfixed
+code.
+
+### Client follow-up (mobile repo)
+
+The Users screen (BE-33) opens for the store's Owner too: Add person, scope picker with
+Supervisor and Manager, role picker without Admin, Switch off/on; Owners and Admins in the
+list are read-only for them.
+
+### What was done
+
+As written. `UserService`: `isAdmin` (stored role), `requireStoreOwner` (stored scope OWNER+,
+else "Only an Admin or the store's Owner can manage people"), `requireOwnerMayManage` (own
+store, below Owner, not an ADMIN). `updateScope`, `updateRole`, `setActive` and `list` take
+the ADMIN branch (unchanged rules) or the Owner branch; the self check now comes first for
+both. `AuthService.register` checks the caller before anything else (so a Manager can't
+probe which emails exist), then for an Owner the tenant must be their own. The five
+`@PreAuthorize("hasRole('ADMIN')")` annotations (`register`, `scope`, `role`, `active`,
+`GET /users`) are gone. No migration.
+
+Tests: `StoreOwnersManagePeopleTest` (5): an Owner adds a person to their store (OPERATOR, no
+scope), not to a sibling store or HQ, while HQ adds the next Owner and gives OWNER; gives
+Supervisor and Manager, not Owner or Principal; gives Procurement and Technician, not Admin;
+can't switch off or re-scope a co-Owner, touch the store's Admin, reach a sibling store's
+staff or switch themself off, but switches their staff off and back on; lists their store
+only (another store 403), while a Manager is refused listing, adding, scoping and switching
+off. All 5 fail against the old code. Changed by design: `SwitchOffUserTest`'s "not an
+ADMIN" refusal now uses the Store Manager (the store's Owner may switch staff off). Full
+suite 200/200. Postman: descriptions of `register`, `user-update-scope`, `user-update-role`,
+`user-update-active`, `user-list`.
 
 ---
 

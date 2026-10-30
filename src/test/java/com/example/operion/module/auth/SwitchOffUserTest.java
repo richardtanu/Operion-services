@@ -137,7 +137,7 @@ class SwitchOffUserTest {
         setActive(storeAdmin, owner1, false, "Left")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("You cannot switch off someone above you"));
-        setActive(owner2, staff, false, "Left").andExpect(status().isForbidden());   // not an ADMIN
+        setActive(sm, staff, false, "Left").andExpect(status().isForbidden());   // neither an ADMIN nor the store's Owner (BE-34)
 
         assertTrue(stored(sm).isActive());
         assertTrue(stored(owner1).isActive());

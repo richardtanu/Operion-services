@@ -48,7 +48,7 @@
                                                                                "register"
                                                                            ]
                                                               },
-                                                      "description":  "ADMIN only (BE-12). Log in as an ADMIN first. New users start as OPERATOR with no scope; grant scope with user-update-scope. tenantCode is optional (defaults to your own tenant) and must be in your tenant tree."
+                                                      "description":  "An ADMIN, inside your tenant tree (BE-12); or (BE-34) a store\u0027s Owner, into their own store only. New users start as OPERATOR with no scope. tenantCode is optional (defaults to your own tenant). HQ creates a new store\u0027s Owner: register with the store\u0027s tenantCode, then user-update-scope OWNER."
                                                   },
                                       "response":  [
 
@@ -183,7 +183,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "ADMIN only (BE-12), inside your tenant tree. BE-31: you can grant a scope only up to your own stored scope (an ADMIN with no scope can grant none), never your own, and never to someone already above you; all 403. Locally, grant with the HQ super admin."
+                                                      "description":  "An ADMIN inside their tree, only up to their own stored scope, never their own, never someone above them (BE-31); or (BE-34) a store\u0027s Owner, for their own store\u0027s people below Owner, giving SUPERVISOR or MANAGER only. All refusals 403. Locally, grant Owner as the HQ super admin."
                                                   },
                                       "response":  [
 
@@ -235,7 +235,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "BE-07. ADMIN only; target must be in your tenant tree; not yourself. role: ADMIN | TECHNICIAN | PROCUREMENT | ACCOUNTING | OPERATOR"
+                                                      "description":  "An ADMIN inside their tree, never their own (BE-07); or (BE-34) a store\u0027s Owner, for their own store\u0027s people below Owner, any role except ADMIN (403)."
                                                   },
                                       "response":  [
 
@@ -332,7 +332,7 @@
                                                                                    }
                                                                                ]
                                                               },
-                                                      "description":  "BE-33. ADMIN only, inside your tenant tree. Switch someone off (they left) or back on (\"active\": true, no reason needed). Never yourself; never someone whose scope is above yours (403). A reason is required to switch off (400). A switched-off user can\u0027t log in (403 \"This account is switched off\"), their token stops working at once (401), they no longer count as one of the store\u0027s Owners, get no new notifications, and can\u0027t be named on a new record."
+                                                      "description":  "BE-33. An ADMIN inside their tree, never someone above them; or (BE-34) a store\u0027s Owner, for their own store\u0027s people below Owner (not Owners, not Admins). Never yourself (403). A reason is required to switch off (400). A switched-off user can\u0027t log in (403), their token stops at once (401), they no longer count as one of the store\u0027s Owners, get no new notifications, and can\u0027t be named on a new record."
                                                   },
                                       "response":  [
 
@@ -376,7 +376,7 @@
                                                                                 }
                                                                             ]
                                                               },
-                                                      "description":  "BE-33. ADMIN only. Users in your tenant tree with role, scope, store and active (plus who switched them off, when and why)."
+                                                      "description":  "BE-33. An ADMIN: users in their tenant tree (?tenantId= one store in it). BE-34: a store\u0027s Owner: their own store only (another tenantId 403). ?active=false lists the switched-off ones."
                                                   },
                                       "response":  [
 

@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -35,12 +36,21 @@ public class AuthService {
     private final TenantHierarchyService tenantHierarchyService;
 
     /**
-     * BE-12: ADMIN-only (see {@code AuthController}). The new user always
-     * starts as {@code OPERATOR} with no scope — scope is granted separately
-     * via {@code PATCH /users/{id}/scope}, so nobody can register themselves
-     * into privilege.
+     * BE-12: an ADMIN, inside their tree; since BE-34 also a store's Owner,
+     * into their own store only. The new user always starts as
+     * {@code OPERATOR} with no scope — scope is granted separately via
+     * {@code PATCH /users/{id}/scope}, so nobody can register themselves into
+     * privilege.
      */
     public String register(RegisterRequest request) {
+
+        User caller = userRepository.findById(UUID.fromString(
+                SecurityContextHolder.getContext().getAuthentication().getName()))
+                .orElseThrow(() -> new AccessDeniedException("Signed-in user not found"));
+
+        if (!UserService.isAdmin(caller)) {
+            UserService.requireStoreOwner(caller);
+        }
 
         // 1. Check email exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
@@ -57,7 +67,11 @@ public class AuthService {
                         .findById(UUID.fromString(TenantContext.getTenantId()))
                         .orElseThrow(() -> new RuntimeException("Tenant not found"));
 
-        tenantHierarchyService.requireWithinCallerTenantTree(tenant.getId());
+        if (UserService.isAdmin(caller)) {
+            tenantHierarchyService.requireWithinCallerTenantTree(tenant.getId());
+        } else if (!tenant.getId().equals(caller.getTenant().getId())) {
+            throw new AccessDeniedException("Owners add people to their own store only");
+        }
 
         // 3. Create user
         User user = new User();

@@ -38,20 +38,31 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
-
         User caller = currentUser();
 
         if (user.getId().equals(caller.getId())) {
             throw new AccessDeniedException("You cannot change your own scope");
         }
 
-        if (!atOrBelow(scope, caller.getScope())) {
-            throw new AccessDeniedException("You can only grant a scope up to your own");
-        }
+        if (isAdmin(caller)) {
 
-        if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
-            throw new AccessDeniedException("You cannot change the scope of someone above you");
+            tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
+
+            if (!atOrBelow(scope, caller.getScope())) {
+                throw new AccessDeniedException("You can only grant a scope up to your own");
+            }
+
+            if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
+                throw new AccessDeniedException("You cannot change the scope of someone above you");
+            }
+
+        } else {
+
+            requireOwnerMayManage(caller, user);
+
+            if (scope.ordinal() >= Scope.OWNER.ordinal()) {
+                throw new AccessDeniedException("Owners give Supervisor or Manager only; HQ gives Owner");
+            }
         }
 
         user.setScope(scope);
@@ -79,12 +90,23 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
+        User caller = currentUser();
 
-        String callerId = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        if (user.getId().toString().equals(callerId)) {
+        if (user.getId().equals(caller.getId())) {
             throw new AccessDeniedException("You cannot change your own role");
+        }
+
+        if (isAdmin(caller)) {
+
+            tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
+
+        } else {
+
+            requireOwnerMayManage(caller, user);
+
+            if (role == Role.ADMIN) {
+                throw new AccessDeniedException("Only HQ gives the Admin role");
+            }
         }
 
         user.setRole(role);
@@ -94,17 +116,16 @@ public class UserService {
     }
 
     /**
-     * BE-33: switch a user off (they left) or back on. ADMIN-only (see
-     * {@code UserController}), inside the caller's tree, never yourself, and
-     * never someone whose scope is above yours (BE-31's rule, stored scope).
-     * Switching off needs a reason; switching back on clears who/when/why.
+     * BE-33: switch a user off (they left) or back on. An ADMIN inside their
+     * tree, never someone whose scope is above theirs (BE-31's rule, stored
+     * scope); or (BE-34) the store's Owner, for the store's people below
+     * Owner. Never yourself. Switching off needs a reason; switching back on
+     * clears who/when/why.
      */
     public UserProfileResponse setActive(UUID userId, boolean active, String reason) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
-        tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
 
         User caller = currentUser();
 
@@ -112,8 +133,17 @@ public class UserService {
             throw new AccessDeniedException("You cannot switch yourself off or on");
         }
 
-        if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
-            throw new AccessDeniedException("You cannot switch off someone above you");
+        if (isAdmin(caller)) {
+
+            tenantHierarchyService.requireWithinCallerTenantTree(user.getTenant().getId());
+
+            if (user.getScope() != null && !atOrBelow(user.getScope(), caller.getScope())) {
+                throw new AccessDeniedException("You cannot switch off someone above you");
+            }
+
+        } else {
+
+            requireOwnerMayManage(caller, user);
         }
 
         if (active) {
@@ -149,16 +179,71 @@ public class UserService {
      */
     public List<UserProfileResponse> list(UUID tenantId, Boolean active) {
 
-        List<UUID> tenantIds = tenantId != null
-                ? tenantHierarchyService.readScope(tenantId)
-                : tenantHierarchyService.getEffectiveTenantIds(UUID.fromString(TenantContext.getTenantId()));
+        User caller = currentUser();
+        List<UUID> tenantIds;
+
+        if (isAdmin(caller)) {
+
+            tenantIds = tenantId != null
+                    ? tenantHierarchyService.readScope(tenantId)
+                    : tenantHierarchyService.getEffectiveTenantIds(UUID.fromString(TenantContext.getTenantId()));
+
+        } else {
+
+            requireStoreOwner(caller);
+
+            UUID ownStore = caller.getTenant().getId();
+
+            if (tenantId != null && !tenantId.equals(ownStore)) {
+                throw new AccessDeniedException("Owners see their own store's people only");
+            }
+
+            tenantIds = List.of(ownStore);
+        }
 
         return userRepository.findInTenants(tenantIds, active).stream()
                 .map(UserService::map)
                 .toList();
     }
 
-    private User currentUser() {
+    /**
+     * BE-34: people are managed by an ADMIN (their tree, the BE-31 and BE-33
+     * rules) or by a store's Owner. Read from the stored user, like the scope
+     * ceiling.
+     */
+    static boolean isAdmin(User caller) {
+
+        return caller.getRole() == Role.ADMIN;
+    }
+
+    /** BE-34: Owner or above (stored), not an ADMIN; anyone else is refused. */
+    static void requireStoreOwner(User caller) {
+
+        if (caller.getScope() == null || caller.getScope().ordinal() < Scope.OWNER.ordinal()) {
+            throw new AccessDeniedException("Only an Admin or the store's Owner can manage people");
+        }
+    }
+
+    /**
+     * BE-34: a store's Owner manages people in their own store only, below
+     * Owner and never an ADMIN: HQ creates and removes a store's Owners and
+     * Admins.
+     */
+    private static void requireOwnerMayManage(User caller, User target) {
+
+        requireStoreOwner(caller);
+
+        if (!target.getTenant().getId().equals(caller.getTenant().getId())) {
+            throw new AccessDeniedException("Owners manage people in their own store only");
+        }
+
+        if (target.getRole() == Role.ADMIN
+                || (target.getScope() != null && target.getScope().ordinal() >= Scope.OWNER.ordinal())) {
+            throw new AccessDeniedException("Only HQ manages Owners and Admins");
+        }
+    }
+
+    User currentUser() {
 
         return userRepository.findById(UUID.fromString(
                 SecurityContextHolder.getContext().getAuthentication().getName()))
